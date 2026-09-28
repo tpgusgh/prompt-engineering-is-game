@@ -63,6 +63,22 @@ test('reports an error from an SDKResultError message', () => {
   assert.equal(info.finalResult, undefined);
 });
 
+test('extracts a changed notebook path from a NotebookEdit tool_use message (uses notebook_path, not file_path)', () => {
+  const message = {
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', name: 'NotebookEdit', input: { notebook_path: '/tmp/nb.ipynb', new_source: 'x' } }] },
+  };
+  assert.deepEqual(extractToolInfo(message).filesChanged, ['/tmp/nb.ipynb']);
+});
+
+test('captures session_id from any message so the caller can resume', () => {
+  const assistantMessage = { type: 'assistant', session_id: 'abc-123', message: { content: [] } };
+  const resultMessage = { type: 'result', subtype: 'success', result: 'ok', session_id: 'abc-123' };
+  assert.equal(extractToolInfo(assistantMessage).sessionId, 'abc-123');
+  assert.equal(extractToolInfo(resultMessage).sessionId, 'abc-123');
+  assert.equal(extractToolInfo({ type: 'system' }).sessionId, undefined);
+});
+
 test('unknown or malformed messages extract to empty, never throw', () => {
   assert.doesNotThrow(() => extractToolInfo(null));
   assert.doesNotThrow(() => extractToolInfo({}));

@@ -17,9 +17,9 @@ A real `npm install -g` of a published/tarball copy of this package will **not**
 
 ## Setup
 
-```bash
-export ANTHROPIC_API_KEY=sk-...
-```
+No API key needed. `promptbattle` reuses whatever Claude Code login is already active on your machine (an OAuth login via `claude`, e.g. a Claude subscription). If you've already used `claude` from this terminal, you're set.
+
+If you'd rather use a standalone API key instead of your Claude Code login, you can still set `ANTHROPIC_API_KEY` and the SDK will use that instead.
 
 ## Play
 
@@ -29,7 +29,7 @@ Run `promptbattle` inside any project directory you want to work on:
 promptbattle --difficulty normal
 ```
 
-Type real coding instructions at the `>` prompt. Longer prompts, and prompts using words like "step by step", "test", "edge case", "refactor", "why", or "example", deal more damage. The agent actually performs the work in your current directory — file edits and commands are real. Type `/quit` or `/flee` to leave the dungeon; your XP and level are saved to `~/.promptbattle/profile.json`.
+Type real coding instructions at the `>` prompt. Longer prompts, and prompts using words like "step by step", "test", "edge case", "refactor", "why", or "example", deal more damage. The agent actually performs the work in your current directory — file edits and commands are real, and stream live (`→ running: ...`, `→ editing: ...`) as they happen. Turns remember earlier ones in the same run, so a follow-up like "now add a test for that" has context. Type `/quit` or `/flee` to leave the dungeon; your XP and level are saved to `~/.promptbattle/profile.json`.
 
 ## Safety
 

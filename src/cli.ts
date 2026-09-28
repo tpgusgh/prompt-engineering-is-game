@@ -9,17 +9,11 @@ import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
 
 async function main(): Promise<void> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error(
-      colorize(
-        'ANTHROPIC_API_KEY is not set. Get a key at https://console.anthropic.com and run:\n  export ANTHROPIC_API_KEY=sk-...',
-        'red',
-      ),
-    );
-    process.exitCode = 1;
-    return;
-  }
-
+  // No API key required: the Claude Agent SDK falls back to the local Claude
+  // Code CLI's own login (an active `claude` session, e.g. a Claude
+  // subscription) when ANTHROPIC_API_KEY isn't set. If that's not logged in
+  // either, the first turn's agent call fails and surfaces through the
+  // normal in-battle "fizzle" error path — no separate preflight needed.
   const difficulty = parseDifficulty(process.argv.slice(2));
   const profile = await loadProfile();
   const rl = readline.createInterface({ input: stdin, output: stdout });
@@ -27,22 +21,25 @@ async function main(): Promise<void> {
 
   console.log(colorize(`Welcome back, level ${profile.level} adventurer. Difficulty: ${difficulty}.`, 'cyan'));
 
-  const summary = await runDungeon({
-    runTurn: runAgentTurn,
-    cwd: process.cwd(),
-    difficulty,
-    write: (text: string) => stdout.write(text),
-    readInput: async () => {
-      const next = await lines.next();
-      return next.done ? null : next.value;
-    },
-  });
-
-  rl.close();
+  let summary;
+  try {
+    summary = await runDungeon({
+      runTurn: runAgentTurn,
+      cwd: process.cwd(),
+      difficulty,
+      write: (text: string) => stdout.write(text),
+      readInput: async () => {
+        const next = await lines.next();
+        return next.done ? null : next.value;
+      },
+    });
+  } finally {
+    rl.close();
+  }
 
   const updated = addXp(profile, summary.xpGained);
   updated.totalWins += summary.floorsCleared;
-  updated.totalBattles += 1;
+  updated.totalBattles += summary.floorsEngaged;
   await saveProfile(updated);
 
   console.log(

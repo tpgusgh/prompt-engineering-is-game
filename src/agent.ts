@@ -5,6 +5,12 @@ export interface TurnResult {
   filesChanged: string[];
   commandsRun: string[];
   error?: string;
+  sessionId?: string;
+}
+
+export interface AgentEvent {
+  type: 'command' | 'file';
+  value: string;
 }
 
 export interface ExtractedInfo {
@@ -13,6 +19,7 @@ export interface ExtractedInfo {
   text: string;
   finalResult?: string;
   error?: string;
+  sessionId?: string;
 }
 
 // Shape confirmed against node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts
@@ -47,6 +54,10 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
         if ((block.name === 'Write' || block.name === 'Edit') && typeof block.input?.file_path === 'string') {
           filesChanged.push(block.input.file_path);
         }
+        // sdk-tools.d.ts NotebookEditInput uses `notebook_path`, not `file_path`.
+        if (block.name === 'NotebookEdit' && typeof block.input?.notebook_path === 'string') {
+          filesChanged.push(block.input.notebook_path);
+        }
       }
       if (block?.type === 'text' && typeof block.text === 'string') {
         text += block.text;
@@ -67,15 +78,25 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
     }
   }
 
-  return { filesChanged, commandsRun, text, finalResult, error };
+  // Every SDKMessage variant carries session_id (sdk.d.ts) — capture it so the
+  // caller can pass it back in as `resume` on the next turn.
+  const sessionId = typeof m?.session_id === 'string' ? m.session_id : undefined;
+
+  return { filesChanged, commandsRun, text, finalResult, error, sessionId };
 }
 
-export async function runAgentTurn(prompt: string, cwd: string): Promise<TurnResult> {
+export async function runAgentTurn(
+  prompt: string,
+  cwd: string,
+  sessionId?: string,
+  onEvent?: (event: AgentEvent) => void,
+): Promise<TurnResult> {
   const filesChanged = new Set<string>();
   const commandsRun: string[] = [];
   let text = '';
   let finalResult: string | undefined;
   let error: string | undefined;
+  let latestSessionId: string | undefined;
 
   try {
     for await (const message of query({
@@ -86,23 +107,41 @@ export async function runAgentTurn(prompt: string, cwd: string): Promise<TurnRes
         // Required by the installed SDK alongside permissionMode: 'bypassPermissions'
         // (sdk.d.ts: "Must be set to true when using permissionMode: 'bypassPermissions'").
         allowDangerouslySkipPermissions: true,
-        allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+        // `tools` restricts the actual available set (sdk.d.ts: "Specify the base
+        // set of available built-in tools") — `allowedTools` only auto-approves,
+        // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
+        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+        ...(sessionId ? { resume: sessionId } : {}),
       },
     })) {
       const info = extractToolInfo(message);
-      info.filesChanged.forEach((f) => filesChanged.add(f));
-      commandsRun.push(...info.commandsRun);
+      for (const f of info.filesChanged) {
+        if (!filesChanged.has(f)) onEvent?.({ type: 'file', value: f });
+        filesChanged.add(f);
+      }
+      for (const c of info.commandsRun) {
+        commandsRun.push(c);
+        onEvent?.({ type: 'command', value: c });
+      }
       text += info.text;
       if (info.finalResult) finalResult = info.finalResult;
       if (info.error) error = info.error;
+      if (info.sessionId) latestSessionId = info.sessionId;
     }
-    return { summary: (finalResult ?? text).trim(), filesChanged: [...filesChanged], commandsRun, error };
+    return {
+      summary: (finalResult ?? text).trim(),
+      filesChanged: [...filesChanged],
+      commandsRun,
+      error,
+      sessionId: latestSessionId,
+    };
   } catch (err) {
     return {
       summary: '',
       filesChanged: [...filesChanged],
       commandsRun,
       error: err instanceof Error ? err.message : String(err),
+      sessionId: latestSessionId,
     };
   }
 }

@@ -15,11 +15,25 @@ function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function coerceProfile(parsed: unknown): Profile {
+  const p = parsed as Partial<Record<keyof Profile, unknown>> | null | undefined;
+  return {
+    level: isFiniteNumber(p?.level) ? p.level : DEFAULT_PROFILE.level,
+    xp: isFiniteNumber(p?.xp) ? p.xp : DEFAULT_PROFILE.xp,
+    totalWins: isFiniteNumber(p?.totalWins) ? p.totalWins : DEFAULT_PROFILE.totalWins,
+    totalBattles: isFiniteNumber(p?.totalBattles) ? p.totalBattles : DEFAULT_PROFILE.totalBattles,
+  };
+}
+
 export async function loadProfile(homeDir: string = os.homedir()): Promise<Profile> {
   try {
     const raw = await fs.readFile(profilePath(homeDir), 'utf-8');
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_PROFILE, ...parsed };
+    return coerceProfile(parsed);
   } catch {
     return { ...DEFAULT_PROFILE };
   }
