@@ -1,12 +1,22 @@
 import { calculateDamage } from './damage.ts';
-import { renderHpBar, colorize } from './ui.ts';
 import { spawnMonster, type Difficulty } from './monsters.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
+
+export type BattleEvent =
+  | { type: 'floorStart'; floor: number; monsterName: string; monsterArt: string; maxHp: number }
+  | { type: 'hesitate' }
+  | { type: 'attack'; damage: number; crit: boolean; matchedKeywords: string[] }
+  | { type: 'agentEvent'; agentEvent: AgentEvent }
+  | { type: 'agentError'; error: string }
+  | { type: 'agentSummary'; summary: string }
+  | { type: 'hpChanged'; hp: number; maxHp: number }
+  | { type: 'floorCleared'; monsterName: string; xpGained: number }
+  | { type: 'runEnded'; floorsCleared: number; floorsEngaged: number; xpGained: number };
 
 export interface BattleDeps {
   runTurn: (prompt: string, cwd: string, sessionId?: string, onEvent?: (event: AgentEvent) => void) => Promise<TurnResult>;
   readInput: () => Promise<string | null>;
-  write: (text: string) => void;
+  onBattleEvent: (event: BattleEvent) => void;
   cwd: string;
   difficulty: Difficulty;
 }
@@ -15,10 +25,6 @@ export interface BattleSummary {
   floorsCleared: number;
   floorsEngaged: number;
   xpGained: number;
-}
-
-function renderEvent(event: AgentEvent): string {
-  return event.type === 'command' ? `  → running: ${event.value}\n` : `  → editing: ${event.value}\n`;
 }
 
 function xpForFloor(floor: number): number {
@@ -35,12 +41,11 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   while (true) {
     const monster = spawnMonster(floor, deps.difficulty);
     let hp = monster.maxHp;
-    deps.write(`\n${colorize(`Floor ${floor + 1}: ${monster.name} appears!`, 'bold')}\n${monster.art}\n${renderHpBar(hp, monster.maxHp)}\n`);
+    deps.onBattleEvent({ type: 'floorStart', floor, monsterName: monster.name, monsterArt: monster.art, maxHp: hp });
 
     let left = false;
     let currentFloorEngaged = false;
     while (hp > 0) {
-      deps.write('\n> ');
       const raw = await deps.readInput();
       if (raw === null) {
         left = true;
@@ -52,7 +57,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         break;
       }
       if (prompt.length === 0) {
-        deps.write(colorize('You hesitate. No attack this turn.', 'yellow') + '\n');
+        deps.onBattleEvent({ type: 'hesitate' });
         continue;
       }
 
@@ -60,7 +65,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       const { damage, crit, matchedKeywords } = calculateDamage(prompt);
       let turn: TurnResult;
       try {
-        turn = await deps.runTurn(prompt, deps.cwd, sessionId, (event) => deps.write(renderEvent(event)));
+        turn = await deps.runTurn(prompt, deps.cwd, sessionId, (event) =>
+          deps.onBattleEvent({ type: 'agentEvent', agentEvent: event }),
+        );
       } catch (err) {
         turn = { summary: '', filesChanged: [], commandsRun: [], error: err instanceof Error ? err.message : String(err) };
       }
@@ -70,17 +77,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (!turn.error && turn.sessionId) sessionId = turn.sessionId;
 
       if (turn.error) {
-        deps.write(colorize(`Your attack misses! The spell fizzles: ${turn.error}`, 'red') + '\n');
+        deps.onBattleEvent({ type: 'agentError', error: turn.error });
       } else {
         hp = Math.max(0, hp - damage);
-        const critLabel = crit ? colorize(' CRITICAL HIT!', 'red') : '';
-        deps.write(`You attack for ${damage} damage!${critLabel}\n`);
-        if (matchedKeywords.length > 0) {
-          deps.write(`(keywords: ${matchedKeywords.join(', ')})\n`);
-        }
-        if (turn.summary) deps.write(`${turn.summary}\n`);
+        deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords });
+        if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       }
-      deps.write(renderHpBar(hp, monster.maxHp) + '\n');
+      deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: monster.maxHp });
     }
 
     if (currentFloorEngaged) floorsEngaged += 1;
@@ -89,9 +92,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const gained = xpForFloor(floor);
     xpGained += gained;
     floorsCleared += 1;
-    deps.write(colorize(`\n${monster.name} defeated! +${gained} XP\n`, 'green'));
+    deps.onBattleEvent({ type: 'floorCleared', monsterName: monster.name, xpGained: gained });
     floor += 1;
   }
 
+  deps.onBattleEvent({ type: 'runEnded', floorsCleared, floorsEngaged, xpGained });
   return { floorsCleared, floorsEngaged, xpGained };
 }
