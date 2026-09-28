@@ -15,6 +15,21 @@ Requires Node.js >= 22.18.0 (native TypeScript type-stripping is flag-gated belo
 
 A real `npm install -g` of a published/tarball copy of this package will **not** work: Node refuses to type-strip `.ts` files located under `node_modules`. `npm link` from a git clone (above) is the supported install path.
 
+## Mac App
+
+Prefer a real window over a terminal? Build the desktop app from the same repo:
+
+```bash
+npm install
+npm run electron:build
+```
+
+This produces a `.dmg` under `release/`. Open it and drag Prompt Battle into Applications, or run the built `.app` directly.
+
+**First launch:** macOS will say the app "cannot be opened because the developer cannot be verified" — this app isn't notarized (that requires a paid Apple Developer account). Right-click the app → Open, then confirm in the dialog. You only need to do this once. (If your machine already has an Apple Development signing identity in its keychain, `electron-builder` will use that automatically instead of ad-hoc signing — you may see a different or no warning.)
+
+The app has the same rules as the CLI (longer/keyword-rich prompts hit harder, real file/bash work happens for real, same Claude Code login, same full-permissions safety note above) — pick a project folder and a difficulty, then fight.
+
 ## Setup
 
 No API key needed. `promptbattle` reuses whatever Claude Code login is already active on your machine (an OAuth login via `claude`, e.g. a Claude subscription). If you've already used `claude` from this terminal, you're set.
