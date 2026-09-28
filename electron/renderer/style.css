@@ -1,0 +1,123 @@
+:root {
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: #0d0f14;
+  color: #d8dee9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#setup-screen,
+#summary-screen {
+  max-width: 420px;
+  margin: 80px auto;
+  text-align: center;
+}
+#setup-screen h1 {
+  font-size: 28px;
+}
+#setup-screen button,
+#summary-screen button {
+  margin-top: 16px;
+  padding: 10px 20px;
+  font-size: 14px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#setup-screen fieldset {
+  margin-top: 16px;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+}
+#dungeon-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+}
+#monster-panel {
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #4c566a;
+}
+#monster-art {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 14px;
+  white-space: pre;
+  margin: 4px 0;
+}
+.hp-bar-track {
+  width: 100%;
+  max-width: 400px;
+  height: 18px;
+  margin: 8px auto 0;
+  background: #2e3440;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a3be8c, #8fbcbb);
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.hp-bar-fill.warn {
+  background: linear-gradient(90deg, #ebcb8b, #d08770);
+}
+.hp-bar-fill.danger {
+  background: linear-gradient(90deg, #bf616a, #d08770);
+}
+#log {
+  flex: 1;
+  overflow-y: auto;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  padding: 12px 4px;
+  white-space: pre-wrap;
+}
+#log .crit {
+  color: #bf616a;
+  font-weight: bold;
+}
+#log .error {
+  color: #bf616a;
+}
+#log .file,
+#log .command {
+  color: #81a1c1;
+}
+#log .victory {
+  color: #a3be8c;
+  font-weight: bold;
+}
+#attack-form {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #4c566a;
+}
+#prompt-input {
+  flex: 1;
+  padding: 8px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+  font-size: 14px;
+}
+#attack-form button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid #4c566a;
+  background: #3b4252;
+  color: #e5e9f0;
+  cursor: pointer;
+}
+.error-text {
+  margin-top: 12px;
+  color: #bf616a;
+  font-size: 13px;
+}

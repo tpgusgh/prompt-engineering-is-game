@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Prompt Battle</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <section id="setup-screen">
+      <h1>Prompt Battle</h1>
+      <button id="pick-folder-btn">Choose Project Folder</button>
+      <p id="folder-path"></p>
+      <fieldset>
+        <legend>Difficulty</legend>
+        <label><input type="radio" name="difficulty" value="easy" /> Easy</label>
+        <label><input type="radio" name="difficulty" value="normal" checked /> Normal</label>
+        <label><input type="radio" name="difficulty" value="hard" /> Hard</label>
+      </fieldset>
+      <button id="start-btn" disabled>Enter the Dungeon</button>
+      <p id="setup-error" class="error-text" hidden></p>
+    </section>
+
+    <section id="dungeon-screen" hidden>
+      <div id="monster-panel">
+        <h2 id="monster-name"></h2>
+        <pre id="monster-art"></pre>
+        <div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
+        <p id="hp-label"></p>
+      </div>
+      <div id="log"></div>
+      <form id="attack-form">
+        <input id="prompt-input" type="text" placeholder="Type your attack..." autocomplete="off" />
+        <button type="submit">Attack</button>
+        <button type="button" id="flee-btn">Flee</button>
+      </form>
+    </section>
+
+    <section id="summary-screen" hidden>
+      <h2>Run Complete</h2>
+      <p id="summary-text"></p>
+      <button id="play-again-btn">Play Again</button>
+    </section>
+
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>
