@@ -23,6 +23,7 @@ async function main(): Promise<void> {
   const difficulty = parseDifficulty(process.argv.slice(2));
   const profile = await loadProfile();
   const rl = readline.createInterface({ input: stdin, output: stdout });
+  const lines = rl[Symbol.asyncIterator]();
 
   console.log(colorize(`Welcome back, level ${profile.level} adventurer. Difficulty: ${difficulty}.`, 'cyan'));
 
@@ -32,11 +33,8 @@ async function main(): Promise<void> {
     difficulty,
     write: (text: string) => stdout.write(text),
     readInput: async () => {
-      try {
-        return await rl.question('');
-      } catch {
-        return null;
-      }
+      const next = await lines.next();
+      return next.done ? null : next.value;
     },
   });
 
@@ -55,4 +53,7 @@ async function main(): Promise<void> {
   );
 }
 
-main();
+main().catch((err) => {
+  console.error(colorize(`Unexpected error: ${err instanceof Error ? err.message : String(err)}`, 'red'));
+  process.exitCode = 1;
+});
