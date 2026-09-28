@@ -1,6 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractToolInfo } from '../src/agent.ts';
+import { extractToolInfo, executableOverrideOptions } from '../src/agent.ts';
+
+test('executableOverrideOptions is empty when PROMPTBATTLE_CLAUDE_EXECUTABLE is unset (plain CLI/dev case)', () => {
+  const prior = process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
+  delete process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
+  try {
+    assert.deepEqual(executableOverrideOptions(), {});
+  } finally {
+    if (prior !== undefined) process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE = prior;
+  }
+});
+
+test('executableOverrideOptions passes pathToClaudeCodeExecutable through when set (packaged Electron app case)', () => {
+  const prior = process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
+  process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE = '/Applications/Prompt Battle.app/Contents/Resources/app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude';
+  try {
+    assert.deepEqual(executableOverrideOptions(), {
+      pathToClaudeCodeExecutable:
+        '/Applications/Prompt Battle.app/Contents/Resources/app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude',
+    });
+  } finally {
+    if (prior === undefined) delete process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
+    else process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE = prior;
+  }
+});
 
 test('extracts a bash command from an assistant tool_use message', () => {
   const message = {

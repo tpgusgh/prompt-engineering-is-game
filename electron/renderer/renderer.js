@@ -16,8 +16,18 @@ const fleeBtn = document.getElementById('flee-btn');
 const summaryTextEl = document.getElementById('summary-text');
 const playAgainBtn = document.getElementById('play-again-btn');
 const setupErrorEl = document.getElementById('setup-error');
+const attackSubmitBtn = attackForm.querySelector('button[type="submit"]');
 
 let chosenFolder = null;
+
+// A turn can take a while (real file/bash work). Without this, a click while
+// one is in flight is silently dropped by main.ts (no pending resolver yet),
+// and Flee does nothing — with no feedback either way.
+function setInputEnabled(enabled) {
+  promptInput.disabled = !enabled;
+  attackSubmitBtn.disabled = !enabled;
+  fleeBtn.disabled = !enabled;
+}
 
 pickFolderBtn.addEventListener('click', async () => {
   const folder = await window.promptBattle.pickFolder();
@@ -55,6 +65,7 @@ function renderBattleEvent(event) {
       break;
     case 'hesitate':
       appendLog('You hesitate. No attack this turn.');
+      setInputEnabled(true);
       break;
     case 'agentEvent':
       appendLog(
@@ -76,6 +87,7 @@ function renderBattleEvent(event) {
       break;
     case 'hpChanged':
       setHpBar(event.hp, event.maxHp);
+      setInputEnabled(true);
       break;
     case 'floorCleared':
       appendLog(`${event.monsterName} defeated! +${event.xpGained} XP`, 'victory');
@@ -94,6 +106,7 @@ startBtn.addEventListener('click', async () => {
   setupScreen.hidden = true;
   dungeonScreen.hidden = false;
   logEl.textContent = '';
+  setInputEnabled(true);
   try {
     const result = await window.promptBattle.startRun({ cwd: chosenFolder, difficulty });
     dungeonScreen.hidden = true;
@@ -116,10 +129,12 @@ attackForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = promptInput.value;
   promptInput.value = '';
+  setInputEnabled(false);
   window.promptBattle.submitPrompt(text);
 });
 
 fleeBtn.addEventListener('click', () => {
+  setInputEnabled(false);
   window.promptBattle.flee();
 });
 

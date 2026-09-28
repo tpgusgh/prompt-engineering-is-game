@@ -26,7 +26,8 @@
   "build": {
     "appId": "com.promptbattle.app",
     "productName": "Prompt Battle",
-    "files": ["src/**/*.ts", "electron/**/*", "package.json", "!node_modules/**/*"],
+    "files": ["src/**/*.ts", "electron/**/*", "package.json"],
+    "asarUnpack": ["node_modules/@anthropic-ai/claude-agent-sdk-*/**"],
     "mac": {
       "target": ["dmg"],
       "category": "public.app-category.developer-tools"

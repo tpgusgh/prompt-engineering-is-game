@@ -7,6 +7,11 @@ body {
   color: #d8dee9;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+/* Must win over any later #id{display:...} rule (e.g. #dungeon-screen's
+   display:flex), since an id selector otherwise beats [hidden] on its own. */
+[hidden] {
+  display: none !important;
+}
 #setup-screen,
 #summary-screen {
   max-width: 420px;

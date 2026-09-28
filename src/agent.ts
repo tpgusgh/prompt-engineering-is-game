@@ -85,6 +85,19 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   return { filesChanged, commandsRun, text, finalResult, error, sessionId };
 }
 
+// The Electron app runs the SDK's native `claude` binary from inside a packaged
+// .app, where node_modules is unpacked from the asar (electron-builder's
+// `asarUnpack`) to a real path on disk — required because an OS can't exec a
+// binary that lives inside a virtual archive. The SDK's own default binary
+// lookup doesn't know about that unpacking, so electron/main.ts sets this env
+// var to the real unpacked path before starting a run; it's unset (and this
+// returns {}) everywhere else, including the plain CLI, which never runs
+// from inside an asar.
+export function executableOverrideOptions(): { pathToClaudeCodeExecutable?: string } {
+  const override = process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
+  return override ? { pathToClaudeCodeExecutable: override } : {};
+}
+
 export async function runAgentTurn(
   prompt: string,
   cwd: string,
@@ -112,6 +125,7 @@ export async function runAgentTurn(
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
         tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
         ...(sessionId ? { resume: sessionId } : {}),
+        ...executableOverrideOptions(),
       },
     })) {
       const info = extractToolInfo(message);
