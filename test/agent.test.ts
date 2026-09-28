@@ -40,6 +40,29 @@ test('reads the final result string from a successful result message', () => {
   assert.equal(info.finalResult, 'All tests pass.');
 });
 
+test('reports an error from an is_error success-subtype result (SDKResultSuccess with is_error true)', () => {
+  // Real shape: sdk.d.ts SDKResultSuccess (5671-5735) — subtype 'success' but
+  // is_error: true means `result` carries the API error text, not a real answer.
+  const message = { type: 'result', subtype: 'success', is_error: true, result: 'invalid API key' };
+  const info = extractToolInfo(message);
+  assert.equal(info.error, 'invalid API key');
+  assert.equal(info.finalResult, undefined);
+});
+
+test('reports an error from an SDKResultError message', () => {
+  // Real shape: sdk.d.ts SDKResultError (5610-5664) — subtype is one of the
+  // error_* variants, no `result` field, `errors: string[]` instead.
+  const message = {
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    errors: ['API error: rate limit exceeded'],
+  };
+  const info = extractToolInfo(message);
+  assert.equal(info.error, 'API error: rate limit exceeded');
+  assert.equal(info.finalResult, undefined);
+});
+
 test('unknown or malformed messages extract to empty, never throw', () => {
   assert.doesNotThrow(() => extractToolInfo(null));
   assert.doesNotThrow(() => extractToolInfo({}));

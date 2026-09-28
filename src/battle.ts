@@ -56,15 +56,15 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         turn = { summary: '', filesChanged: [], commandsRun: [], error: err instanceof Error ? err.message : String(err) };
       }
 
-      hp = Math.max(0, hp - damage);
-      const critLabel = crit ? colorize(' CRITICAL HIT!', 'red') : '';
-      deps.write(`You attack for ${damage} damage!${critLabel}\n`);
-      if (matchedKeywords.length > 0) {
-        deps.write(`(keywords: ${matchedKeywords.join(', ')})\n`);
-      }
       if (turn.error) {
-        deps.write(colorize(`The spell fizzles: ${turn.error}`, 'red') + '\n');
+        deps.write(colorize(`Your attack misses! The spell fizzles: ${turn.error}`, 'red') + '\n');
       } else {
+        hp = Math.max(0, hp - damage);
+        const critLabel = crit ? colorize(' CRITICAL HIT!', 'red') : '';
+        deps.write(`You attack for ${damage} damage!${critLabel}\n`);
+        if (matchedKeywords.length > 0) {
+          deps.write(`(keywords: ${matchedKeywords.join(', ')})\n`);
+        }
         if (turn.filesChanged.length > 0) deps.write(`Files changed: ${turn.filesChanged.join(', ')}\n`);
         if (turn.commandsRun.length > 0) deps.write(`Commands run: ${turn.commandsRun.join(', ')}\n`);
         if (turn.summary) deps.write(`${turn.summary}\n`);

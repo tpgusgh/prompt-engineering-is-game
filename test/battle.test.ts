@@ -55,7 +55,7 @@ test('/flee behaves the same as /quit', async () => {
   assert.equal(summary.floorsCleared, 1);
 });
 
-test('an agent turn that throws does not crash the loop and deals no bonus/penalty', async () => {
+test('an agent turn that throws does not crash the loop and deals no damage', async () => {
   let calls = 0;
   const deps = {
     runTurn: async () => {
@@ -73,5 +73,17 @@ test('an agent turn that throws does not crash the loop and deals no bonus/penal
   };
   const summary = await runDungeon(deps);
   assert.equal(calls, 1);
-  assert.equal(summary.floorsCleared, 1, 'damage still applies from the prompt even though the agent call failed');
+  assert.equal(summary.floorsCleared, 0, 'no damage lands when the agent call failed, so the floor is not cleared');
+});
+
+test('an agent turn that resolves with TurnResult.error set deals no damage either', async () => {
+  const { deps, runTurnCalls } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit'], {
+    summary: '',
+    filesChanged: [],
+    commandsRun: [],
+    error: 'invalid API key',
+  });
+  const summary = await runDungeon(deps);
+  assert.equal(runTurnCalls.length, 1);
+  assert.equal(summary.floorsCleared, 0, 'a result-level error (no thrown exception) still deals no damage');
 });

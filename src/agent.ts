@@ -12,17 +12,29 @@ export interface ExtractedInfo {
   commandsRun: string[];
   text: string;
   finalResult?: string;
+  error?: string;
 }
 
 // Shape confirmed against node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts
-// (SDKAssistantMessage, SDKResultSuccess) and
+// (SDKAssistantMessage, SDKResultSuccess, SDKResultError) and
 // node_modules/@anthropic-ai/sdk/resources/beta/messages/messages.d.ts
 // (BetaTextBlock, BetaToolUseBlock).
+//
+// SDKResultMessage = SDKResultSuccess | SDKResultError (sdk.d.ts:5669).
+// SDKResultSuccess (5671-5735): subtype 'success', is_error: boolean (5699),
+// result: string (5703) — per the doc comment on 5667, subtype 'success' with
+// is_error true carries the ERROR text in `result` (an API error ending the
+// turn), not a real success.
+// SDKResultError (5610-5664): subtype is one of
+// 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' |
+// 'error_max_structured_output_retries' (5612), no `result` field, has
+// `errors: string[]` instead (5636).
 export function extractToolInfo(message: unknown): ExtractedInfo {
   const filesChanged: string[] = [];
   const commandsRun: string[] = [];
   let text = '';
   let finalResult: string | undefined;
+  let error: string | undefined;
 
   const m = message as any;
 
@@ -42,11 +54,20 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
     }
   }
 
-  if (m?.type === 'result' && m.subtype === 'success' && typeof m.result === 'string') {
-    finalResult = m.result;
+  if (m?.type === 'result') {
+    if (m.subtype === 'success') {
+      if (m.is_error === true) {
+        error = typeof m.result === 'string' ? m.result : 'agent turn ended with an error';
+      } else if (typeof m.result === 'string') {
+        finalResult = m.result;
+      }
+    } else if (typeof m.subtype === 'string') {
+      const errs = Array.isArray(m.errors) ? m.errors.filter((e: unknown) => typeof e === 'string') : [];
+      error = errs.length > 0 ? errs.join('; ') : `agent turn ended: ${m.subtype}`;
+    }
   }
 
-  return { filesChanged, commandsRun, text, finalResult };
+  return { filesChanged, commandsRun, text, finalResult, error };
 }
 
 export async function runAgentTurn(prompt: string, cwd: string): Promise<TurnResult> {
@@ -54,6 +75,7 @@ export async function runAgentTurn(prompt: string, cwd: string): Promise<TurnRes
   const commandsRun: string[] = [];
   let text = '';
   let finalResult: string | undefined;
+  let error: string | undefined;
 
   try {
     for await (const message of query({
@@ -72,8 +94,9 @@ export async function runAgentTurn(prompt: string, cwd: string): Promise<TurnRes
       commandsRun.push(...info.commandsRun);
       text += info.text;
       if (info.finalResult) finalResult = info.finalResult;
+      if (info.error) error = info.error;
     }
-    return { summary: (finalResult ?? text).trim(), filesChanged: [...filesChanged], commandsRun };
+    return { summary: (finalResult ?? text).trim(), filesChanged: [...filesChanged], commandsRun, error };
   } catch (err) {
     return {
       summary: '',
