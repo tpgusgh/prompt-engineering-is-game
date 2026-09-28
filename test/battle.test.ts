@@ -99,7 +99,7 @@ test('an agent turn that resolves with TurnResult.error set deals no damage eith
   assert.equal(summary.floorsEngaged, 1);
 });
 
-test('threads sessionId returned from one turn into the next turn call, across floors', async () => {
+test('threads sessionId returned from one turn into the next turn call, across floors, latest wins', async () => {
   const sessionIdsSeen: (string | undefined)[] = [];
   let turnCount = 0;
   const deps = {
@@ -108,7 +108,7 @@ test('threads sessionId returned from one turn into the next turn call, across f
       turnCount += 1;
       return { summary: '', filesChanged: [], commandsRun: [], sessionId: `session-${turnCount}` };
     },
-    readInput: drain([ONE_SHOT_PROMPT, ONE_SHOT_PROMPT, '/quit']),
+    readInput: drain([ONE_SHOT_PROMPT, ONE_SHOT_PROMPT, ONE_SHOT_PROMPT, '/quit']),
     write: () => {},
     cwd: '/fake/cwd',
     difficulty: 'normal' as const,
@@ -116,6 +116,31 @@ test('threads sessionId returned from one turn into the next turn call, across f
   await runDungeon(deps);
   assert.equal(sessionIdsSeen[0], undefined, 'first turn of a run has no prior session to resume');
   assert.equal(sessionIdsSeen[1], 'session-1', 'second turn (a new floor) still receives the first turn\'s session');
+  assert.equal(sessionIdsSeen[2], 'session-2', 'third turn receives the most recent session, not the first');
+});
+
+test('a failed turn never poisons sessionId for later turns', async () => {
+  const sessionIdsSeen: (string | undefined)[] = [];
+  let turnCount = 0;
+  const deps = {
+    runTurn: async (_prompt: string, _cwd: string, sessionId?: string) => {
+      sessionIdsSeen.push(sessionId);
+      turnCount += 1;
+      if (turnCount === 2) {
+        // second turn fails but still reports a (broken/unreliable) session id
+        return { summary: '', filesChanged: [], commandsRun: [], error: 'invalid API key', sessionId: 'broken-session' };
+      }
+      return { summary: '', filesChanged: [], commandsRun: [], sessionId: `session-${turnCount}` };
+    },
+    readInput: drain([ONE_SHOT_PROMPT, ONE_SHOT_PROMPT, ONE_SHOT_PROMPT, '/quit']),
+    write: () => {},
+    cwd: '/fake/cwd',
+    difficulty: 'normal' as const,
+  };
+  await runDungeon(deps);
+  assert.equal(sessionIdsSeen[0], undefined);
+  assert.equal(sessionIdsSeen[1], 'session-1', 'second (failing) turn still resumes the last good session');
+  assert.equal(sessionIdsSeen[2], 'session-1', 'third turn resumes the last GOOD session, not the broken one the failed turn reported');
 });
 
 test('streams file/command events live via deps.write as they happen', async () => {
@@ -126,6 +151,13 @@ test('streams file/command events live via deps.write as they happen', async () 
     return { summary: 'done', filesChanged: ['src/foo.ts'], commandsRun: ['npm test'] };
   };
   await runDungeon(deps);
-  assert.ok(written.some((line) => line.includes('npm test')), 'command event was written live');
-  assert.ok(written.some((line) => line.includes('src/foo.ts')), 'file event was written live');
+  const commandIndex = written.findIndex((line) => line.includes('npm test'));
+  const fileIndex = written.findIndex((line) => line.includes('src/foo.ts'));
+  const damageLineIndex = written.findIndex((line) => line.includes('You attack for'));
+  assert.notEqual(commandIndex, -1, 'command event was written');
+  assert.notEqual(fileIndex, -1, 'file event was written');
+  assert.ok(
+    commandIndex < damageLineIndex && fileIndex < damageLineIndex,
+    'events are written from onEvent during the turn, before the post-turn damage line — not buffered until the turn resolves',
+  );
 });

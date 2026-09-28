@@ -38,6 +38,18 @@ test('loadProfile coerces a field with the wrong type back to its default instea
   assert.deepEqual(profile, { level: 5, xp: 0, totalWins: 0, totalBattles: 12 }, 'good fields kept, bad-typed fields fall back individually');
 });
 
+test('loadProfile rejects negative, fractional, and non-finite counts, not just wrong types', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
+  await writeFile(
+    path.join(dir, '.promptbattle', 'profile.json'),
+    JSON.stringify({ level: 0, xp: -5, totalWins: 2.5, totalBattles: Infinity }),
+    'utf-8',
+  );
+  const profile = await loadProfile(dir);
+  assert.deepEqual(profile, { level: 1, xp: 0, totalWins: 0, totalBattles: 0 });
+});
+
 test('levelForXp follows a flat 100-xp-per-level curve', () => {
   assert.equal(levelForXp(0), 1);
   assert.equal(levelForXp(99), 1);

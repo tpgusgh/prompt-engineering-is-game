@@ -33,7 +33,9 @@ Type real coding instructions at the `>` prompt. Longer prompts, and prompts usi
 
 ## Safety
 
-`promptbattle` runs with full autonomous file/command permissions (no per-action confirmation) so a turn resolves in one shot. Only run it inside projects you trust, the same way you would with `claude --dangerously-skip-permissions`.
+`promptbattle` runs with full autonomous file/command permissions (no per-action confirmation) so a turn resolves in one shot. Only run it inside projects you trust, the same way you would with `claude --dangerously-skip-permissions`. Tool access is restricted to reading, writing, editing files, running shell commands, and searching (Read/Write/Edit/Bash/Glob/Grep) — nothing else.
+
+Each run is one continuing Claude Code session (turns resume each other for context), so it shows up in your Claude Code history as a single growing conversation, and cost/context grows across floors the same way a long `claude` session would.
 
 ## Limitations (v1)
 

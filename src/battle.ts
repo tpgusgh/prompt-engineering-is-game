@@ -64,7 +64,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       } catch (err) {
         turn = { summary: '', filesChanged: [], commandsRun: [], error: err instanceof Error ? err.message : String(err) };
       }
-      if (turn.sessionId) sessionId = turn.sessionId;
+      // Only adopt a session id from a turn that actually succeeded — resuming
+      // a session captured from a failed turn (a broken/never-saved session)
+      // would make every later turn fail the same way for the rest of the run.
+      if (!turn.error && turn.sessionId) sessionId = turn.sessionId;
 
       if (turn.error) {
         deps.write(colorize(`Your attack misses! The spell fizzles: ${turn.error}`, 'red') + '\n');

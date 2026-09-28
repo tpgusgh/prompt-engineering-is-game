@@ -2,7 +2,7 @@
 // src/cli.ts
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { runDungeon } from './battle.ts';
+import { runDungeon, type BattleSummary } from './battle.ts';
 import { runAgentTurn } from './agent.ts';
 import { loadProfile, saveProfile, addXp } from './profile.ts';
 import { parseDifficulty } from './args.ts';
@@ -21,7 +21,7 @@ async function main(): Promise<void> {
 
   console.log(colorize(`Welcome back, level ${profile.level} adventurer. Difficulty: ${difficulty}.`, 'cyan'));
 
-  let summary;
+  let summary: BattleSummary;
   try {
     summary = await runDungeon({
       runTurn: runAgentTurn,

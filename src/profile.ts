@@ -15,17 +15,17 @@ function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+function isValidCount(value: unknown, min: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min;
 }
 
 function coerceProfile(parsed: unknown): Profile {
   const p = parsed as Partial<Record<keyof Profile, unknown>> | null | undefined;
   return {
-    level: isFiniteNumber(p?.level) ? p.level : DEFAULT_PROFILE.level,
-    xp: isFiniteNumber(p?.xp) ? p.xp : DEFAULT_PROFILE.xp,
-    totalWins: isFiniteNumber(p?.totalWins) ? p.totalWins : DEFAULT_PROFILE.totalWins,
-    totalBattles: isFiniteNumber(p?.totalBattles) ? p.totalBattles : DEFAULT_PROFILE.totalBattles,
+    level: isValidCount(p?.level, 1) ? p.level : DEFAULT_PROFILE.level,
+    xp: isValidCount(p?.xp, 0) ? p.xp : DEFAULT_PROFILE.xp,
+    totalWins: isValidCount(p?.totalWins, 0) ? p.totalWins : DEFAULT_PROFILE.totalWins,
+    totalBattles: isValidCount(p?.totalBattles, 0) ? p.totalBattles : DEFAULT_PROFILE.totalBattles,
   };
 }
 
