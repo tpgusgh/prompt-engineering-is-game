@@ -7,6 +7,7 @@ import { runAgentTurn } from './agent.ts';
 import { loadProfile, saveProfile, addXp } from './profile.ts';
 import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
+import { formatBattleEvent } from './cli-render.ts';
 
 async function main(): Promise<void> {
   // No API key required: the Claude Agent SDK falls back to the local Claude
@@ -27,8 +28,9 @@ async function main(): Promise<void> {
       runTurn: runAgentTurn,
       cwd: process.cwd(),
       difficulty,
-      write: (text: string) => stdout.write(text),
+      onBattleEvent: (event) => stdout.write(formatBattleEvent(event)),
       readInput: async () => {
+        stdout.write('\n> ');
         const next = await lines.next();
         return next.done ? null : next.value;
       },
