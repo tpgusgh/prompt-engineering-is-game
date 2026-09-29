@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" alt="프롬프트 배틀" width="220" /></p>
+
 # 프롬프트 배틀
 
 **한국어** | [English](README.en.md)

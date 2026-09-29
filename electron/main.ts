@@ -59,6 +59,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
+    icon: path.join(__dirname, 'renderer', 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -100,6 +101,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // The packaged app gets its icon from build/icon.icns; in dev, set the Dock icon.
+  if (!app.isPackaged && process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, 'renderer', 'logo.png'));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

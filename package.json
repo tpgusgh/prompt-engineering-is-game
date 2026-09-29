@@ -40,7 +40,8 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns"
     },
     "directories": {
       "output": "release"

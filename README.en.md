@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" alt="Prompt Battle" width="220" /></p>
+
 # Prompt Battle
 
 **English** | [한국어](README.md)

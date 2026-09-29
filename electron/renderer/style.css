@@ -1760,3 +1760,11 @@ body {
   70% { transform: scale(1.04); opacity: 1; }
   100% { transform: scale(1); }
 }
+
+.title-logo {
+  display: block;
+  width: 180px;
+  height: 180px;
+  margin: 8px auto 6px;
+  filter: drop-shadow(0 8px 24px rgba(129, 90, 255, 0.35));
+}
