@@ -6,7 +6,7 @@ import path from 'node:path';
 import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 0, swordLevel: 0 };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0 };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -16,9 +16,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 }, statPoints: 1, swordLevel: 3 }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3 }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 }, statPoints: 1, swordLevel: 3 });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3 });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -108,11 +108,10 @@ test('applyRun records xp, stats, coins, bag, max HP and the exact floor to resu
   assert.equal(p.totalBattles, 4);
   assert.equal(p.coins, 70);
   assert.deepEqual(p.bag, { potion: 1 });
-  assert.equal(p.maxHp, 110);
   assert.deepEqual(p.storyFloors, { adventure: 9 });
-  assert.deepEqual(p.stats, { attack: 1, defense: 0, vitality: 1 });
-  assert.equal(p.statPoints, 2);
   assert.equal(p.swordLevel, 4);
+  assert.equal('stats' in p, false, 'stats are per-run, never saved to the profile');
+  assert.equal(p.maxHp, 100, "vitality's +10 from this run is stripped; only permanent max HP (crystals) is kept");
 });
 
 test('applyRun: defeat rewinds to the chapter start; progress never goes backwards', () => {

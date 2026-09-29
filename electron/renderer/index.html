@@ -28,7 +28,7 @@
       <fieldset>
         <legend>용사 능력치</legend>
         <div id="stat-options" class="stat-list"></div>
-        <p class="option-sub">몬스터를 쓰러뜨릴 때마다 능력치 포인트 1개 (전투 중 사용, 능력치당 최대 Lv.10). 검 강화는 던전의 대장장이에게.</p>
+        <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 검 강화는 영구 (던전의 대장장이).</p>
       </fieldset>
       <fieldset>
         <legend>난이도</legend>
@@ -49,8 +49,18 @@
       <aside id="inventory">
         <div class="inventory-header">
           <span>인벤토리</span>
-          <button type="button" id="refresh-tree" title="새로고침">↻</button>
+          <span class="inventory-actions">
+            <button type="button" id="new-file" title="새 파일 (선택한 폴더 안에)">+📄</button>
+            <button type="button" id="new-folder" title="새 폴더 (선택한 폴더 안에)">+📁</button>
+            <button type="button" id="refresh-tree" title="새로고침">↻</button>
+          </span>
         </div>
+        <form id="new-entry-form" class="new-entry" hidden>
+          <input id="new-entry-name" autocomplete="off" />
+          <button type="submit">만들기</button>
+          <button type="button" id="new-entry-cancel">취소</button>
+        </form>
+        <div id="tree-status" class="tree-status" hidden></div>
         <div id="file-tree" class="file-tree"></div>
       </aside>
 

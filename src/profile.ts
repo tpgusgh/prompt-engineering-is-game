@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { MONSTER_COUNT } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
-import { EMPTY_STATS, type Stats } from './stats.ts';
+import { VITALITY_HP } from './stats.ts';
 
 export interface Profile {
   level: number;
@@ -16,13 +16,12 @@ export interface Profile {
   coins: number;
   bag: Record<string, number>;
   maxHp: number;
-  stats: Stats;
-  statPoints: number;
+  // Permanent: the blacksmith's +N. (Hero stats are per-run, not saved here.)
   swordLevel: number;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, stats: { ...EMPTY_STATS }, statPoints: 0, swordLevel: 0 };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0 };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -61,8 +60,6 @@ function coerceProfile(parsed: unknown): Profile {
     coins: isValidCount(p?.coins, 0) ? p.coins : DEFAULT_PROFILE.coins,
     bag: coerceCounts(p?.bag, 1),
     maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
-    stats: { ...EMPTY_STATS, ...coerceCounts(p?.stats, 0) },
-    statPoints: isValidCount(p?.statPoints, 0) ? p.statPoints : 0,
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
   };
 }
@@ -73,7 +70,7 @@ export async function loadProfile(homeDir: string = os.homedir()): Promise<Profi
     const parsed = JSON.parse(raw);
     return coerceProfile(parsed);
   } catch {
-    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, stats: { ...EMPTY_STATS } };
+    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {} };
   }
 }
 
@@ -101,9 +98,9 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.totalBattles += summary.floorsEngaged;
   updated.coins = summary.coins;
   updated.bag = { ...summary.bag };
-  updated.maxHp = summary.playerMaxHp;
-  updated.stats = { ...summary.stats };
-  updated.statPoints = summary.statPoints;
+  // Vitality is a per-run stat: strip its bonus so only permanent max HP
+  // (life crystals) carries over.
+  updated.maxHp = Math.max(BASE_MAX_HP, summary.playerMaxHp - summary.stats.vitality * VITALITY_HP);
   updated.swordLevel = summary.swordLevel;
   if (themeId) {
     const reached = summary.defeated ? summary.chaptersCleared * MONSTER_COUNT : summary.nextFloor;

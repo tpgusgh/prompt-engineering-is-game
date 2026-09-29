@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn, fetchPlanUsage, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { loadSlots, writeSlot } from '../src/saves.ts';
+import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
 import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
@@ -167,8 +168,9 @@ ipcMain.handle(
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier,
-      stats: slot ? slot.stats : profile.stats,
-      statPoints: slot ? slot.statPoints : profile.statPoints,
+      // Hero stats are per-run: fresh each game, restored only from a save slot.
+      stats: slot?.stats,
+      statPoints: slot?.statPoints,
       swordLevel: slot ? slot.swordLevel : profile.swordLevel,
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
@@ -197,10 +199,19 @@ ipcMain.handle(
 
 function insideCwd(filePath: string): string | null {
   if (!currentCwd) return null;
-  const resolved = path.resolve(currentCwd, filePath);
-  const rel = path.relative(currentCwd, resolved);
-  return rel === '' || rel.startsWith('..') || path.isAbsolute(rel) ? null : resolved;
+  const resolved = resolveInside(currentCwd, filePath);
+  return resolved === currentCwd ? null : resolved;
 }
+
+// Inventory drag & drop and "new file/folder" — all confined to the project.
+const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
+ipcMain.handle('move-path', (_event, src: string, destDir: string) => (currentCwd ? movePath(currentCwd, src, destDir) : noProject));
+ipcMain.handle('import-files', (_event, sources: string[], destDir: string) =>
+  currentCwd ? importPaths(currentCwd, sources, destDir) : { imported: 0, failed: sources },
+);
+ipcMain.handle('create-entry', (_event, parentDir: string, name: string, kind: 'file' | 'dir') =>
+  currentCwd ? createEntry(currentCwd, parentDir, name, kind) : noProject,
+);
 
 const TREE_SKIP = new Set(['node_modules', '.git', 'release', 'dist', '.superpowers', '.claude', '.DS_Store']);
 const TREE_MAX_ENTRIES = 800;

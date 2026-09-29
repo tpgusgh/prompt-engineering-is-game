@@ -5,13 +5,18 @@
 // .mjs for ESM, and sandboxed preload has no ESM context). This is the one
 // file in the project that isn't native-TS, because the platform doesn't
 // support it here, not because it was skipped.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('promptBattle', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
   getUsage: () => ipcRenderer.invoke('get-usage'),
+  movePath: (src, destDir) => ipcRenderer.invoke('move-path', src, destDir),
+  importFiles: (sources, destDir) => ipcRenderer.invoke('import-files', sources, destDir),
+  createEntry: (parentDir, name, kind) => ipcRenderer.invoke('create-entry', parentDir, name, kind),
+  // Dropped OS files: Electron no longer exposes File.path to the page.
+  pathForFile: (file) => webUtils.getPathForFile(file),
   listSessions: (cwd) => ipcRenderer.invoke('list-sessions', cwd),
   sessionHistory: (cwd, sessionId) => ipcRenderer.invoke('session-history', cwd, sessionId),
   listSlots: () => ipcRenderer.invoke('list-slots'),

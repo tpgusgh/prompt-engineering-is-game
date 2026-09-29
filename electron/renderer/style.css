@@ -884,3 +884,52 @@ body {
 #session-select {
   max-width: 360px;
 }
+
+.inventory-actions {
+  display: flex;
+  gap: 4px;
+}
+.new-entry {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid #4c566a;
+}
+.new-entry input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #5e81ac;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.new-entry button {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tree-status {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #a3be8c;
+}
+.tree-status.error {
+  color: #bf616a;
+}
+.file-tree .tree-item.selected {
+  background: rgba(136, 192, 208, 0.18);
+}
+.file-tree .tree-item.drop-target,
+.file-tree.drop-target {
+  outline: 1px dashed #ebcb8b;
+  background: rgba(235, 203, 139, 0.15);
+}
+.file-tree .tree-item[draggable='true'] {
+  -webkit-user-drag: element;
+}

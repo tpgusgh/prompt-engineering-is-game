@@ -31,8 +31,6 @@ async function main(): Promise<void> {
       coins: profile.coins,
       bag: profile.bag,
       playerMaxHp: profile.maxHp,
-      stats: profile.stats,
-      statPoints: profile.statPoints,
       swordLevel: profile.swordLevel,
       onBattleEvent: (event) => stdout.write(formatBattleEvent(event)),
       readInput: async () => {

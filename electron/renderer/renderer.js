@@ -219,7 +219,7 @@ function renderSetupStats() {
     const row = document.createElement('div');
     row.className = 'stat-row';
     const label = document.createElement('span');
-    label.textContent = `${s.name} Lv.${profile.stats[s.id]}/${statMax}`;
+    label.textContent = `${s.name} (최대 Lv.${statMax})`;
     const effect = document.createElement('span');
     effect.className = 'option-sub';
     effect.textContent = s.effect;
@@ -231,7 +231,7 @@ function renderSetupStats() {
   sword.append(`검 강화 +${profile.swordLevel}/${swordMax}`);
   const swordFx = document.createElement('span');
   swordFx.className = 'option-sub';
-  swordFx.textContent = `피해 +${profile.swordLevel * 10}%${profile.statPoints ? ` · 남은 능력치 포인트 ${profile.statPoints}` : ''}`;
+  swordFx.textContent = `피해 +${profile.swordLevel * 10}% (영구)`;
   sword.append(swordFx);
   list.append(sword);
 }
@@ -540,6 +540,91 @@ function throwFileIcon(filePath) {
 // Inventory: the project's file tree. Folders toggle; files open in the
 // viewer/editor. Files the AI touched this run are highlighted.
 const openDirs = new Set();
+let treeRoot = null;
+let selectedDir = null; // target of "new file/folder"; null = project root
+const DRAG_TYPE = 'application/x-promptbattle-path';
+
+function treeStatus(text, isError) {
+  const el = $('tree-status');
+  el.textContent = text;
+  el.className = `tree-status${isError ? ' error' : ''}`;
+  el.hidden = false;
+  clearTimeout(treeStatus.timer);
+  treeStatus.timer = setTimeout(() => (el.hidden = true), 3500);
+}
+
+const baseName = (p) => p.split('/').filter(Boolean).pop();
+
+// A drop onto a folder (or the empty tree area = project root): an entry
+// dragged from the tree moves; files dragged in from Finder are copied.
+async function handleDrop(e, destDir) {
+  e.preventDefault();
+  e.stopPropagation();
+  for (const el of document.querySelectorAll('.drop-target')) el.classList.remove('drop-target');
+  if (!destDir) return;
+  const internal = e.dataTransfer.getData(DRAG_TYPE);
+  if (internal) {
+    const r = await window.promptBattle.movePath(internal, destDir);
+    if (r.ok) {
+      openDirs.add(destDir);
+      treeStatus(`${baseName(internal)} → ${baseName(destDir) ?? '/'} 로 옮겼다`);
+    } else treeStatus(`옮길 수 없다: ${r.message}`, true);
+  } else {
+    const paths = [...e.dataTransfer.files].map((f) => window.promptBattle.pathForFile(f)).filter(Boolean);
+    if (paths.length === 0) return;
+    const r = await window.promptBattle.importFiles(paths, destDir);
+    openDirs.add(destDir);
+    treeStatus(
+      r.failed.length ? `${r.imported}개 가져옴, ${r.failed.length}개 실패` : `${r.imported}개를 ${baseName(destDir)}(으)로 가져왔다`,
+      r.failed.length > 0,
+    );
+  }
+  refreshTree();
+}
+
+function makeDropTarget(el, destDirOf) {
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes(DRAG_TYPE) ? 'move' : 'copy';
+    el.classList.add('drop-target');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+  el.addEventListener('drop', (e) => handleDrop(e, destDirOf()));
+}
+makeDropTarget(fileTreeEl, () => treeRoot);
+// Stray drops anywhere else must not navigate the window to the file.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+
+let newEntryKind = 'file';
+function openNewEntry(kind) {
+  newEntryKind = kind;
+  const input = $('new-entry-name');
+  input.value = '';
+  const where = selectedDir ? baseName(selectedDir) : '프로젝트 루트';
+  input.placeholder = `${kind === 'dir' ? '새 폴더' : '새 파일'} 이름 (${where} 안에)`;
+  $('new-entry-form').hidden = false;
+  input.focus();
+}
+$('new-file').addEventListener('click', () => openNewEntry('file'));
+$('new-folder').addEventListener('click', () => openNewEntry('dir'));
+$('new-entry-cancel').addEventListener('click', () => ($('new-entry-form').hidden = true));
+$('new-entry-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const parent = selectedDir ?? treeRoot;
+  if (!parent) return;
+  const r = await window.promptBattle.createEntry(parent, $('new-entry-name').value, newEntryKind);
+  if (!r.ok) {
+    treeStatus(r.message, true);
+    return;
+  }
+  $('new-entry-form').hidden = true;
+  if (selectedDir) openDirs.add(selectedDir);
+  treeStatus(`${baseName(r.path)}을(를) 만들었다`);
+  await refreshTree();
+  if (newEntryKind === 'file') openFileViewer(r.path);
+});
 
 function renderTreeNodes(nodes) {
   const ul = document.createElement('ul');
@@ -549,6 +634,11 @@ function renderTreeNodes(nodes) {
     item.className = `tree-item ${node.type}`;
     item.textContent = node.name;
     item.title = node.path;
+    item.draggable = true;
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData(DRAG_TYPE, node.path);
+      e.dataTransfer.effectAllowed = 'move';
+    });
     li.append(item);
     if (node.type === 'dir') {
       const childList = renderTreeNodes(node.children ?? []);
@@ -557,12 +647,19 @@ function renderTreeNodes(nodes) {
         childList.hidden = !open;
       };
       setOpen(openDirs.has(node.path));
+      item.classList.toggle('selected', selectedDir === node.path);
       item.addEventListener('click', () => {
         const open = !openDirs.has(node.path);
         if (open) openDirs.add(node.path);
         else openDirs.delete(node.path);
         setOpen(open);
+        // Clicking a folder also picks it as where "new file/folder" goes;
+        // clicking it again (while open→closed) keeps it selected.
+        selectedDir = node.path;
+        for (const el of fileTreeEl.querySelectorAll('.tree-item.selected')) el.classList.remove('selected');
+        item.classList.add('selected');
       });
+      makeDropTarget(item, () => node.path);
       li.append(childList);
     } else {
       if (touchedFiles.has(node.path)) item.classList.add('touched');
@@ -583,6 +680,8 @@ async function refreshTree() {
   fileTreeEl.classList.add('tree-refreshed');
   fileTreeEl.textContent = '';
   if (!tree) return;
+  if (treeRoot !== tree.root) selectedDir = null;
+  treeRoot = tree.root;
   fileTreeEl.append(renderTreeNodes(tree.children));
   if (tree.children.length === 0) {
     const note = document.createElement('div');
@@ -1065,8 +1164,9 @@ async function startGame({ loadSlot, slot }) {
   const from = slot ?? profile;
   coins = from.coins;
   bag = { ...from.bag };
-  stats = { ...from.stats };
-  statPoints = from.statPoints;
+  // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
+  stats = { attack: 0, defense: 0, vitality: 0, ...slot?.stats };
+  statPoints = slot?.statPoints ?? 0;
   swordLevel = from.swordLevel;
   renderCoins();
   renderSwordLevel();
