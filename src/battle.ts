@@ -2,6 +2,8 @@ import { calculateDamage } from './damage.ts';
 import { spawnMonster, MONSTER_COUNT, type Difficulty } from './monsters.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { ITEMS, getItem, POTION_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
+import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
+import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
 
 export type BattleEvent =
   | { type: 'runStart'; playerHp: number; playerMaxHp: number }
@@ -45,6 +47,13 @@ export type BattleEvent =
   | { type: 'itemUseFailed'; itemId: string }
   | { type: 'counterBlocked' }
   | { type: 'contextUsage'; usedTokens: number; contextWindow: number }
+  | { type: 'statPointsChanged'; points: number; stats: Stats }
+  | { type: 'statRaised'; stat: StatId; stats: Stats; points: number }
+  | { type: 'statRaiseFailed'; reason: string }
+  | { type: 'blacksmithOpen'; swordLevel: number; coins: number; odds: EnhanceOdds; maxLevel: number }
+  | { type: 'enhanceResult'; outcome: 'success' | 'fail' | 'broken'; swordLevel: number; coins: number; odds: EnhanceOdds }
+  | { type: 'enhanceFailed'; reason: string }
+  | { type: 'blacksmithClosed' }
   | ({ type: 'runEnded' } & BattleSummary);
 
 export interface BattleDeps {
@@ -64,8 +73,10 @@ export interface BattleDeps {
   bag?: Record<string, number>;
   // Resume a Claude session saved for this project folder.
   initialSessionId?: string;
-  // Fraction (0-0.5) shaved off every monster counterattack (defense stat).
-  defense?: number;
+  // Permanent progression carried in the profile.
+  stats?: Stats;
+  statPoints?: number;
+  swordLevel?: number;
   // Flee and merchant rolls; injectable so tests are deterministic.
   random?: () => number;
 }
@@ -82,6 +93,9 @@ export interface BattleSummary {
   coins: number;
   bag: Record<string, number>;
   playerMaxHp: number;
+  stats: Stats;
+  statPoints: number;
+  swordLevel: number;
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -89,6 +103,7 @@ const FLOOR_CLEAR_HEAL = 25;
 const SESSION_WARN_RATIO = 0.8;
 const FLEE_CHANCE = 0.5;
 const MERCHANT_CHANCE = 0.3;
+const BLACKSMITH_CHANCE = 0.2;
 const BOSS_COIN_MULTIPLIER = 3;
 
 function xpForFloor(floor: number): number {
@@ -111,6 +126,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let coins = deps.coins ?? 0;
   const bag: Record<string, number> = {};
   for (const [id, count] of Object.entries(deps.bag ?? {})) if (count > 0) bag[id] = count;
+  let stats: Stats = { ...EMPTY_STATS, ...deps.stats };
+  let statPoints = deps.statPoints ?? 0;
+  let swordLevel = deps.swordLevel ?? 0;
   let sharpened = false; // whetstone: next attack x2
   let shielded = false; // amulet: next counterattack blocked
   // Input typed at the merchant that wasn't a shop command: replayed as the
@@ -142,7 +160,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'counterBlocked' });
       return;
     }
-    damage = Math.max(1, Math.round(damage * (1 - (deps.defense ?? 0))));
+    damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats))));
     playerHp = Math.max(0, playerHp - damage);
     deps.onBattleEvent({ type: 'monsterAttack', damage });
     deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
@@ -195,43 +213,109 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     deps.onBattleEvent({ type: 'betResult', choice, roll, won, amount, coins });
   };
 
-  // Returns false if the player left the dungeon from the shop.
-  const visitMerchant = async (): Promise<boolean> => {
-    deps.onBattleEvent({ type: 'merchantOpen', coins, items: ITEMS });
+  // Free action, allowed anywhere: spend a stat point from defeated monsters.
+  const spendStatPoint = (input: string) => {
+    const id = input.slice('/stat '.length).trim();
+    const fail = (reason: string) => deps.onBattleEvent({ type: 'statRaiseFailed', reason });
+    if (!isStatId(id)) return fail('그런 능력치는 없다');
+    if (statPoints < 1) return fail('능력치 포인트가 없다 (몬스터를 쓰러뜨리면 얻는다)');
+    const raised = raiseStat(stats, id);
+    if (!raised) return fail('이미 최대 레벨이다');
+    stats = raised;
+    statPoints -= 1;
+    if (id === 'vitality') {
+      playerMaxHp += VITALITY_HP;
+      playerHp += VITALITY_HP;
+      emitPlayerHp();
+    }
+    deps.onBattleEvent({ type: 'statRaised', stat: id, stats: { ...stats }, points: statPoints });
+  };
+
+  // Shared shop loop (merchant, blacksmith). `handle` returns true when it
+  // consumed the input; anything else closes the shop, and a prompt typed
+  // there is replayed as the next floor's first input. Returns false if the
+  // player left the dungeon from the shop.
+  const visitShop = async (handle: (input: string) => boolean, onClose: () => void): Promise<boolean> => {
     while (true) {
       const raw = await deps.readInput();
       if (raw === null) return false;
       const input = raw.trim();
       if (input === '/quit') return false;
-      if (input.startsWith('/bet ')) {
-        placeBet(input);
+      if (input.startsWith('/stat ')) {
+        spendStatPoint(input);
         continue;
       }
-      if (input.startsWith('/buy ')) {
-        const id = input.slice('/buy '.length).trim();
-        const item = getItem(id);
-        if (!item) {
-          deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '그런 물건은 없다' });
-        } else if (coins < item.price) {
-          deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
-        } else {
-          coins -= item.price;
-          if (item.id === 'crystal') {
-            playerMaxHp += CRYSTAL_MAX_HP;
-            playerHp += CRYSTAL_MAX_HP;
-            emitPlayerHp();
-          } else {
-            bag[item.id] = (bag[item.id] ?? 0) + 1;
-            emitBag();
-          }
-          deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins });
-        }
-        continue;
-      }
-      deps.onBattleEvent({ type: 'merchantClosed' });
+      if (handle(input)) continue;
+      onClose();
       if (input !== '/leave' && input !== '') carried = raw;
       return true;
     }
+  };
+
+  const tryEnhance = () => {
+    const odds = enhanceOdds(swordLevel);
+    if (swordLevel >= SWORD_MAX_LEVEL) {
+      deps.onBattleEvent({ type: 'enhanceFailed', reason: '이미 최대 강화다' });
+      return;
+    }
+    if (coins < odds.cost) {
+      deps.onBattleEvent({ type: 'enhanceFailed', reason: `코인이 부족하다 (${odds.cost} 필요)` });
+      return;
+    }
+    coins -= odds.cost;
+    let outcome: 'success' | 'fail' | 'broken';
+    if (random() < odds.successChance) {
+      swordLevel += 1;
+      outcome = 'success';
+    } else if (odds.breakChance > 0 && random() < odds.breakChance) {
+      swordLevel = 0;
+      outcome = 'broken';
+    } else {
+      outcome = 'fail';
+    }
+    deps.onBattleEvent({ type: 'enhanceResult', outcome, swordLevel, coins, odds: enhanceOdds(swordLevel) });
+  };
+
+  const visitBlacksmith = () => {
+    deps.onBattleEvent({ type: 'blacksmithOpen', swordLevel, coins, odds: enhanceOdds(swordLevel), maxLevel: SWORD_MAX_LEVEL });
+    return visitShop(
+      (input) => {
+        if (input !== '/enhance') return false;
+        tryEnhance();
+        return true;
+      },
+      () => deps.onBattleEvent({ type: 'blacksmithClosed' }),
+    );
+  };
+
+  const visitMerchant = () => {
+    deps.onBattleEvent({ type: 'merchantOpen', coins, items: ITEMS });
+    return visitShop((input) => {
+      if (input.startsWith('/bet ')) {
+        placeBet(input);
+        return true;
+      }
+      if (!input.startsWith('/buy ')) return false;
+      const id = input.slice('/buy '.length).trim();
+      const item = getItem(id);
+      if (!item) {
+        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '그런 물건은 없다' });
+      } else if (coins < item.price) {
+        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
+      } else {
+        coins -= item.price;
+        if (item.id === 'crystal') {
+          playerMaxHp += CRYSTAL_MAX_HP;
+          playerHp += CRYSTAL_MAX_HP;
+          emitPlayerHp();
+        } else {
+          bag[item.id] = (bag[item.id] ?? 0) + 1;
+          emitBag();
+        }
+        deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins });
+      }
+      return true;
+    }, () => deps.onBattleEvent({ type: 'merchantClosed' }));
   };
 
   while (true) {
@@ -287,6 +371,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (playerHp <= 0) break;
         continue;
       }
+      if (prompt.startsWith('/stat ')) {
+        spendStatPoint(prompt);
+        continue;
+      }
       if (prompt.startsWith('/use ')) {
         useItem(prompt.slice('/use '.length).trim());
         continue;
@@ -307,7 +395,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
       currentFloorEngaged = true;
       const base = calculateDamage(prompt);
-      let damage = Math.round(base.damage * (deps.getDamageMultiplier?.() ?? 1));
+      let damage = Math.round(
+        base.damage * (deps.getDamageMultiplier?.() ?? 1) * attackMultiplier(stats) * swordMultiplier(swordLevel),
+      );
       if (sharpened) {
         damage *= 2;
         sharpened = false;
@@ -401,8 +491,17 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const coinsGained = coinsForFloor(floor, isBoss);
     coins += coinsGained;
     deps.onBattleEvent({ type: 'coinsChanged', coins, gained: coinsGained });
+    if (!allMaxed(stats)) {
+      statPoints += 1;
+      deps.onBattleEvent({ type: 'statPointsChanged', points: statPoints, stats: { ...stats } });
+    }
     floor += 1;
-    if (random() < MERCHANT_CHANCE && !(await visitMerchant())) break;
+    const encounter = random();
+    if (encounter < MERCHANT_CHANCE) {
+      if (!(await visitMerchant())) break;
+    } else if (encounter < MERCHANT_CHANCE + BLACKSMITH_CHANCE) {
+      if (!(await visitBlacksmith())) break;
+    }
   }
 
   const summary: BattleSummary = {
@@ -415,6 +514,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     coins,
     bag: { ...bag },
     playerMaxHp,
+    stats: { ...stats },
+    statPoints,
+    swordLevel,
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

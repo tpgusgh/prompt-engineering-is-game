@@ -82,6 +82,13 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'itemUseFailed', itemId: 'potion' },
     { type: 'counterBlocked' },
     { type: 'contextUsage', usedTokens: 1, contextWindow: 2 },
+    { type: 'statPointsChanged', points: 1, stats: { attack: 0, defense: 0, vitality: 0 } },
+    { type: 'statRaised', stat: 'attack', stats: { attack: 1, defense: 0, vitality: 0 }, points: 0 },
+    { type: 'statRaiseFailed', reason: 'x' },
+    { type: 'blacksmithOpen', swordLevel: 0, coins: 10, odds: { cost: 20, successChance: 0.95, breakChance: 0 }, maxLevel: 10 },
+    { type: 'enhanceResult', outcome: 'broken', swordLevel: 0, coins: 0, odds: { cost: 20, successChance: 0.95, breakChance: 0 } },
+    { type: 'enhanceFailed', reason: 'x' },
+    { type: 'blacksmithClosed' },
   ];
   for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);
 });

@@ -26,9 +26,9 @@
         <div id="weapon-options" class="option-list"></div>
       </fieldset>
       <fieldset>
-        <legend>능력치 강화 <span id="stat-coins" class="coin-label"></span></legend>
+        <legend>용사 능력치</legend>
         <div id="stat-options" class="stat-list"></div>
-        <p id="stat-error" class="error-text" hidden></p>
+        <p class="option-sub">몬스터를 쓰러뜨릴 때마다 능력치 포인트 1개 (전투 중 사용, 능력치당 최대 Lv.10). 검 강화는 던전의 대장장이에게.</p>
       </fieldset>
       <fieldset>
         <legend>난이도</legend>
@@ -66,9 +66,26 @@
             <span id="player-hp-label"></span>
           </div>
           <span id="coin-label" class="coin-label"></span>
-          <label class="weapon-select">무기 <select id="weapon-select"></select></label>
+          <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
         </div>
         <div id="bag" class="bag"></div>
+        <div id="stat-panel" class="stat-panel"></div>
+
+        <div id="blacksmith-panel" class="merchant-panel" hidden>
+          <h2>대장장이</h2>
+          <div class="merchant-body">
+            <div id="blacksmith-art"></div>
+            <div>
+              <p class="merchant-greeting">"검을 두드려 줄까? 운이 없으면... 부러질 수도 있지. 흐흐."</p>
+              <p id="forge-info" class="forge-info"></p>
+              <div class="forge-actions">
+                <button type="button" id="forge-enhance">강화하기</button>
+                <button type="button" id="forge-leave">떠나기</button>
+                <span id="forge-result" class="bet-result"></span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div id="merchant-panel" class="merchant-panel" hidden>
           <h2>상인 고블린</h2>

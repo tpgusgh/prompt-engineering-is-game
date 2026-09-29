@@ -17,10 +17,12 @@ export interface Profile {
   bag: Record<string, number>;
   maxHp: number;
   stats: Stats;
+  statPoints: number;
+  swordLevel: number;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, stats: { ...EMPTY_STATS } };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, stats: { ...EMPTY_STATS }, statPoints: 0, swordLevel: 0 };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -60,6 +62,8 @@ function coerceProfile(parsed: unknown): Profile {
     bag: coerceCounts(p?.bag, 1),
     maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
     stats: { ...EMPTY_STATS, ...coerceCounts(p?.stats, 0) },
+    statPoints: isValidCount(p?.statPoints, 0) ? p.statPoints : 0,
+    swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
   };
 }
 
@@ -98,6 +102,9 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.coins = summary.coins;
   updated.bag = { ...summary.bag };
   updated.maxHp = summary.playerMaxHp;
+  updated.stats = { ...summary.stats };
+  updated.statPoints = summary.statPoints;
+  updated.swordLevel = summary.swordLevel;
   if (themeId) {
     const reached = summary.defeated ? summary.chaptersCleared * MONSTER_COUNT : summary.nextFloor;
     updated.storyFloors = { ...profile.storyFloors, [themeId]: Math.max(profile.storyFloors[themeId] ?? 0, reached) };

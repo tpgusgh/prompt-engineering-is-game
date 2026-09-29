@@ -11,7 +11,6 @@ contextBridge.exposeInMainWorld('promptBattle', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
-  upgradeStat: (id) => ipcRenderer.invoke('upgrade-stat', id),
   getUsage: () => ipcRenderer.invoke('get-usage'),
   getFolderSession: (cwd) => ipcRenderer.invoke('get-folder-session', cwd),
   onBattleEvent: (callback) => {

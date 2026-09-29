@@ -16,7 +16,8 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Sessions** — games start a fresh Claude session by default; when a folder has a saved session you can choose to resume it. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session.
 - **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
 - **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions. The merchant also runs an **odd/even dice game**: bet coins on odd or even, win double or lose the stake.
-- **Stat upgrades** — spend saved coins on the setup screen for permanent upgrades: attack (+10% damage per level, max 10), defense (-10% counterattack damage per level, max 5), vitality (+10 max HP per level, max 10). Each level costs more.
+- **Stat growth** — every monster defeated grants a free stat point. Spend it in battle on attack (+10% damage per level), defense (-5% counterattack damage per level) or vitality (+10 max HP per level); each stat caps at Lv.10, and unspent points are saved.
+- **Sword enhancement (blacksmith)** — after a clear you sometimes (20%) meet a blacksmith. Pay coins to enhance your sword (+10% damage per level, max +10). The higher it goes the lower the success rate (+0→+1: 95% … +9→+10: 14%), and from +3 a failure can **break the sword back to +0** (10%–40%).
 - **Usage bar** — a small line at the bottom shows how much of your Claude plan's 5-hour session limit and weekly limit is used/left and when each resets, plus the current conversation's context tokens (used/max). Refreshes after each turn; click to refresh. (Plan limits come from the SDK as percentages, not token counts; hidden with an API key.)
 - **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 
@@ -25,7 +26,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 ### 1. Setup
 ![Setup screen](docs/screenshots/setup.png)
 
-Pick a project folder, a story theme, a weapon (Claude model) and a difficulty, and spend coins on stat upgrades. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
+Pick a project folder, a story theme, a weapon (Claude model) and a difficulty. Your current stats and sword level are shown here too. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
 
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)
@@ -43,7 +44,12 @@ The capture is a real turn: the prompt asked (in Korean) to fix a bug in `cart.j
 
 The merchant sometimes shows up after a clear. Click an item to buy it with coins. In the 🎲 odd/even box, set a stake (or `올인`, all-in) and press `홀` (odd) / `짝` (even) to roll. When done, press `떠나기` (leave) to move on. Typing a prompt here closes the shop and attacks the next monster with it.
 
-### 4. Exit
+### 4. Blacksmith
+![Blacksmith](docs/screenshots/blacksmith.png)
+
+Shows the current sword level, the next enhance's cost, success rate and break-on-failure chance. `강화하기` (enhance) rolls immediately: success, fail, or 💥 broken. The ⭐ stat-point buttons at the top spend points earned from defeated monsters.
+
+### 5. Exit
 ![Exit dialog](docs/screenshots/exit.png)
 
 `나가기` (Exit) asks whether to end today's adventure or keep playing. Ending saves your floor, coins, bag, and this folder's Claude session and chat history. Next time you open the folder, the earlier chat appears at the top of the log.
@@ -69,7 +75,7 @@ npm link
 promptbattle --difficulty normal
 ```
 
-Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>`, `/bet odd|even <coins>`, `/leave` at the merchant. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
+Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>`, `/bet odd|even <coins>`, `/leave` at the merchant, `/enhance` at the blacksmith, and `/stat attack|defense|vitality` any time. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
 
 ## Setup
 

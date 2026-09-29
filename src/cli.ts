@@ -8,7 +8,6 @@ import { loadProfile, saveProfile, applyRun } from './profile.ts';
 import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
 import { formatBattleEvent } from './cli-render.ts';
-import { attackMultiplier, defenseReduction } from './stats.ts';
 
 async function main(): Promise<void> {
   // No API key required: the Claude Agent SDK falls back to the local Claude
@@ -32,8 +31,9 @@ async function main(): Promise<void> {
       coins: profile.coins,
       bag: profile.bag,
       playerMaxHp: profile.maxHp,
-      getDamageMultiplier: () => attackMultiplier(profile.stats),
-      defense: defenseReduction(profile.stats),
+      stats: profile.stats,
+      statPoints: profile.statPoints,
+      swordLevel: profile.swordLevel,
       onBattleEvent: (event) => stdout.write(formatBattleEvent(event)),
       readInput: async () => {
         stdout.write('\n> ');

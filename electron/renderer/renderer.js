@@ -1,6 +1,6 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
-import { monsterSvg, merchantSvg } from './monster-art.js';
+import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
 
 const $ = (id) => document.getElementById(id);
 const setupScreen = $('setup-screen');
@@ -114,6 +114,12 @@ let items = [];
 let coins = 0;
 let bag = {};
 let inputEnabled = false;
+let statDefs = [];
+let statMax = 10;
+let swordMax = 10;
+let stats = { attack: 0, defense: 0, vitality: 0 };
+let statPoints = 0;
+let swordLevel = 0;
 let planUsage = null;
 let contextUsage = null;
 let usageFetchedAt = 0;
@@ -149,7 +155,10 @@ async function loadSetup() {
   profile = info.profile;
   weapons = info.weapons;
   items = info.items;
-  renderStats(info.stats);
+  statDefs = info.stats;
+  statMax = info.statMaxLevel;
+  swordMax = info.swordMaxLevel;
+  renderSetupStats();
   renderProfileLine();
 
   themeOptionsEl.textContent = '';
@@ -200,44 +209,85 @@ async function loadSetup() {
 loadSetup();
 
 // ---------------------------------------------------------------------------
-// Stat upgrades (setup screen): permanent, bought with saved coins.
-function renderStats(stats) {
-  $('stat-coins').textContent = `🪙 ${profile.coins}`;
+// Stats: read-only on the setup screen; points from defeated monsters are
+// spent in battle (stat panel). The sword's +N comes from the blacksmith.
+function renderSetupStats() {
   const list = $('stat-options');
   list.textContent = '';
-  for (const s of stats) {
+  for (const s of statDefs) {
     const row = document.createElement('div');
     row.className = 'stat-row';
     const label = document.createElement('span');
-    label.textContent = `${s.name} Lv.${s.level}/${s.maxLevel}`;
+    label.textContent = `${s.name} Lv.${profile.stats[s.id]}/${statMax}`;
     const effect = document.createElement('span');
     effect.className = 'option-sub';
     effect.textContent = s.effect;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    const maxed = s.level >= s.maxLevel;
-    btn.textContent = maxed ? '최대' : `강화 🪙 ${s.cost}`;
-    btn.disabled = maxed || profile.coins < s.cost;
-    btn.addEventListener('click', async () => {
-      const result = await window.promptBattle.upgradeStat(s.id);
-      $('stat-error').hidden = result.ok;
-      if (!result.ok) {
-        $('stat-error').textContent = result.reason;
-        return;
-      }
-      profile = result.profile;
-      renderProfileLine();
-      renderStats(result.stats);
-    });
-    row.append(label, effect, btn);
+    row.append(label, effect);
     list.append(row);
   }
+  const sword = document.createElement('div');
+  sword.className = 'stat-row';
+  sword.append(`검 강화 +${profile.swordLevel}/${swordMax}`);
+  const swordFx = document.createElement('span');
+  swordFx.className = 'option-sub';
+  swordFx.textContent = `피해 +${profile.swordLevel * 10}%${profile.statPoints ? ` · 남은 능력치 포인트 ${profile.statPoints}` : ''}`;
+  sword.append(swordFx);
+  list.append(sword);
 }
 
 function renderProfileLine() {
-  const st = profile.stats;
-  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 공격 Lv.${st.attack} 방어 Lv.${st.defense}`;
+  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 검 +${profile.swordLevel}`;
 }
+
+// Battle stat panel: unspent points + one button per stat (a free action).
+function renderStatPanel() {
+  const panel = $('stat-panel');
+  panel.textContent = '';
+  const points = document.createElement('span');
+  points.className = statPoints > 0 ? 'stat-points has' : 'stat-points';
+  points.textContent = `⭐ 능력치 포인트 ${statPoints}`;
+  panel.append(points);
+  for (const s of statDefs) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const maxed = stats[s.id] >= statMax;
+    btn.textContent = `${s.name} Lv.${stats[s.id]}${maxed ? ' (MAX)' : statPoints > 0 ? ' ＋' : ''}`;
+    btn.title = s.effect;
+    btn.disabled = !inputEnabled || maxed || statPoints < 1;
+    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/stat ${s.id}`));
+    panel.append(btn);
+  }
+}
+
+function renderSwordLevel() {
+  $('sword-level').textContent = swordLevel > 0 ? `+${swordLevel}강` : '';
+}
+
+const pct = (x) => `${Math.round(x * 100)}%`;
+function renderForgeInfo(odds) {
+  $('forge-info').textContent =
+    swordLevel >= swordMax
+      ? `검 +${swordLevel} — 최대 강화에 도달했다!`
+      : `검 +${swordLevel} → +${swordLevel + 1}  ·  비용 🪙 ${odds.cost}  ·  성공 ${pct(odds.successChance)}  ·  실패 시 파괴 ${pct(odds.breakChance)}`;
+  $('forge-enhance').disabled = !inputEnabled || swordLevel >= swordMax;
+}
+
+function openBlacksmith(event) {
+  monsterPanel.hidden = true;
+  fleeBtn.disabled = true;
+  $('blacksmith-panel').hidden = false;
+  $('blacksmith-art').innerHTML = blacksmithSvg();
+  $('forge-result').textContent = '';
+  renderForgeInfo(event.odds);
+}
+
+function closeBlacksmith() {
+  $('blacksmith-panel').hidden = true;
+  monsterPanel.hidden = !merchantPanel.hidden;
+  fleeBtn.disabled = !inputEnabled;
+}
+$('forge-enhance').addEventListener('click', () => window.promptBattle.submitPrompt('/enhance'));
+$('forge-leave').addEventListener('click', () => window.promptBattle.submitPrompt('/leave'));
 
 // ---------------------------------------------------------------------------
 // Usage bar: Claude plan limits (5-hour session + weekly, as % used — the
@@ -288,6 +338,7 @@ function setInputEnabled(enabled) {
   fleeBtn.disabled = !enabled;
   exitBtn.disabled = !enabled;
   for (const btn of document.querySelectorAll('.bag button, .merchant-panel button')) btn.disabled = !enabled;
+  if (statDefs.length) renderStatPanel();
 }
 
 // A turn emits several hpChanged events (one per partial hit, plus one at
@@ -786,6 +837,58 @@ function renderBattleEvent(event) {
     case 'itemUseFailed':
       appendLog(`${itemName(event.itemId)}을(를) 쓸 수 없다.`, 'error');
       break;
+    case 'statPointsChanged':
+      statPoints = event.points;
+      stats = event.stats;
+      renderStatPanel();
+      appendLog(`⭐ 능력치 포인트 +1! (보유 ${event.points}) 아래 버튼으로 원하는 능력치를 올리자.`, 'coin-line');
+      break;
+    case 'statRaised': {
+      statPoints = event.points;
+      stats = event.stats;
+      renderStatPanel();
+      const def = statDefs.find((s) => s.id === event.stat);
+      appendLog(`${def?.name ?? event.stat}이(가) Lv.${event.stats[event.stat]}(으)로 올랐다! (${def?.effect ?? ''})`, 'victory');
+      break;
+    }
+    case 'statRaiseFailed':
+      appendLog(`능력치를 올릴 수 없다: ${event.reason}`, 'error');
+      break;
+    case 'blacksmithOpen':
+      coins = event.coins;
+      renderCoins();
+      appendLog('대장장이가 나타났다! "그 검, 좀 더 날카롭게 해줄까?"', 'coin-line');
+      openBlacksmith(event);
+      break;
+    case 'enhanceResult': {
+      coins = event.coins;
+      swordLevel = event.swordLevel;
+      renderCoins();
+      renderSwordLevel();
+      renderForgeInfo(event.odds);
+      const result = $('forge-result');
+      const text = { success: `성공! +${event.swordLevel}강`, fail: `실패... +${event.swordLevel}강 유지`, broken: '💥 검이 부러졌다! +0강' }[event.outcome];
+      result.textContent = text;
+      result.className = `bet-result ${event.outcome === 'success' ? 'win' : 'lose'}`;
+      void result.offsetWidth;
+      result.classList.add('rolled');
+      appendLog(
+        event.outcome === 'success'
+          ? `🔨 깡! 깡! 강화 성공! 검이 +${event.swordLevel}강이 되었다! (피해 +${event.swordLevel * 10}%)`
+          : event.outcome === 'broken'
+            ? '🔨 쩌저적... 검이 부러졌다! 처음부터 다시 강화해야 한다. 대장장이: "...미안하게 됐군."'
+            : `🔨 강화 실패... 검은 +${event.swordLevel}강 그대로다.`,
+        event.outcome === 'success' ? 'victory' : 'error',
+      );
+      break;
+    }
+    case 'enhanceFailed':
+      appendLog(`강화할 수 없다: ${event.reason}`, 'error');
+      break;
+    case 'blacksmithClosed':
+      appendLog('대장장이: "또 들르라고."', 'story-line');
+      closeBlacksmith();
+      break;
     case 'contextUsage':
       contextUsage = event;
       renderUsage();
@@ -817,8 +920,13 @@ startBtn.addEventListener('click', async () => {
   logEl.textContent = '';
   coins = profile.coins;
   bag = { ...profile.bag };
+  stats = { ...profile.stats };
+  statPoints = profile.statPoints;
+  swordLevel = profile.swordLevel;
   renderCoins();
+  renderSwordLevel();
   closeMerchant();
+  closeBlacksmith();
   exitOverlay.hidden = true;
   setInputEnabled(true);
   renderBag();
@@ -859,8 +967,8 @@ attackForm.addEventListener('submit', (e) => {
   // Only a real agent turn (or an empty hesitate) waits on an event that
   // re-enables input; slash commands (/new alone, /use, /buy, /flee...)
   // resolve instantly, so disabling for them would lock the input.
-  // At the merchant an empty line just leaves the shop (no hesitate follows).
-  const atMerchant = !merchantPanel.hidden;
+  // At a shop an empty line just leaves it (no hesitate follows).
+  const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
   const startsTurn = (!trimmed.startsWith('/') && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
   if (startsTurn) setInputEnabled(false);
   window.promptBattle.submitPrompt(text);

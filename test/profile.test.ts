@@ -6,7 +6,7 @@ import path from 'node:path';
 import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, stats: { attack: 0, defense: 0, vitality: 0 } };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 0, swordLevel: 0 };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -16,9 +16,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 } }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 }, statPoints: 1, swordLevel: 3 }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 } });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, stats: { attack: 2, defense: 1, vitality: 2 }, statPoints: 1, swordLevel: 3 });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -95,7 +95,7 @@ test('bad coins/bag/maxHp fall back', async () => {
 function summary(overrides: Partial<BattleSummary>): BattleSummary {
   return {
     floorsCleared: 2, floorsEngaged: 3, xpGained: 45, defeated: false, nextFloor: 9, chaptersCleared: 1,
-    coins: 70, bag: { potion: 1 }, playerMaxHp: 110, ...overrides,
+    coins: 70, bag: { potion: 1 }, playerMaxHp: 110, stats: { attack: 1, defense: 0, vitality: 1 }, statPoints: 2, swordLevel: 4, ...overrides,
   };
 }
 const base: Profile = { level: 1, xp: 80, totalWins: 1, totalBattles: 1, ...EXTRA };
@@ -110,6 +110,9 @@ test('applyRun records xp, stats, coins, bag, max HP and the exact floor to resu
   assert.deepEqual(p.bag, { potion: 1 });
   assert.equal(p.maxHp, 110);
   assert.deepEqual(p.storyFloors, { adventure: 9 });
+  assert.deepEqual(p.stats, { attack: 1, defense: 0, vitality: 1 });
+  assert.equal(p.statPoints, 2);
+  assert.equal(p.swordLevel, 4);
 });
 
 test('applyRun: defeat rewinds to the chapter start; progress never goes backwards', () => {

@@ -87,6 +87,28 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize(`No usable ${event.itemId} in your bag.`, 'red') + '\n';
     case 'contextUsage':
       return '';
+    case 'statPointsChanged':
+      return colorize(`+1 stat point (${event.points} unspent) — /stat attack|defense|vitality`, 'cyan') + '\n';
+    case 'statRaised':
+      return colorize(`${event.stat} is now Lv.${event.stats[event.stat]} (${event.points} points left)`, 'green') + '\n';
+    case 'statRaiseFailed':
+      return colorize(`Can't raise stat: ${event.reason}`, 'red') + '\n';
+    case 'blacksmithOpen':
+      return (
+        colorize(`\nA blacksmith appears! Sword +${event.swordLevel}, ${event.coins} coins.`, 'bold') +
+        `\n  /enhance — ${event.odds.cost} coins, ${Math.round(event.odds.successChance * 100)}% success, ${Math.round(event.odds.breakChance * 100)}% break on failure\n  /leave to move on\n`
+      );
+    case 'enhanceResult':
+      return (
+        colorize(
+          event.outcome === 'success' ? `Success! Sword is now +${event.swordLevel}.` : event.outcome === 'broken' ? 'The sword BROKE! Back to +0.' : `Failed. Sword stays +${event.swordLevel}.`,
+          event.outcome === 'success' ? 'green' : 'red',
+        ) + ` ${event.coins} coins left.\n`
+      );
+    case 'enhanceFailed':
+      return colorize(`Can't enhance: ${event.reason}`, 'red') + '\n';
+    case 'blacksmithClosed':
+      return colorize('The blacksmith goes back to the forge.', 'cyan') + '\n';
     case 'counterBlocked':
       return colorize('Your amulet blocks the counterattack!', 'cyan') + '\n';
     case 'runEnded':

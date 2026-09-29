@@ -514,7 +514,7 @@ test('bets must be a whole amount between 1 and your coins; Korean 홀/짝 work 
 
 test('defense reduces monster counterattacks', async () => {
   const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
-  await runDungeon({ ...deps, defense: 0.5 });
+  await runDungeon({ ...deps, stats: { attack: 0, defense: 10, vitality: 0 } });
   const counter = events.find((e) => e.type === 'monsterAttack');
   assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 3, '6 halved');
 });
@@ -525,4 +525,60 @@ test('contextUsage is reported after each turn that knows its context size', asy
   });
   await runDungeon(deps);
   assert.ok(events.some((e) => e.type === 'contextUsage' && e.usedTokens === 12000 && e.contextWindow === 200000));
+});
+
+test('each monster defeated grants a free stat point; /stat spends it as a free action', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/stat vitality', '/stat attack', WEAK_PROMPT_2, '/quit']);
+  const summary = await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'statPointsChanged' && e.points === 1));
+  assert.ok(events.some((e) => e.type === 'statRaised' && e.stat === 'vitality' && e.points === 0));
+  assert.ok(events.some((e) => e.type === 'statRaiseFailed'), 'second /stat has no point left');
+  assert.deepEqual(summary.stats, { attack: 0, defense: 0, vitality: 1 });
+  assert.equal(summary.statPoints, 0);
+  assert.equal(summary.playerMaxHp, 110, 'vitality raises max HP right away');
+  assert.ok(events.some((e) => e.type === 'playerHpChanged' && e.maxHp === 110));
+});
+
+test('attack stat and sword level both scale damage', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  await runDungeon({ ...deps, stats: { attack: 5, defense: 0, vitality: 0 }, swordLevel: 2 });
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 18, '10 x 1.5 x 1.2');
+});
+
+test('unspent stat points carry over, and a maxed stat refuses', async () => {
+  const { deps, events } = makeFakeDeps(['/stat attack', '/quit']);
+  const summary = await runDungeon({ ...deps, statPoints: 2, stats: { attack: 10, defense: 0, vitality: 0 } });
+  assert.ok(events.some((e) => e.type === 'statRaiseFailed'));
+  assert.equal(summary.statPoints, 2);
+});
+
+test('blacksmith appears on a 0.3-0.5 roll; a successful enhance costs coins and adds a level', async () => {
+  // rolls: encounter 0.35 (blacksmith), enhance success roll 0.0, then nothing
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/enhance', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 100, random: seq(0.35, 0.0, 0.99) });
+  assert.ok(events.some((e) => e.type === 'blacksmithOpen' && e.swordLevel === 0));
+  assert.ok(events.some((e) => e.type === 'enhanceResult' && e.outcome === 'success' && e.swordLevel === 1));
+  assert.equal(summary.swordLevel, 1);
+  assert.equal(summary.coins, 110 - 20);
+  assert.ok(events.some((e) => e.type === 'blacksmithClosed'));
+});
+
+test('a failed enhance at a high level can break the sword back to +0', async () => {
+  // at +5: success roll 0.99 fails, break roll 0.0 breaks
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/enhance', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 500, swordLevel: 5, random: seq(0.35, 0.99, 0.0, 0.99) });
+  assert.ok(events.some((e) => e.type === 'enhanceResult' && e.outcome === 'broken' && e.swordLevel === 0));
+  assert.equal(summary.swordLevel, 0);
+});
+
+test('a failed enhance without breaking keeps the level; no coins means no enhance', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/enhance', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 500, swordLevel: 5, random: seq(0.35, 0.99, 0.99) });
+  assert.ok(events.some((e) => e.type === 'enhanceResult' && e.outcome === 'fail' && e.swordLevel === 5));
+  assert.equal(summary.swordLevel, 5);
+
+  const poor = makeFakeDeps([ONE_SHOT_PROMPT, '/enhance', '/leave', '/quit']);
+  await runDungeon({ ...poor.deps, coins: 0, random: seq(0.35, 0.99) });
+  assert.ok(poor.events.some((e) => e.type === 'enhanceFailed'));
 });

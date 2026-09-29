@@ -772,3 +772,59 @@ body {
   opacity: 0.45;
   cursor: default;
 }
+
+.stat-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.stat-points {
+  color: #7b88a1;
+}
+.stat-points.has {
+  color: #ebcb8b;
+  font-weight: bold;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.stat-panel button {
+  padding: 2px 9px;
+  font-size: 12px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #88c0d0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.stat-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sword-level {
+  color: #ebcb8b;
+  font-weight: bold;
+}
+.forge-info {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.forge-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.forge-actions button {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid #ebcb8b;
+  background: #3b4252;
+  color: #e5e9f0;
+  cursor: pointer;
+}
+#forge-enhance {
+  background: #d08770;
+  color: #2e3440;
+  font-weight: bold;
+}

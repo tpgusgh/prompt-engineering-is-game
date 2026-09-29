@@ -151,3 +151,33 @@ export function merchantSvg() {
     <g class="monster-body">${MERCHANT}</g>
   </svg>`;
 }
+
+// The blacksmith: a bearded dwarf with a hammer over an anvil.
+const BLACKSMITH = `<defs>
+    <radialGradient id="bs-skin" cx="45%" cy="40%" r="65%"><stop offset="0%" stop-color="#f3c9a0"/><stop offset="100%" stop-color="#c98b5e"/></radialGradient>
+    <linearGradient id="bs-metal" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#aeb6c4"/><stop offset="100%" stop-color="#4c566a"/></linearGradient>
+    <radialGradient id="bs-glow"><stop offset="0%" stop-color="#ffcf70"/><stop offset="100%" stop-color="#ff7a30" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="100" cy="190" rx="75" ry="8" fill="#000" opacity=".35"/>
+  <path d="M40 150 L160 150 L150 165 L120 168 L128 188 L72 188 L80 168 L50 165 Z" fill="url(#bs-metal)" stroke="#2e3440" stroke-width="3"/>
+  <circle cx="100" cy="146" r="16" fill="url(#bs-glow)"/>
+  <rect x="84" y="140" width="32" height="7" rx="2" fill="#ffb347"/>
+  <path d="M64 136 Q100 108 136 136 L136 150 L64 150 Z" fill="#7a4a2a" stroke="#4e3115" stroke-width="3"/>
+  <rect x="80" y="112" width="40" height="30" rx="4" fill="#5a3a1e"/>
+  <circle cx="100" cy="72" r="36" fill="url(#bs-skin)" stroke="#8a5a3a" stroke-width="3"/>
+  <path d="M64 70 Q100 30 136 70 Q130 46 100 40 Q70 46 64 70 Z" fill="#5a3a1e"/>
+  <path d="M70 84 Q100 150 130 84 Q118 96 100 94 Q82 96 70 84 Z" fill="#c9793a" stroke="#8a4f22" stroke-width="2"/>
+  <path d="M86 70 l8 0 M106 70 l8 0" stroke="#2e3440" stroke-width="4" stroke-linecap="round"/>
+  <path d="M78 62 l14 -4 M122 62 l-14 -4" stroke="#5a3a1e" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="100" cy="80" rx="6" ry="5" fill="#e0a07a"/>
+  <g transform="rotate(-30 150 90)">
+    <rect x="146" y="64" width="8" height="64" rx="3" fill="#8a5a3a"/>
+    <rect x="130" y="52" width="40" height="20" rx="3" fill="url(#bs-metal)" stroke="#2e3440" stroke-width="3"/>
+  </g>
+  <circle cx="72" cy="132" r="3" fill="#ffcf70"/><circle cx="130" cy="128" r="2.5" fill="#ffcf70"/><circle cx="118" cy="120" r="2" fill="#ffb347"/>`;
+
+export function blacksmithSvg() {
+  return `<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+    <g class="monster-body">${BLACKSMITH}</g>
+  </svg>`;
+}
