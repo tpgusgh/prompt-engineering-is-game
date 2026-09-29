@@ -18,6 +18,18 @@ test('hesitate prints the hesitate line', () => {
   assert.equal(out, 'You hesitate. No attack this turn.\n');
 });
 
+test('turnStart prints a working indicator', () => {
+  const out = stripAnsi(formatBattleEvent({ type: 'turnStart' }));
+  assert.equal(out, 'Focusing your attack...\n');
+});
+
+test('partialHit prints the incremental damage', () => {
+  const out = stripAnsi(
+    formatBattleEvent({ type: 'partialHit', damage: 16, agentEvent: { type: 'command', value: 'npm test' } }),
+  );
+  assert.equal(out, '  hit for 16!\n');
+});
+
 test('agentEvent formats a command differently from a file', () => {
   assert.equal(
     stripAnsi(formatBattleEvent({ type: 'agentEvent', agentEvent: { type: 'command', value: 'npm test' } })),

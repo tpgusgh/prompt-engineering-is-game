@@ -7,12 +7,12 @@ interface MonsterTemplate {
 }
 
 const MONSTERS: MonsterTemplate[] = [
-  { name: 'Bug Goblin', art: '  (o_o)\n  <)  )╯\n  /   \\', baseHp: 60 },
-  { name: 'Type Error Slime', art: '  .-\'\'-.\n (  ~~  )\n  `-..-`', baseHp: 80 },
-  { name: 'Null Pointer Wraith', art: '  ,---.\n ( 0 0 )\n  `-v-`  undefined', baseHp: 100 },
-  { name: 'Race Condition Phantom', art: '  <o><o>\n ~~~~~~~~ (blinking)', baseHp: 130 },
-  { name: 'Merge Conflict Hydra', art: '  <<<<<<<\n  =======\n  >>>>>>>', baseHp: 160 },
-  { name: 'Legacy Code Dragon', art: '  /^^^^^\\\n <( o o )>\n  \\_===_/', baseHp: 220 },
+  { name: '버그 고블린', art: '  (o_o)\n  <)  )╯\n  /   \\', baseHp: 60 },
+  { name: '타입 에러 슬라임', art: '  .-\'\'-.\n (  ~~  )\n  `-..-`', baseHp: 80 },
+  { name: '널 포인터 레이스', art: '  ,---.\n ( 0 0 )\n  `-v-`  undefined', baseHp: 100 },
+  { name: '경쟁 상태 팬텀', art: '  <o><o>\n ~~~~~~~~ (blinking)', baseHp: 130 },
+  { name: '머지 컨플릭트 히드라', art: '  <<<<<<<\n  =======\n  >>>>>>>', baseHp: 160 },
+  { name: '레거시 코드 드래곤', art: '  /^^^^^\\\n <( o o )>\n  \\_===_/', baseHp: 220 },
 ];
 
 const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {

@@ -4,7 +4,7 @@ import { spawnMonster } from '../src/monsters.ts';
 
 test('floor 0 on normal difficulty uses the first monster at its base HP', () => {
   const monster = spawnMonster(0, 'normal');
-  assert.equal(monster.name, 'Bug Goblin');
+  assert.equal(monster.name, '버그 고블린');
   assert.equal(monster.maxHp, 60);
   assert.ok(monster.art.length > 0);
 });

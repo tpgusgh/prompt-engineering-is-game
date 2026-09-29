@@ -7,6 +7,10 @@ export function formatBattleEvent(event: BattleEvent): string {
       return `\n${colorize(`Floor ${event.floor + 1}: ${event.monsterName} appears!`, 'bold')}\n${event.monsterArt}\n${renderHpBar(event.maxHp, event.maxHp)}\n`;
     case 'hesitate':
       return colorize('You hesitate. No attack this turn.', 'yellow') + '\n';
+    case 'turnStart':
+      return colorize('Focusing your attack...', 'cyan') + '\n';
+    case 'partialHit':
+      return colorize(`  hit for ${event.damage}!`, 'red') + '\n';
     case 'agentEvent':
       return event.agentEvent.type === 'command'
         ? `  → running: ${event.agentEvent.value}\n`
