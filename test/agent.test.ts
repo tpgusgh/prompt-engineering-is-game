@@ -103,6 +103,27 @@ test('captures session_id from any message so the caller can resume', () => {
   assert.equal(extractToolInfo({ type: 'system' }).sessionId, undefined);
 });
 
+test('reads current context size from an assistant message usage (input + both cache buckets)', () => {
+  const message = {
+    type: 'assistant',
+    message: {
+      content: [],
+      usage: { input_tokens: 1000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 2000, output_tokens: 300 },
+    },
+  };
+  assert.equal(extractToolInfo(message).contextTokens, 53000);
+});
+
+test('reads the context window size from a result message modelUsage', () => {
+  const message = {
+    type: 'result',
+    subtype: 'success',
+    result: 'ok',
+    modelUsage: { 'claude-sonnet-5': { contextWindow: 200000, inputTokens: 1 } },
+  };
+  assert.equal(extractToolInfo(message).contextWindow, 200000);
+});
+
 test('unknown or malformed messages extract to empty, never throw', () => {
   assert.doesNotThrow(() => extractToolInfo(null));
   assert.doesNotThrow(() => extractToolInfo({}));

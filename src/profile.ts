@@ -7,9 +7,12 @@ export interface Profile {
   xp: number;
   totalWins: number;
   totalBattles: number;
+  // Chapters (boss floors) cleared so far per story theme, so the next run
+  // can pick the story up where it left off instead of starting over.
+  storyChapters: Record<string, number>;
 }
 
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0 };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyChapters: {} };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -19,6 +22,15 @@ function isValidCount(value: unknown, min: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= min;
 }
 
+function coerceStoryChapters(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, number> = {};
+  for (const [themeId, chapters] of Object.entries(value)) {
+    if (isValidCount(chapters, 0)) out[themeId] = chapters;
+  }
+  return out;
+}
+
 function coerceProfile(parsed: unknown): Profile {
   const p = parsed as Partial<Record<keyof Profile, unknown>> | null | undefined;
   return {
@@ -26,6 +38,7 @@ function coerceProfile(parsed: unknown): Profile {
     xp: isValidCount(p?.xp, 0) ? p.xp : DEFAULT_PROFILE.xp,
     totalWins: isValidCount(p?.totalWins, 0) ? p.totalWins : DEFAULT_PROFILE.totalWins,
     totalBattles: isValidCount(p?.totalBattles, 0) ? p.totalBattles : DEFAULT_PROFILE.totalBattles,
+    storyChapters: coerceStoryChapters(p?.storyChapters),
   };
 }
 
@@ -35,7 +48,7 @@ export async function loadProfile(homeDir: string = os.homedir()): Promise<Profi
     const parsed = JSON.parse(raw);
     return coerceProfile(parsed);
   } catch {
-    return { ...DEFAULT_PROFILE };
+    return { ...DEFAULT_PROFILE, storyChapters: {} };
   }
 }
 

@@ -53,6 +53,29 @@ test('attack prints damage, crit label, and matched keywords', () => {
   assert.equal(crit, 'You attack for 225 damage! CRITICAL HIT!\n(keywords: test, refactor)\n');
 });
 
+test('an attack whose closing chunk is 0 reads as the monster dodging, not "0 damage"', () => {
+  const out = stripAnsi(formatBattleEvent({ type: 'attack', damage: 0, crit: false, matchedKeywords: [] }));
+  assert.equal(out, 'The monster dodged your final blow!\n');
+});
+
+test('every event type formats to a string (never undefined, which would crash stdout.write)', () => {
+  const events: BattleEvent[] = [
+    { type: 'runStart', playerHp: 100, playerMaxHp: 100 },
+    { type: 'monsterAttack', damage: 6 },
+    { type: 'playerHpChanged', hp: 94, maxHp: 100 },
+    { type: 'playerDefeated' },
+    { type: 'chapterCleared', chapter: 1 },
+    { type: 'sessionReset' },
+    { type: 'sessionNearlyFull', usedTokens: 170000, contextWindow: 200000 },
+  ];
+  for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);
+});
+
+test('monsterAttack and playerHpChanged report the counterattack and player HP', () => {
+  assert.equal(stripAnsi(formatBattleEvent({ type: 'monsterAttack', damage: 6 })), 'The monster strikes back for 6!\n');
+  assert.equal(stripAnsi(formatBattleEvent({ type: 'playerHpChanged', hp: 94, maxHp: 100 })), 'Your HP: 94/100\n');
+});
+
 test('agentSummary prints the summary text', () => {
   assert.equal(formatBattleEvent({ type: 'agentSummary', summary: 'Fixed the bug.' }), 'Fixed the bug.\n');
 });

@@ -6,6 +6,8 @@ export interface TurnResult {
   commandsRun: string[];
   error?: string;
   sessionId?: string;
+  contextTokens?: number;
+  contextWindow?: number;
 }
 
 export interface AgentEvent {
@@ -20,6 +22,8 @@ export interface ExtractedInfo {
   finalResult?: string;
   error?: string;
   sessionId?: string;
+  contextTokens?: number;
+  contextWindow?: number;
 }
 
 // Shape confirmed against node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts
@@ -82,7 +86,24 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   // caller can pass it back in as `resume` on the next turn.
   const sessionId = typeof m?.session_id === 'string' ? m.session_id : undefined;
 
-  return { filesChanged, commandsRun, text, finalResult, error, sessionId };
+  // Each assistant message is one API call; its input side (fresh + both
+  // cache buckets) is how full the context was at that call. The result's
+  // modelUsage carries the window size (sdk.d.ts ModelUsage.contextWindow).
+  let contextTokens: number | undefined;
+  const usage = m?.type === 'assistant' ? m.message?.usage : undefined;
+  if (usage && typeof usage.input_tokens === 'number') {
+    contextTokens =
+      usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  }
+  let contextWindow: number | undefined;
+  if (m?.type === 'result' && m.modelUsage && typeof m.modelUsage === 'object') {
+    const windows = Object.values(m.modelUsage as Record<string, any>)
+      .map((u) => u?.contextWindow)
+      .filter((w): w is number => typeof w === 'number' && w > 0);
+    if (windows.length > 0) contextWindow = Math.max(...windows);
+  }
+
+  return { filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow };
 }
 
 // The Electron app runs the SDK's native `claude` binary from inside a packaged
@@ -103,6 +124,7 @@ export async function runAgentTurn(
   cwd: string,
   sessionId?: string,
   onEvent?: (event: AgentEvent) => void,
+  model?: string,
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
   const commandsRun: string[] = [];
@@ -110,12 +132,15 @@ export async function runAgentTurn(
   let finalResult: string | undefined;
   let error: string | undefined;
   let latestSessionId: string | undefined;
+  let contextTokens: number | undefined;
+  let contextWindow: number | undefined;
 
   try {
     for await (const message of query({
       prompt,
       options: {
         cwd,
+        ...(model ? { model } : {}),
         permissionMode: 'bypassPermissions',
         // Required by the installed SDK alongside permissionMode: 'bypassPermissions'
         // (sdk.d.ts: "Must be set to true when using permissionMode: 'bypassPermissions'").
@@ -141,6 +166,8 @@ export async function runAgentTurn(
       if (info.finalResult) finalResult = info.finalResult;
       if (info.error) error = info.error;
       if (info.sessionId) latestSessionId = info.sessionId;
+      if (info.contextTokens !== undefined) contextTokens = info.contextTokens;
+      if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
     }
     return {
       summary: (finalResult ?? text).trim(),
@@ -148,6 +175,8 @@ export async function runAgentTurn(
       commandsRun,
       error,
       sessionId: latestSessionId,
+      contextTokens,
+      contextWindow,
     };
   } catch (err) {
     return {

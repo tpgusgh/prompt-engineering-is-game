@@ -15,6 +15,10 @@ const MONSTERS: MonsterTemplate[] = [
   { name: '레거시 코드 드래곤', art: '  /^^^^^\\\n <( o o )>\n  \\_===_/', baseHp: 220 },
 ];
 
+// One chapter = one full cycle through the roster; its last floor (the
+// dragon) is the chapter boss.
+export const MONSTER_COUNT = MONSTERS.length;
+
 const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
   easy: 0.7,
   normal: 1,

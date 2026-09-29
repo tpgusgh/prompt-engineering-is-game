@@ -234,9 +234,119 @@ test('emits a final runEnded event matching the returned summary', async () => {
   const runEnded = events.find((e) => e.type === 'runEnded');
   assert.ok(runEnded && runEnded.type === 'runEnded');
   if (runEnded && runEnded.type === 'runEnded') {
-    assert.deepEqual(
-      { floorsCleared: runEnded.floorsCleared, floorsEngaged: runEnded.floorsEngaged, xpGained: runEnded.xpGained },
-      summary,
-    );
+    const { type: _type, ...fields } = runEnded;
+    assert.deepEqual(fields, summary);
   }
+});
+
+const WEAK_PROMPT = 'x'; // 10 damage, no crit — floor 0's 60-HP goblin survives it
+
+test('the monster counterattacks after every real turn it survives', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT, '/quit']);
+  await runDungeon(deps);
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 6, '10% of the goblin\'s 60 max HP');
+  const playerHp = events.filter((e) => e.type === 'playerHpChanged');
+  assert.ok(playerHp.some((e) => e.type === 'playerHpChanged' && e.hp === 94 && e.maxHp === 100));
+});
+
+test('hesitating is punished with a heavier counterattack', async () => {
+  const { deps, events } = makeFakeDeps(['', '/quit']);
+  await runDungeon(deps);
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 9, '1.5x the normal 6');
+});
+
+test('a monster killed by the turn does not counterattack', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon(deps);
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 0);
+});
+
+test('player HP reaching 0 ends the run as a defeat', async () => {
+  const { deps, events, runTurnCalls } = makeFakeDeps([WEAK_PROMPT, WEAK_PROMPT, WEAK_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, playerMaxHp: 10 });
+  assert.equal(runTurnCalls.length, 2, 'two counters of 6 kill a 10-HP player; the third prompt is never read');
+  assert.ok(events.some((e) => e.type === 'playerDefeated'));
+  assert.equal(summary.defeated, true);
+  assert.equal(summary.floorsCleared, 0);
+});
+
+test('clearing a floor heals the player a little', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT, ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon(deps);
+  const hpValues = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : -1));
+  assert.deepEqual(hpValues, [94, 100], 'counter to 94, then the floor-clear heal caps back at 100');
+});
+
+test('every 6th floor is a chapter boss with 1.5x HP, and clearing it emits chapterCleared', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, startFloor: 5, getDamageMultiplier: () => 10 });
+  const floorStart = events.find((e) => e.type === 'floorStart');
+  assert.ok(floorStart && floorStart.type === 'floorStart');
+  if (floorStart && floorStart.type === 'floorStart') {
+    assert.equal(floorStart.isBoss, true);
+    assert.equal(floorStart.chapter, 1);
+    assert.equal(floorStart.monsterIndex, 5);
+    assert.equal(floorStart.maxHp, Math.round(495 * 1.5), 'floor-5 dragon (495) boosted 1.5x as a boss');
+  }
+  assert.ok(events.some((e) => e.type === 'chapterCleared' && e.chapter === 1));
+  assert.equal(summary.chaptersCleared, 1);
+  assert.equal(summary.nextFloor, 6);
+});
+
+test('startFloor resumes the story mid-way (chapter 2 starts at floor 6)', async () => {
+  const { deps, events } = makeFakeDeps(['/quit']);
+  const summary = await runDungeon({ ...deps, startFloor: 6 });
+  const floorStart = events.find((e) => e.type === 'floorStart');
+  assert.ok(floorStart && floorStart.type === 'floorStart' && floorStart.chapter === 2 && floorStart.isBoss === false);
+  assert.equal(summary.chaptersCleared, 1, 'chapters behind the start floor still count as cleared');
+  assert.equal(summary.nextFloor, 6);
+});
+
+test('the weapon multiplier scales the prompt\'s total damage', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT, '/quit']);
+  await runDungeon({ ...deps, getDamageMultiplier: () => 1.5 });
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 15, '10 base x 1.5');
+});
+
+test('/new resets the session and runs the rest of the line as a fresh-session prompt', async () => {
+  const sessionIdsSeen: (string | undefined)[] = [];
+  const events: BattleEvent[] = [];
+  const deps = {
+    runTurn: async (_prompt: string, _cwd: string, sessionId?: string) => {
+      sessionIdsSeen.push(sessionId);
+      return { summary: '', filesChanged: [], commandsRun: [], sessionId: 'session-old' };
+    },
+    readInput: drain([WEAK_PROMPT, '/new keep going', '/quit']),
+    onBattleEvent: (e: BattleEvent) => events.push(e),
+    cwd: '/fake/cwd',
+    difficulty: 'normal' as const,
+  };
+  await runDungeon(deps);
+  assert.deepEqual(sessionIdsSeen, [undefined, undefined], 'the /new turn resumes nothing');
+  assert.ok(events.some((e) => e.type === 'sessionReset'));
+});
+
+test('warns once when the session context passes 80% of the window', async () => {
+  const events: BattleEvent[] = [];
+  const deps = {
+    runTurn: async () => ({
+      summary: 'done',
+      filesChanged: [],
+      commandsRun: [],
+      sessionId: 's1',
+      contextTokens: 170000,
+      contextWindow: 200000,
+    }),
+    readInput: drain([WEAK_PROMPT, WEAK_PROMPT, '/quit']),
+    onBattleEvent: (e: BattleEvent) => events.push(e),
+    cwd: '/fake/cwd',
+    difficulty: 'normal' as const,
+  };
+  await runDungeon(deps);
+  const warnings = events.filter((e) => e.type === 'sessionNearlyFull');
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].type === 'sessionNearlyFull' && warnings[0].usedTokens === 170000 && warnings[0].contextWindow === 200000);
 });
