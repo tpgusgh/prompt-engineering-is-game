@@ -90,6 +90,9 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'enhanceFailed', reason: 'x' },
     { type: 'blacksmithClosed' },
     { type: 'saveFailed', reason: 'x' },
+    { type: 'agentEvent', agentEvent: { type: 'text', value: 'hi' } },
+    { type: 'agentEvent', agentEvent: { type: 'agentStart', id: 'a', agentType: 'wizard', description: 'scout' } },
+    { type: 'agentEvent', agentEvent: { type: 'agentEnd', id: 'a' } },
     { type: 'sessionSwitched', sessionId: 's' },
   ];
   for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);

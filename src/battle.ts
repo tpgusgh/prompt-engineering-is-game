@@ -59,8 +59,8 @@ export type BattleEvent =
   | { type: 'sessionSwitched'; sessionId: string }
   | ({ type: 'runEnded' } & BattleSummary);
 
-// Everything a save slot needs to resume a run (monster HP excluded: a
-// loaded run restarts the saved floor with a fresh monster).
+// Everything a save slot needs to resume a run, including the current
+// monster's HP when saved mid-fight.
 export interface RunState {
   floor: number;
   playerHp: number;
@@ -71,6 +71,8 @@ export interface RunState {
   statPoints: number;
   swordLevel: number;
   sessionId?: string;
+  // HP of the monster being fought when saved (absent if saved at a shop).
+  monsterHp?: number;
 }
 
 export const SAVE_SLOTS = 3;
@@ -89,6 +91,8 @@ export interface BattleDeps {
   playerMaxHp?: number;
   // Current HP to start at (a loaded save); defaults to full.
   playerHp?: number;
+  // HP of the first floor's monster (a loaded mid-fight save).
+  monsterHp?: number;
   // Carried over between runs via the profile.
   coins?: number;
   bag?: Record<string, number>;
@@ -126,6 +130,8 @@ const FLEE_CHANCE = 0.5;
 const MERCHANT_CHANCE = 0.3;
 const BLACKSMITH_CHANCE = 0.2;
 const BOSS_COIN_MULTIPLIER = 3;
+// Max coins the "while you wait" mini-game can bank per real turn.
+export const WAIT_BONUS_MAX = 10;
 
 function xpForFloor(floor: number): number {
   return 20 + floor * 5;
@@ -150,6 +156,12 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let stats: Stats = { ...EMPTY_STATS, ...deps.stats };
   let statPoints = deps.statPoints ?? 0;
   let swordLevel = deps.swordLevel ?? 0;
+  // The current monster's HP: -1 while at a shop / between floors.
+  let hp = -1;
+  let pendingMonsterHp = deps.monsterHp;
+  // Coins the waiting mini-game may still claim with /bonus; refilled after
+  // every real turn, emptied when claimed.
+  let bonusAllowance = 0;
   let sharpened = false; // whetstone: next attack x2
   let shielded = false; // amulet: next counterattack blocked
   // Input typed at the merchant that wasn't a shop command: replayed as the
@@ -267,8 +279,18 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       const state: RunState = {
         floor, playerHp, playerMaxHp, coins, bag: { ...bag }, stats: { ...stats }, statPoints, swordLevel,
         ...(sessionId ? { sessionId } : {}),
+        ...(hp > 0 ? { monsterHp: hp } : {}),
       };
       deps.onBattleEvent({ type: 'snapshot', slot, state });
+      return true;
+    }
+    if (input.startsWith('/bonus ')) {
+      const gained = Math.min(Math.max(0, Math.floor(Number(input.slice('/bonus '.length)) || 0)), bonusAllowance);
+      bonusAllowance = 0;
+      if (gained > 0) {
+        coins += gained;
+        deps.onBattleEvent({ type: 'coinsChanged', coins, gained });
+      }
       return true;
     }
     if (input.startsWith('/session ')) {
@@ -372,7 +394,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const isBoss = monsterIndex === MONSTER_COUNT - 1;
     const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
     const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
-    let hp = maxHp;
+    hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
+    pendingMonsterHp = undefined;
     deps.onBattleEvent({
       type: 'floorStart',
       floor,
@@ -383,6 +406,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       monsterArt: spawned.art,
       maxHp,
     });
+    if (hp < maxHp) deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
 
     let left = false;
     let fled = false;
@@ -459,7 +483,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       let remaining = damage;
       const onAgentEvent = (event: AgentEvent) => {
         deps.onBattleEvent({ type: 'agentEvent', agentEvent: event });
-        if (remaining > 0) {
+        if (remaining > 0 && (event.type === 'command' || event.type === 'file')) {
           const hit = Math.min(remaining, Math.max(1, Math.round(remaining * 0.4)));
           remaining -= hit;
           hp = Math.max(0, hp - hit);
@@ -494,6 +518,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       }
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
+      bonusAllowance = WAIT_BONUS_MAX;
 
       if (turn.contextTokens !== undefined && turn.contextWindow !== undefined) {
         deps.onBattleEvent({ type: 'contextUsage', usedTokens: turn.contextTokens, contextWindow: turn.contextWindow });
@@ -514,6 +539,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
     }
 
+    hp = -1; // between floors / at a shop: no monster to save
     if (currentFloorEngaged) floorsEngaged += 1;
     if (playerHp <= 0) {
       defeated = true;

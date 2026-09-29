@@ -8,7 +8,7 @@ import { loadSlots, writeSlot, SLOT_COUNT, type SaveSlot } from '../src/saves.ts
 const slot: SaveSlot = {
   savedAt: 1700000000000, cwd: '/proj', themeId: 'adventure', difficulty: 'normal', model: 'claude-sonnet-5',
   floor: 4, playerHp: 50, playerMaxHp: 110, coins: 33, bag: { potion: 1 },
-  stats: { attack: 1, defense: 0, vitality: 1 }, statPoints: 2, swordLevel: 3, sessionId: 's1',
+  stats: { attack: 1, defense: 0, vitality: 1 }, statPoints: 2, swordLevel: 3, sessionId: 's1', monsterHp: 20,
 };
 
 test('three empty slots by default', async () => {

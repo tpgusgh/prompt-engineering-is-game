@@ -593,7 +593,7 @@ test('/save N snapshots the run as a free action (no turn, no counter)', async (
     assert.equal(snap.slot, 2);
     assert.deepEqual(snap.state, {
       floor: 0, playerHp: 94, playerMaxHp: 100, coins: 7, bag: { potion: 1 },
-      stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 1, swordLevel: 3, sessionId: 'sess-1',
+      stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 1, swordLevel: 3, sessionId: 'sess-1', monsterHp: 47, // 60 - 10 x 1.3 (sword +3)
     });
   }
   assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1);
@@ -622,4 +622,45 @@ test('/session <id> swaps the Claude session mid-run; the next turn resumes it',
   await runDungeon(deps);
   assert.deepEqual(seen, [undefined, 'other-id']);
   assert.ok(events.some((e) => e.type === 'sessionSwitched' && e.sessionId === 'other-id'));
+});
+
+test('only command/file events land partial hits; text and party events do not', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  deps.runTurn = async (_p: string, _c: string, _s?: string, onEvent?: (e: any) => void) => {
+    onEvent?.({ type: 'text', value: 'hi' });
+    onEvent?.({ type: 'agentStart', id: 'a1', agentType: 'wizard', description: 'scout' });
+    onEvent?.({ type: 'command', value: 'ls', agentId: 'a1' });
+    onEvent?.({ type: 'agentEnd', id: 'a1' });
+    return { summary: 'done', filesChanged: [], commandsRun: ['ls'] };
+  };
+  await runDungeon(deps);
+  assert.equal(events.filter((e) => e.type === 'partialHit').length, 1);
+  assert.equal(events.filter((e) => e.type === 'agentEvent').length, 4, 'all four are forwarded for the UI');
+});
+
+test('a save mid-fight records the monster HP, and loading restores it', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/save 1', '/quit']);
+  await runDungeon(deps);
+  const snap = events.find((e) => e.type === 'snapshot');
+  assert.ok(snap && snap.type === 'snapshot' && snap.state.monsterHp === 50, '60 - 10');
+
+  const loaded = makeFakeDeps(['/quit']);
+  await runDungeon({ ...loaded.deps, monsterHp: 50 });
+  const hp = loaded.events.find((e) => e.type === 'hpChanged');
+  assert.ok(hp && hp.type === 'hpChanged' && hp.hp === 50 && hp.maxHp === 60);
+});
+
+test('a save at the shop has no monster HP (the next monster starts fresh)', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/save 1', '/leave', '/quit']);
+  await runDungeon({ ...deps, random: seq(0.1, 0.99) });
+  const snap = events.find((e) => e.type === 'snapshot');
+  assert.ok(snap && snap.type === 'snapshot' && snap.state.monsterHp === undefined && snap.state.floor === 1);
+});
+
+test('/bonus claims waiting-game coins, capped per real turn', async () => {
+  const { deps, events } = makeFakeDeps(['/bonus 5', WEAK_PROMPT_2, '/bonus 50', '/bonus 3', '/quit']);
+  const summary = await runDungeon(deps);
+  const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : -1));
+  assert.deepEqual(gains, [10], 'nothing before any turn; after a turn at most 10, once');
+  assert.equal(summary.coins, 10);
 });

@@ -31,6 +31,10 @@
         <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 검 강화는 영구 (던전의 대장장이).</p>
       </fieldset>
       <fieldset>
+        <legend>AI 파티</legend>
+        <label><input type="checkbox" id="party-mode" checked /> 🧙 마법사 · 🗡 검사 · 🏹 궁수 서브에이전트 사용 <span class="option-sub">(AI가 여러 에이전트를 동시에 보내 탐색·구현·검증 — 토큰을 더 씀)</span></label>
+      </fieldset>
+      <fieldset>
         <legend>난이도</legend>
         <label><input type="radio" name="difficulty" value="easy" /> 쉬움</label>
         <label><input type="radio" name="difficulty" value="normal" checked /> 보통</label>
@@ -121,7 +125,21 @@
           </div>
         </div>
 
-        <p id="turn-status" class="turn-status" hidden></p>
+        <div id="turn-panel" class="turn-panel" hidden>
+          <div class="turn-head">
+            <span id="turn-status" class="turn-status"></span>
+            <span id="turn-timer" class="turn-timer"></span>
+          </div>
+          <div id="party-status" class="party-status"></div>
+          <div class="bug-game">
+            <div id="bug-grid" class="bug-grid"></div>
+            <div class="bug-info">
+              <strong>🐛 기다리는 동안 버그 잡기</strong>
+              <span id="bug-score"></span>
+              <span class="option-sub">나타나는 버그를 클릭! 턴이 끝나면 잡은 만큼 코인 (턴당 최대 10)</span>
+            </div>
+          </div>
+        </div>
         <div id="session-banner" class="session-banner" hidden>
           <p id="session-banner-text"></p>
           <pre id="session-banner-prompt"></pre>
@@ -129,7 +147,7 @@
         </div>
         <div id="log"></div>
         <form id="attack-form">
-          <input id="prompt-input" type="text" placeholder="공격 프롬프트를 입력하세요... (/new 로 새 세션)" autocomplete="off" />
+          <textarea id="prompt-input" rows="1" placeholder="공격 프롬프트를 입력하세요... (Enter 공격 · Shift+Enter 줄바꿈 · /new 새 세션)" autocomplete="off"></textarea>
           <button type="submit">공격</button>
           <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>
           <button type="button" id="save-btn">저장</button>

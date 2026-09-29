@@ -349,8 +349,160 @@ function setInputEnabled(enabled) {
 function turnConcluded() {
   setInputEnabled(true);
   refreshUsage(false);
-  turnStatusEl.hidden = true;
+  stopTurnTimer();
+  stopBugGame();
+  finalizeLive();
+  $('turn-panel').hidden = true;
   refreshTree();
+}
+
+// ---------------------------------------------------------------------------
+// Turn timer + party (subagents) status + the waiting mini-game.
+let turnStartedAt = 0;
+let turnTimer = null;
+const fmtElapsed = (ms) => {
+  const s = Math.floor(ms / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초` : `${s}초`;
+};
+function startTurnTimer() {
+  turnStartedAt = Date.now();
+  const tick = () => ($('turn-timer').textContent = `⏱ ${fmtElapsed(Date.now() - turnStartedAt)}`);
+  tick();
+  clearInterval(turnTimer);
+  turnTimer = setInterval(tick, 1000);
+}
+function stopTurnTimer() {
+  clearInterval(turnTimer);
+  turnTimer = null;
+  if (turnStartedAt) appendLog(`⏱ 이번 턴: ${fmtElapsed(Date.now() - turnStartedAt)}`, 'sys-line');
+  turnStartedAt = 0;
+}
+
+const ROLES = {
+  wizard: { icon: '🧙', name: '마법사' },
+  swordsman: { icon: '🗡', name: '검사' },
+  archer: { icon: '🏹', name: '궁수' },
+};
+const roleOf = (type) => ROLES[type] ?? { icon: '🤖', name: type };
+const activeAgents = new Map(); // tool-use id -> { agentType, description }
+const agentTypeById = new Map(); // survives agentEnd, for late events
+function renderParty() {
+  const el = $('party-status');
+  const members = [...activeAgents.values()];
+  if (members.length === 0) {
+    el.textContent = '프로세스 1개 (용사 단독)';
+    return;
+  }
+  el.textContent = `프로세스 ${members.length + 1}개 동시 진행 · ` + members.map((m) => `${roleOf(m.agentType).icon} ${roleOf(m.agentType).name}: ${m.description}`).join('  ·  ');
+}
+
+// Bug-squash: bugs pop up in a 3x3 grid while the AI works.
+let bugTimer = null;
+let bugsCaught = 0;
+function renderBugScore() {
+  $('bug-score').textContent = `잡은 버그 ${bugsCaught}/10`;
+}
+function startBugGame() {
+  bugsCaught = 0;
+  renderBugScore();
+  const grid = $('bug-grid');
+  grid.textContent = '';
+  const cells = Array.from({ length: 9 }, () => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'bug-cell';
+    cell.addEventListener('click', () => {
+      if (!cell.classList.contains('bug')) return;
+      cell.classList.remove('bug');
+      cell.classList.add('squashed');
+      cell.textContent = '💥';
+      setTimeout(() => {
+        cell.classList.remove('squashed');
+        cell.textContent = '';
+      }, 300);
+      bugsCaught = Math.min(10, bugsCaught + 1);
+      renderBugScore();
+    });
+    grid.append(cell);
+    return cell;
+  });
+  clearInterval(bugTimer);
+  bugTimer = setInterval(() => {
+    const cell = cells[Math.floor(Math.random() * cells.length)];
+    if (cell.classList.contains('bug') || cell.classList.contains('squashed')) return;
+    cell.classList.add('bug');
+    cell.textContent = Math.random() < 0.15 ? '🪲' : '🐛';
+    setTimeout(() => {
+      if (!cell.classList.contains('bug')) return;
+      cell.classList.remove('bug');
+      cell.textContent = '';
+    }, 850 + Math.random() * 500);
+  }, 650);
+}
+function stopBugGame() {
+  clearInterval(bugTimer);
+  bugTimer = null;
+  if (bugsCaught > 0) {
+    appendLog(`🐛 기다리는 동안 버그 ${bugsCaught}마리를 잡았다!`, 'coin-line');
+    window.promptBattle.submitPrompt(`/bonus ${bugsCaught}`);
+  }
+  bugsCaught = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Live typing: the AI's streamed text is typed into a bubble a few
+// characters per frame (catching up faster when far behind), rendered as
+// markdown as it goes. A tool call splits the reply into a new bubble.
+let live = null; // the bubble currently receiving text
+let streamedThisTurn = false;
+function newBubble() {
+  const el = document.createElement('div');
+  el.className = 'markdown ai-bubble typing';
+  logEl.appendChild(el);
+  const b = { el, target: '', shown: 0, raf: 0, lastRender: 0, closing: false };
+  const render = (force) => {
+    const now = performance.now();
+    if (!force && now - b.lastRender < 50) return;
+    b.lastRender = now;
+    const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 120;
+    el.innerHTML = marked.parse(b.target.slice(0, b.shown));
+    if (nearBottom) scrollLogToBottom();
+  };
+  const finish = () => {
+    el.classList.remove('typing');
+    el.innerHTML = marked.parse(b.target);
+    attachChoices(el);
+    scrollLogToBottom();
+  };
+  b.push = (text) => {
+    b.target += text;
+    if (!b.raf) b.raf = requestAnimationFrame(frame);
+  };
+  function frame() {
+    const backlog = b.target.length - b.shown;
+    b.shown += Math.max(1, Math.ceil(backlog / 25));
+    render(b.shown >= b.target.length);
+    if (b.shown < b.target.length) b.raf = requestAnimationFrame(frame);
+    else {
+      b.raf = 0;
+      if (b.closing) finish();
+    }
+  }
+  // Soft close: keeps typing what it has, then renders the final markdown.
+  b.close = () => {
+    b.closing = true;
+    if (!b.raf) finish();
+  };
+  return b;
+}
+function liveAppend(text) {
+  if (!live) live = newBubble();
+  live.push(text);
+}
+function finalizeLive() {
+  if (!live) return;
+  live.close();
+  live = null;
 }
 
 pickFolderBtn.addEventListener('click', async () => {
@@ -489,13 +641,19 @@ const weaponName = () => weapons.find((w) => w.model === weaponSelect.value)?.na
 // choices that fill the input.
 function renderMarkdownLog(text, extraClass) {
   const wrapper = document.createElement('div');
-  wrapper.className = `markdown${extraClass ? ` ${extraClass}` : ''}`;
+  wrapper.className = `markdown ai-bubble${extraClass ? ` ${extraClass}` : ''}`;
   wrapper.innerHTML = marked.parse(text);
   logEl.appendChild(wrapper);
+  if (!extraClass) attachChoices(wrapper);
+  scrollLogToBottom();
+}
 
+// A reply ending in a question followed by a list: the list items become
+// clickable choices that fill the input.
+function attachChoices(wrapper) {
   const children = Array.from(wrapper.children);
   const lastList = children[children.length - 1];
-  if (!extraClass && lastList && (lastList.tagName === 'UL' || lastList.tagName === 'OL')) {
+  if (lastList && (lastList.tagName === 'UL' || lastList.tagName === 'OL')) {
     const priorText = children[children.length - 2];
     if (priorText && /[?？]\s*$/.test(priorText.textContent.trim())) {
       const buttonRow = document.createElement('div');
@@ -507,14 +665,14 @@ function renderMarkdownLog(text, extraClass) {
         btn.textContent = item;
         btn.addEventListener('click', () => {
           promptInput.value = item;
+          autoGrowInput();
           promptInput.focus();
         });
         buttonRow.appendChild(btn);
       }
-      logEl.appendChild(buttonRow);
+      wrapper.after(buttonRow);
     }
   }
-  scrollLogToBottom();
 }
 
 // The touched file's real OS icon flies from the input to the monster.
@@ -801,17 +959,55 @@ function renderBattleEvent(event) {
       turnConcluded();
       break;
     case 'turnStart':
-      appendUserChat(event.prompt);
-      turnStatusEl.hidden = false;
+      $('turn-panel').hidden = false;
       turnStatusEl.textContent = `AI가 ${weaponName()}을(를) 들고 작업 중...`;
+      streamedThisTurn = false;
+      activeAgents.clear();
+      renderParty();
+      startTurnTimer();
+      startBugGame();
       break;
-    case 'partialHit':
-      appendLog(`  » ${event.damage}의 피해!`, 'partial-hit');
+    case 'partialHit': {
+      const type = event.agentEvent.agentId ? agentTypeById.get(event.agentEvent.agentId) : undefined;
+      const line = {
+        wizard: `🧙✨ 마법사가 불러낸 정령이 덮쳤다! ${event.damage}의 피해!`,
+        archer: `🏹 궁수의 동료들이 일제히 화살을 날렸다! ${event.damage}의 피해!`,
+        swordsman: `🏹🗡 궁수의 엄호 사격 속에 검사가 파고들어 베었다! ${event.damage}의 피해!`,
+      }[type] ?? `  » ${event.damage}의 피해!`;
+      appendLog(line, type ? `partial-hit party-${type}` : 'partial-hit');
       flashMonster();
       break;
+    }
     case 'agentEvent': {
-      const isFile = event.agentEvent.type === 'file';
-      const line = appendLog(isFile ? `→ 수정 중: ${event.agentEvent.value}` : `→ 실행 중: ${event.agentEvent.value}`, event.agentEvent.type);
+      const ae = event.agentEvent;
+      if (ae.type === 'text') {
+        streamedThisTurn = true;
+        liveAppend(ae.value);
+        break;
+      }
+      if (ae.type === 'agentStart') {
+        finalizeLive();
+        activeAgents.set(ae.id, ae);
+        agentTypeById.set(ae.id, ae.agentType);
+        renderParty();
+        const r = roleOf(ae.agentType);
+        appendLog(`${r.icon} ${r.name}가 출격했다: ${ae.description}`, `party-line party-${ae.agentType}`);
+        break;
+      }
+      if (ae.type === 'agentEnd') {
+        const member = activeAgents.get(ae.id);
+        activeAgents.delete(ae.id);
+        renderParty();
+        if (member) {
+          const r = roleOf(member.agentType);
+          appendLog(`${r.icon} ${r.name}가 임무를 마치고 돌아왔다.`, `party-line party-${member.agentType}`);
+        }
+        break;
+      }
+      finalizeLive();
+      const isFile = ae.type === 'file';
+      const who = ae.agentId ? `${roleOf(agentTypeById.get(ae.agentId)).icon} ` : '';
+      const line = appendLog(`${who}${isFile ? '→ 수정 중' : '→ 실행 중'}: ${ae.value}`, ae.type);
       if (isFile) {
         touchedFiles.add(event.agentEvent.value);
         line.classList.add('clickable');
@@ -839,7 +1035,11 @@ function renderBattleEvent(event) {
     }
     case 'agentSummary':
       lastSummary = event.summary;
-      renderMarkdownLog(event.summary);
+      // Already typed out live from the stream; otherwise type it now.
+      if (!streamedThisTurn) {
+        liveAppend(event.summary);
+        finalizeLive();
+      }
       break;
     case 'hpChanged':
       setBar(hpBarFillEl, hpLabelEl, event.hp, event.maxHp, ' HP');
@@ -1103,7 +1303,7 @@ $('session-close').addEventListener('click', () => ($('session-overlay').hidden 
 function slotSummary(slot) {
   const theme = THEMES.find((t) => t.id === slot.themeId);
   const folderName = slot.cwd.split('/').filter(Boolean).pop();
-  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 검 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
+  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 검 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
 }
 
 function renderSlotRows(container, onPick, allowEmpty) {
@@ -1186,7 +1386,8 @@ async function startGame({ loadSlot, slot }) {
   contextUsage = null;
   refreshUsage(true);
   try {
-    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot });
+    const party = $('party-mode').checked;
+    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated } = await runPromise;
     profile = updated;
@@ -1221,8 +1422,12 @@ attackForm.addEventListener('submit', (e) => {
   const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
   const startsTurn = (!trimmed.startsWith('/') && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
   if (startsTurn) setInputEnabled(false);
+  // Show my message right away, then jump to the bottom.
+  const shown = trimmed.startsWith('/new ') ? trimmed.slice(5).trim() : trimmed;
+  if (shown && !shown.startsWith('/') && !atMerchant) appendUserChat(shown);
   window.promptBattle.submitPrompt(text);
-  scrollLogToBottom();
+  autoGrowInput();
+  requestAnimationFrame(scrollLogToBottom);
 });
 
 fleeBtn.addEventListener('click', () => window.promptBattle.submitPrompt('/flee'));
@@ -1254,4 +1459,18 @@ playAgainBtn.addEventListener('click', async () => {
   await loadSetup();
   await refreshSlots();
   if (chosenFolder) await refreshSessionPicker(chosenFolder);
+});
+
+// The prompt box grows with its text (up to ~40% of the window); Enter
+// attacks, Shift+Enter adds a line. Korean IME composition is respected.
+function autoGrowInput() {
+  promptInput.style.height = 'auto';
+  promptInput.style.height = `${Math.min(promptInput.scrollHeight, window.innerHeight * 0.4)}px`;
+}
+promptInput.addEventListener('input', autoGrowInput);
+promptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    if (!promptInput.disabled) attackForm.requestSubmit();
+  }
 });

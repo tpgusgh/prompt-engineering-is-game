@@ -11,10 +11,14 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize('Focusing your attack...', 'cyan') + '\n';
     case 'partialHit':
       return colorize(`  hit for ${event.damage}!`, 'red') + '\n';
-    case 'agentEvent':
-      return event.agentEvent.type === 'command'
-        ? `  → running: ${event.agentEvent.value}\n`
-        : `  → editing: ${event.agentEvent.value}\n`;
+    case 'agentEvent': {
+      const e = event.agentEvent;
+      if (e.type === 'command') return `  → running: ${e.value}\n`;
+      if (e.type === 'file') return `  → editing: ${e.value}\n`;
+      if (e.type === 'agentStart') return colorize(`  ✦ ${e.agentType} joins the party: ${e.description}`, 'cyan') + '\n';
+      // Streamed text is printed once, whole, as agentSummary.
+      return '';
+    }
     case 'agentError':
       return colorize(`Your attack misses! The spell fizzles: ${event.error}`, 'red') + '\n';
     case 'attack': {

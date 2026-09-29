@@ -37,6 +37,10 @@ let mainWindow: InstanceType<typeof BrowserWindow> | null = null;
 // One dungeon run at a time, one window: a single pending resolver is enough.
 // A multi-window/multi-run version would need a per-session map instead.
 let pendingInputResolve: ((value: string | null) => void) | null = null;
+// Slash commands sent while a turn is running (the waiting mini-game's
+// /bonus, a stat button...) wait here for the next readInput instead of
+// being dropped. Plain prompts are never queued: the UI disables them mid-turn.
+let queuedCommands: string[] = [];
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -123,6 +127,8 @@ ipcMain.handle(
       sessionId?: string;
       // Load a save slot instead: its folder, theme, model and run state win.
       loadSlot?: number;
+      // Let the AI send out the wizard/swordsman/archer subagents.
+      party?: boolean;
     },
   ) => {
     const profile = await loadProfile();
@@ -132,6 +138,8 @@ ipcMain.handle(
       ? { ...requested, cwd: slot.cwd, difficulty: slot.difficulty, model: slot.model, themeId: slot.themeId, startFloor: slot.floor, sessionId: slot.sessionId }
       : requested;
     currentCwd = path.resolve(options.cwd);
+    queuedCommands = [];
+    const party = requested.party ?? true;
     currentModel = getWeapon(options.model).model;
     const cwd = currentCwd;
     const send = (event: unknown) => {
@@ -158,13 +166,14 @@ ipcMain.handle(
     };
 
     const summary = await runDungeon({
-      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
+      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel, party),
       cwd,
       difficulty: options.difficulty,
       coins: slot ? slot.coins : profile.coins,
       bag: slot ? slot.bag : profile.bag,
       playerMaxHp: slot ? slot.playerMaxHp : profile.maxHp,
       playerHp: slot?.playerHp,
+      monsterHp: slot?.monsterHp,
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier,
@@ -184,9 +193,11 @@ ipcMain.handle(
         }
       },
       readInput: () =>
-        new Promise<string | null>((resolve) => {
-          pendingInputResolve = resolve;
-        }),
+        queuedCommands.length > 0
+          ? Promise.resolve(queuedCommands.shift()!)
+          : new Promise<string | null>((resolve) => {
+              pendingInputResolve = resolve;
+            }),
     });
 
     const updated = applyRun(profile, summary, options.themeId);
@@ -267,6 +278,8 @@ ipcMain.on('submit-prompt', (_event, text: string) => {
     const resolve = pendingInputResolve;
     pendingInputResolve = null;
     resolve(text);
+  } else if (text.trim().startsWith('/') && text.trim() !== '/quit') {
+    queuedCommands.push(text);
   }
 });
 

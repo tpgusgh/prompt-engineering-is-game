@@ -1,4 +1,5 @@
 import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { PARTY, PARTY_SYSTEM_PROMPT } from './party.ts';
 
 export interface TurnResult {
   summary: string;
@@ -10,10 +11,13 @@ export interface TurnResult {
   contextWindow?: number;
 }
 
-export interface AgentEvent {
-  type: 'command' | 'file';
-  value: string;
-}
+// Live events from a turn. command/file land hits; agentId marks ones done
+// by a party subagent (the id of the Agent tool call that started it).
+export type AgentEvent =
+  | { type: 'command' | 'file'; value: string; agentId?: string }
+  | { type: 'agentStart'; id: string; agentType: string; description: string }
+  | { type: 'agentEnd'; id: string }
+  | { type: 'text'; value: string };
 
 export interface ExtractedInfo {
   filesChanged: string[];
@@ -24,6 +28,14 @@ export interface ExtractedInfo {
   sessionId?: string;
   contextTokens?: number;
   contextWindow?: number;
+  agentStarts: { id: string; agentType: string; description: string }[];
+  // Read-only tool uses, e.g. "Read src/a.ts" — hits only when a subagent does them.
+  readsRun: string[];
+  toolResultIds: string[];
+  // Streamed text from the main agent (stream_event text_delta).
+  textDelta?: string;
+  // Set on messages produced inside a subagent.
+  parentToolUseId?: string;
 }
 
 // Shape confirmed against node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts
@@ -48,10 +60,37 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   let error: string | undefined;
 
   const m = message as any;
+  const parentToolUseId = typeof m?.parent_tool_use_id === 'string' ? m.parent_tool_use_id : undefined;
+  const agentStarts: ExtractedInfo['agentStarts'] = [];
+  const readsRun: string[] = [];
+  const toolResultIds: string[] = [];
+
+  if (m?.type === 'user' && Array.isArray(m.message?.content)) {
+    for (const block of m.message.content) {
+      if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string') toolResultIds.push(block.tool_use_id);
+    }
+  }
+
+  let textDelta: string | undefined;
+  if (m?.type === 'stream_event' && !parentToolUseId) {
+    const d = m.event?.type === 'content_block_delta' ? m.event.delta : undefined;
+    if (d?.type === 'text_delta' && typeof d.text === 'string') textDelta = d.text;
+  }
 
   if (m?.type === 'assistant' && Array.isArray(m.message?.content)) {
     for (const block of m.message.content) {
       if (block?.type === 'tool_use') {
+        if ((block.name === 'Agent' || block.name === 'Task') && typeof block.id === 'string') {
+          agentStarts.push({
+            id: block.id,
+            agentType: typeof block.input?.subagent_type === 'string' ? block.input.subagent_type : 'general-purpose',
+            description: typeof block.input?.description === 'string' ? block.input.description : '',
+          });
+        }
+        if (block.name === 'Read' && typeof block.input?.file_path === 'string') readsRun.push(`Read ${block.input.file_path}`);
+        if ((block.name === 'Grep' || block.name === 'Glob') && typeof block.input?.pattern === 'string') {
+          readsRun.push(`${block.name} ${block.input.pattern}`);
+        }
         if (block.name === 'Bash' && typeof block.input?.command === 'string') {
           commandsRun.push(block.input.command);
         }
@@ -63,7 +102,8 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
           filesChanged.push(block.input.notebook_path);
         }
       }
-      if (block?.type === 'text' && typeof block.text === 'string') {
+      // A subagent's own narration isn't the reply to the player.
+      if (block?.type === 'text' && typeof block.text === 'string' && !parentToolUseId) {
         text += block.text;
       }
     }
@@ -103,7 +143,10 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
     if (windows.length > 0) contextWindow = Math.max(...windows);
   }
 
-  return { filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow };
+  return {
+    filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow,
+    agentStarts, readsRun, toolResultIds, textDelta, parentToolUseId,
+  };
 }
 
 // The Electron app runs the SDK's native `claude` binary from inside a packaged
@@ -225,6 +268,8 @@ export async function runAgentTurn(
   sessionId?: string,
   onEvent?: (event: AgentEvent) => void,
   model?: string,
+  // Let the main agent send out the wizard/swordsman/archer subagents.
+  party = false,
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
   const commandsRun: string[] = [];
@@ -234,6 +279,7 @@ export async function runAgentTurn(
   let latestSessionId: string | undefined;
   let contextTokens: number | undefined;
   let contextWindow: number | undefined;
+  const runningAgents = new Set<string>();
 
   try {
     for await (const message of query({
@@ -248,19 +294,34 @@ export async function runAgentTurn(
         // `tools` restricts the actual available set (sdk.d.ts: "Specify the base
         // set of available built-in tools") — `allowedTools` only auto-approves,
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
-        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
+        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', ...(party ? ['Agent'] : [])],
+        ...(party ? { agents: PARTY, systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: PARTY_SYSTEM_PROMPT } } : {}),
+        // Stream text as it's written so the UI can type it out live.
+        includePartialMessages: true,
         ...(sessionId ? { resume: sessionId } : {}),
         ...executableOverrideOptions(),
       },
     })) {
       const info = extractToolInfo(message);
+      const agentId = info.parentToolUseId && runningAgents.has(info.parentToolUseId) ? info.parentToolUseId : undefined;
+      if (info.textDelta) onEvent?.({ type: 'text', value: info.textDelta });
+      for (const a of info.agentStarts) {
+        runningAgents.add(a.id);
+        onEvent?.({ type: 'agentStart', ...a });
+      }
       for (const f of info.filesChanged) {
-        if (!filesChanged.has(f)) onEvent?.({ type: 'file', value: f });
+        if (!filesChanged.has(f)) onEvent?.({ type: 'file', value: f, ...(agentId ? { agentId } : {}) });
         filesChanged.add(f);
       }
       for (const c of info.commandsRun) {
         commandsRun.push(c);
-        onEvent?.({ type: 'command', value: c });
+        onEvent?.({ type: 'command', value: c, ...(agentId ? { agentId } : {}) });
+      }
+      // The main agent's reads stay quiet (as before); a subagent's reads are
+      // its whole job (the wizard), so they count as actions.
+      if (agentId) for (const r of info.readsRun) onEvent?.({ type: 'command', value: r, agentId });
+      for (const id of info.toolResultIds) {
+        if (runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
       }
       text += info.text;
       if (info.finalResult) finalResult = info.finalResult;
@@ -269,6 +330,7 @@ export async function runAgentTurn(
       if (info.contextTokens !== undefined) contextTokens = info.contextTokens;
       if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
     }
+    for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     return {
       summary: (finalResult ?? text).trim(),
       filesChanged: [...filesChanged],
@@ -279,6 +341,7 @@ export async function runAgentTurn(
       contextWindow,
     };
   } catch (err) {
+    for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     return {
       summary: '',
       filesChanged: [...filesChanged],

@@ -167,3 +167,48 @@ test('toChatEntries keeps user prompts and assistant text, skips tool traffic, m
     { role: 'user', text: 'thanks' },
   ]);
 });
+
+test('an Agent tool_use from the main thread is reported as a party member starting', () => {
+  const info = extractToolInfo({
+    type: 'assistant',
+    parent_tool_use_id: null,
+    message: { content: [{ type: 'tool_use', name: 'Agent', id: 'tu_1', input: { subagent_type: 'wizard', description: 'Scout the code', prompt: '...' } }] },
+  });
+  assert.deepEqual(info.agentStarts, [{ id: 'tu_1', agentType: 'wizard', description: 'Scout the code' }]);
+});
+
+test('subagent tool uses carry the parent Agent id; tool_results are listed for end detection', () => {
+  const sub = extractToolInfo({
+    type: 'assistant',
+    parent_tool_use_id: 'tu_1',
+    message: { content: [{ type: 'tool_use', name: 'Bash', id: 'tu_2', input: { command: 'ls' } }] },
+  });
+  assert.deepEqual(sub.commandsRun, ['ls']);
+  assert.equal(sub.parentToolUseId, 'tu_1');
+  const done = extractToolInfo({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: 'ok' }] } });
+  assert.deepEqual(done.toolResultIds, ['tu_1']);
+});
+
+test('main-thread text deltas stream out; subagent deltas do not', () => {
+  const delta = (parent: string | null) => ({
+    type: 'stream_event',
+    parent_tool_use_id: parent,
+    event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hel' } },
+  });
+  assert.equal(extractToolInfo(delta(null)).textDelta, 'Hel');
+  assert.equal(extractToolInfo(delta('tu_1')).textDelta, undefined);
+  assert.equal(extractToolInfo({ type: 'assistant', parent_tool_use_id: 'tu_1', message: { content: [{ type: 'text', text: 'sub says' }] } }).text, '', 'subagent text is not the reply');
+});
+
+test('read-only tool uses (Read/Glob/Grep) are listed, so a scouting subagent can land hits', () => {
+  const info = extractToolInfo({
+    type: 'assistant',
+    parent_tool_use_id: 'tu_1',
+    message: { content: [
+      { type: 'tool_use', name: 'Read', id: 'r1', input: { file_path: '/p/src/cart.js' } },
+      { type: 'tool_use', name: 'Grep', id: 'r2', input: { pattern: 'total' } },
+      { type: 'tool_use', name: 'Glob', id: 'r3', input: { pattern: 'src/**' } },
+    ] },
+  });
+  assert.deepEqual(info.readsRun, ['Read /p/src/cart.js', 'Grep total', 'Glob src/**']);
+});

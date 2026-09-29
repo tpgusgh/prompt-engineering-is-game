@@ -33,7 +33,8 @@ function isSlot(v: any): v is SaveSlot {
     [v.floor, v.playerHp, v.playerMaxHp, v.coins, v.statPoints, v.swordLevel].every(isCount) &&
     isCounts(v.bag) &&
     isCounts(v.stats) &&
-    (v.sessionId === undefined || typeof v.sessionId === 'string')
+    (v.sessionId === undefined || typeof v.sessionId === 'string') &&
+    (v.monsterHp === undefined || isCount(v.monsterHp))
   );
 }
 
