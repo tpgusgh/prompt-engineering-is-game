@@ -47,6 +47,7 @@ export type BattleEvent =
   | { type: 'itemUseFailed'; itemId: string }
   | { type: 'counterBlocked' }
   | { type: 'typingHit'; damage: number }
+  | { type: 'turnInterrupted' }
   | { type: 'contextUsage'; usedTokens: number; contextWindow: number }
   | { type: 'statPointsChanged'; points: number; stats: Stats }
   | { type: 'statRaised'; stat: StatId; stats: Stats; points: number }
@@ -141,6 +142,12 @@ const BOSS_COIN_MULTIPLIER = 3;
 
 function xpForFloor(floor: number): number {
   return 20 + floor * 5;
+}
+
+// Damage of one successful tool action: a quarter of the prompt's damage,
+// at least 1 and at most 12 (so a crit prompt doesn't one-shot per action).
+export function actionDamage(promptDamage: number): number {
+  return Math.min(12, Math.max(1, Math.round(promptDamage * 0.25)));
 }
 
 function coinsForFloor(floor: number, isBoss: boolean): number {
@@ -486,20 +493,22 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       const { crit, matchedKeywords } = base;
       deps.onBattleEvent({ type: 'turnStart', prompt });
 
-      // The prompt's total damage (still purely prompt-shape-based, times the
-      // weapon multiplier) is spent across the turn as live tool-use events
-      // arrive, tapering by 40% of what's left each time, instead of landing
-      // as one lump sum at the end. Partial hits land for real immediately,
-      // even if the turn later errors; only the leftover "closing" chunk is
-      // skipped on error (below), matching the "no bonus on error" rule.
-      let remaining = damage;
+      // Work is damage: every tool action that succeeds (a command, an edit,
+      // a subagent's read) lands its own hit as its result comes in — failed
+      // ones don't — and the prompt's full damage lands as the closing blow
+      // when the turn ends normally (not on error or stop). So a short
+      // prompt that makes the AI do a lot still hits hard.
+      const actionHit = actionDamage(damage);
+      const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
         deps.onBattleEvent({ type: 'agentEvent', agentEvent: event });
-        if (remaining > 0 && (event.type === 'command' || event.type === 'file')) {
-          const hit = Math.min(remaining, Math.max(1, Math.round(remaining * 0.4)));
-          remaining -= hit;
-          hp = Math.max(0, hp - hit);
-          deps.onBattleEvent({ type: 'partialHit', damage: hit, agentEvent: event });
+        if ((event.type === 'command' || event.type === 'file') && event.toolId) calls.set(event.toolId, event);
+        if (event.type === 'toolResult') {
+          const call = calls.get(event.toolId);
+          calls.delete(event.toolId);
+          if (!call || event.isError || hp <= 0) return;
+          hp = Math.max(0, hp - actionHit);
+          deps.onBattleEvent({ type: 'partialHit', damage: actionHit, agentEvent: call });
           deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
         }
       };
@@ -527,9 +536,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
       if (turn.error) {
         deps.onBattleEvent({ type: 'agentError', error: turn.error });
+      } else if (turn.interrupted) {
+        // Stopped by the player: hits so far stay, no closing blow.
+        deps.onBattleEvent({ type: 'turnInterrupted' });
+        if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       } else {
-        hp = Math.max(0, hp - remaining);
-        deps.onBattleEvent({ type: 'attack', damage: remaining, crit, matchedKeywords });
+        hp = Math.max(0, hp - damage);
+        deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords });
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       }
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });

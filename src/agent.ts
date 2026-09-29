@@ -8,6 +8,8 @@ export interface TurnResult {
   filesChanged: string[];
   commandsRun: string[];
   error?: string;
+  // The player stopped the turn (⏹ 멈추기).
+  interrupted?: boolean;
   sessionId?: string;
   contextTokens?: number;
   contextWindow?: number;
@@ -345,6 +347,7 @@ export async function runAgentTurn(
     party = false,
     claude,
     env,
+    signal,
   }: {
     model?: string;
     // Let the main agent send out the wizard/swordsman/archer subagents
@@ -354,6 +357,8 @@ export async function runAgentTurn(
     claude?: ClaudeSettings;
     // Process environment (auth: CLI login vs API key), see authEnv.
     env?: Record<string, string | undefined>;
+    // Aborting it stops the turn (⏹ 멈추기): the result is `interrupted`.
+    signal?: AbortSignal;
   } = {},
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
@@ -378,15 +383,18 @@ export async function runAgentTurn(
     yield { type: 'user' as const, message: { role: 'user' as const, content: prompt }, parent_tool_use_id: null };
     await inputClosed;
   })();
+  let interrupted = false;
+  const abortController = new AbortController();
   // No time limit: a turn waits as long as its background work takes.
   const closer = createTurnCloser();
   const settings = claude ? toQueryOptions(claude) : undefined;
 
   try {
-    for await (const message of query({
+    const q = query({
       prompt: input,
       options: {
         cwd,
+        abortController,
         ...(model ? { model } : {}),
         permissionMode: 'bypassPermissions',
         // Required by the installed SDK alongside permissionMode: 'bypassPermissions'
@@ -406,7 +414,18 @@ export async function runAgentTurn(
         ...(sessionId ? { resume: sessionId } : {}),
         ...executableOverrideOptions(),
       },
-    })) {
+    });
+    // Stop: ask Claude Code to interrupt gracefully (like Esc) so the session
+    // stays consistent; force-abort if it hasn't ended a few seconds later.
+    const onStop = () => {
+      interrupted = true;
+      closeInput();
+      q.interrupt().catch(() => {});
+      setTimeout(() => abortController.abort(), 5000).unref?.();
+    };
+    if (signal?.aborted) onStop();
+    else signal?.addEventListener('abort', onStop, { once: true });
+    for await (const message of q) {
       const info = extractToolInfo(message);
       const agentId = info.parentToolUseId && runningAgents.has(info.parentToolUseId) ? info.parentToolUseId : undefined;
       // A reply that resumes after tools/background work starts a new paragraph.
@@ -466,7 +485,8 @@ export async function runAgentTurn(
       summary: (finalResult ?? text).trim(),
       filesChanged: [...filesChanged],
       commandsRun,
-      error,
+      // A stop ends the turn with an error-ish result; it isn't a failure.
+      ...(interrupted ? { interrupted: true } : { error }),
       sessionId: latestSessionId,
       contextTokens,
       contextWindow,
@@ -474,6 +494,10 @@ export async function runAgentTurn(
   } catch (err) {
     closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
+    if (interrupted) {
+      if (latestSessionId) await relabelForListing(latestSessionId).catch(() => false);
+      return { summary: text.trim(), filesChanged: [...filesChanged], commandsRun, interrupted: true, sessionId: latestSessionId };
+    }
     return {
       summary: '',
       filesChanged: [...filesChanged],

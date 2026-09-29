@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('promptBattle', {
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
   onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),
   saveAndCloseDone: (ok) => ipcRenderer.send('save-and-close-done', ok),
+  stopTurn: () => ipcRenderer.invoke('stop-turn'),
   typingHit: () => ipcRenderer.invoke('typing-hit'),
   claudeCapabilities: (cwd, refresh) => ipcRenderer.invoke('claude-capabilities', cwd, refresh),
   setClaudeSettings: (settings) => ipcRenderer.invoke('set-claude-settings', settings),

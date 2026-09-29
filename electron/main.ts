@@ -46,6 +46,13 @@ let pendingInputResolve: ((value: string | null) => void) | null = null;
 let queuedCommands: string[] = [];
 // Lands a typing mini-game hit on the current monster (set by runDungeon).
 let externalHit: ((damage: number) => boolean) | null = null;
+// ⏹ 멈추기: stops the AI turn in progress.
+let currentTurnStop: AbortController | null = null;
+ipcMain.handle('stop-turn', () => {
+  if (!currentTurnStop) return false;
+  currentTurnStop.abort();
+  return true;
+});
 ipcMain.handle('typing-hit', () => externalHit?.(1) ?? false);
 
 function createWindow(): void {
@@ -292,7 +299,17 @@ ipcMain.handle(
     };
 
     const summary = await runDungeon({
-      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, { model: currentModel, party, claude: currentClaude ?? undefined, env: claudeEnv() }),
+      runTurn: async (prompt, cwd, sessionId, onEvent) => {
+        const stop = new AbortController();
+        currentTurnStop = stop;
+        try {
+          return await runAgentTurn(prompt, cwd, sessionId, onEvent, {
+            model: currentModel, party, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal,
+          });
+        } finally {
+          if (currentTurnStop === stop) currentTurnStop = null;
+        }
+      },
       cwd,
       difficulty: options.difficulty,
       coins: slot ? slot.coins : profile.coins,

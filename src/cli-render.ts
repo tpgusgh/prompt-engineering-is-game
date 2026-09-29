@@ -121,6 +121,8 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize('The blacksmith goes back to the forge.', 'cyan') + '\n';
     case 'typingHit':
       return '';
+    case 'turnInterrupted':
+      return colorize('You stopped the attack.', 'yellow') + '\n';
     case 'counterBlocked':
       return colorize('Your amulet blocks the counterattack!', 'cyan') + '\n';
     case 'runEnded':

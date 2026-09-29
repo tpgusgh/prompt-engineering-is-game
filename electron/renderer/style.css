@@ -1591,3 +1591,67 @@ body {
   margin: -4px 0 10px;
 }
 .setup-xp .hp-bar-track.xp { width: 220px; }
+
+.turn-head-right { display: flex; align-items: center; gap: 8px; }
+.stop-turn {
+  padding: 2px 10px;
+  font-size: 12px;
+  background: #3b2a2e;
+  color: #f0c4c8;
+  border: 1px solid #bf616a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.stop-turn:hover:not(:disabled) { background: #bf616a; color: #fff; }
+.stop-turn:disabled { opacity: 0.6; cursor: default; }
+
+/* My latest message, to the right of the monster */
+.monster-stage {
+  position: relative;
+}
+.last-prompt {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: min(300px, 32%);
+  max-height: 150px;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-align: left;
+  background: rgba(94, 129, 172, 0.18);
+  border: 1px solid #5e81ac;
+  border-radius: 12px 12px 12px 3px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.last-prompt.expanded {
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 5;
+  background: #2b3445;
+}
+.last-prompt-title {
+  font-size: 11px;
+  color: #88c0d0;
+  margin-bottom: 3px;
+}
+.last-prompt-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #e5e9f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.last-prompt.expanded .last-prompt-text {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+#player-panel { flex-wrap: wrap; row-gap: 6px; }
+#player-panel .player-hp { flex-shrink: 0; }
+#player-panel .player-label,
+#player-hp-label,
+#player-panel .xp-label { white-space: nowrap; }

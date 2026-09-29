@@ -116,7 +116,13 @@
         <div id="chapter-banner" class="chapter-banner"></div>
         <div id="monster-panel">
           <h2 id="monster-name"></h2>
-          <div id="monster-art"></div>
+          <div class="monster-stage">
+            <div id="monster-art"></div>
+            <aside id="last-prompt" class="last-prompt" hidden title="클릭해서 전체 보기">
+              <div class="last-prompt-title">🗨 내가 방금 한 말</div>
+              <div id="last-prompt-text" class="last-prompt-text"></div>
+            </aside>
+          </div>
           <div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
           <p id="hp-label"></p>
         </div>
@@ -177,7 +183,10 @@
         <div id="turn-panel" class="turn-panel" hidden>
           <div class="turn-head">
             <span id="turn-status" class="turn-status"></span>
-            <span id="turn-timer" class="turn-timer"></span>
+            <span class="turn-head-right">
+              <span id="turn-timer" class="turn-timer"></span>
+              <button type="button" id="stop-turn" class="stop-turn" title="AI 작업을 지금 멈춘다 (지금까지의 타격은 유지)">⏹ 멈추기</button>
+            </span>
           </div>
           <div id="party-status" class="party-status"></div>
           <div class="typing-game">

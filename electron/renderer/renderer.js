@@ -711,7 +711,17 @@ function appendLog(text, className) {
   return line;
 }
 
+// My most recent message, shown next to the monster so I remember what I
+// asked for while the AI works on it.
+function setLastPrompt(text) {
+  $('last-prompt-text').textContent = text;
+  $('last-prompt').hidden = !text;
+  $('last-prompt').classList.remove('expanded');
+}
+$('last-prompt').addEventListener('click', () => $('last-prompt').classList.toggle('expanded'));
+
 function appendUserChat(text, extraClass) {
+  setLastPrompt(text);
   const line = appendLog(text, `user-chat${extraClass ? ` ${extraClass}` : ''}`);
   line.dataset.who = '나';
   return line;
@@ -1347,6 +1357,8 @@ function renderBattleEvent(event) {
       renderParty();
       startTurnTimer();
       startTyping();
+      $('stop-turn').disabled = false;
+      $('stop-turn').textContent = '⏹ 멈추기';
       break;
     case 'partialHit': {
       const type = event.agentEvent.agentId ? agentTypeById.get(event.agentEvent.agentId) : undefined;
@@ -1614,6 +1626,10 @@ function renderBattleEvent(event) {
       contextUsage = event;
       renderUsage();
       break;
+    case 'turnInterrupted':
+      appendLog('⏹ 공격을 멈췄다. 지금까지 들어간 타격은 그대로, 마무리 일격은 없다.', 'story-line');
+      turnConcluded();
+      break;
     case 'typingHit':
       appendLog(`⌨️ 코드 타자 공격! "${lastTypedTitle}" 완성 — ${event.damage}의 피해!`, 'partial-hit typing-hit');
       flashMonster();
@@ -1777,6 +1793,7 @@ async function startGame({ loadSlot, slot }) {
   setupScreen.hidden = true;
   dungeonScreen.hidden = false;
   logEl.textContent = '';
+  setLastPrompt('');
   const from = slot ?? profile;
   coins = from.coins;
   bag = { ...from.bag };
@@ -2342,3 +2359,13 @@ function renderXp() {
   for (const el of document.querySelectorAll('[data-xp-fill]')) el.style.width = `${pct}%`;
   for (const el of document.querySelectorAll('[data-xp-label]')) el.textContent = `${into} / ${xpPerLevel} XP (${pct}%)`;
 }
+
+$('stop-turn').addEventListener('click', async () => {
+  const btn = $('stop-turn');
+  btn.disabled = true;
+  btn.textContent = '멈추는 중…';
+  if (!(await window.promptBattle.stopTurn())) {
+    btn.disabled = false;
+    btn.textContent = '⏹ 멈추기';
+  }
+});

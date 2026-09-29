@@ -165,52 +165,7 @@ test('emits turnStart right before a real turn starts (not for hesitate)', async
   assert.ok(turnStartIndices[0] < attackIndex, 'turnStart fires before the turn resolves');
 });
 
-test('deals partial damage per live agentEvent in real time, tapering, with the remainder as the closing attack', async () => {
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
-  deps.runTurn = async (
-    _prompt: string,
-    _cwd: string,
-    _sessionId?: string,
-    onEvent?: (e: { type: 'command' | 'file'; value: string }) => void,
-  ) => {
-    onEvent?.({ type: 'command', value: 'npm test' });
-    onEvent?.({ type: 'file', value: 'src/foo.ts' });
-    return { summary: 'done', filesChanged: ['src/foo.ts'], commandsRun: ['npm test'] };
-  };
-  const summary = await runDungeon(deps);
-  const partialHits = events.filter((e) => e.type === 'partialHit');
-  const attack = events.find((e) => e.type === 'attack');
-  assert.equal(partialHits.length, 2, 'one partial hit per live event');
-  // ONE_SHOT_PROMPT deals 225 total (crit). 40% of remaining per event: 90, then 40% of 135 = 54.
-  assert.deepEqual(
-    partialHits.map((e) => (e.type === 'partialHit' ? e.damage : -1)),
-    [90, 54],
-  );
-  assert.ok(attack && attack.type === 'attack' && attack.damage === 225 - 90 - 54, 'closing attack carries only the undealt remainder');
-  assert.equal(summary.floorsCleared, 1, 'total damage across partial hits + remainder still clears the floor');
-});
 
-test('partial hits land for real even if the turn ultimately errors — only the closing/remainder bonus is skipped', async () => {
-  // Deliberately not ONE_SHOT_PROMPT: this one's total damage (40) is well
-  // under the monster's HP (60) even after landing the partial hit, so
-  // skipping the closing bonus is actually observable (the monster survives).
-  const SMALL_PROMPT = 'x'.repeat(150); // no keywords, no crit: base = 10 + floor(150/5) = 40
-  const { deps, events } = makeFakeDeps([SMALL_PROMPT, '/quit']);
-  deps.runTurn = async (
-    _prompt: string,
-    _cwd: string,
-    _sessionId?: string,
-    onEvent?: (e: { type: 'command' | 'file'; value: string }) => void,
-  ) => {
-    onEvent?.({ type: 'file', value: 'src/foo.ts' });
-    return { summary: '', filesChanged: [], commandsRun: [], error: 'rate limited' };
-  };
-  const summary = await runDungeon(deps);
-  const partialHits = events.filter((e) => e.type === 'partialHit');
-  assert.equal(partialHits.length, 1);
-  assert.equal(partialHits[0].type === 'partialHit' ? partialHits[0].damage : -1, 16, '40% of the 40 total landed live before the error');
-  assert.equal(summary.floorsCleared, 0, 'the 24 remaining (the closing bonus) is skipped because the turn errored, and 16 alone does not clear a 60-HP monster — matches "no bonus on error"');
-});
 
 test('emits floorStart with the monster name/art/maxHp, hpChanged after the attack, and floorCleared', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
@@ -624,20 +579,6 @@ test('/session <id> swaps the Claude session mid-run; the next turn resumes it',
   assert.ok(events.some((e) => e.type === 'sessionSwitched' && e.sessionId === 'other-id'));
 });
 
-test('only command/file events land partial hits; text and party events do not', async () => {
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
-  deps.runTurn = async (_p: string, _c: string, _s?: string, onEvent?: (e: any) => void) => {
-    onEvent?.({ type: 'text', value: 'hi' });
-    onEvent?.({ type: 'agentStart', id: 'a1', agentType: 'wizard', description: 'scout' });
-    onEvent?.({ type: 'command', value: 'ls', agentId: 'a1' });
-    onEvent?.({ type: 'toolResult', toolId: 't1', output: 'a.txt', isError: false });
-    onEvent?.({ type: 'agentEnd', id: 'a1' });
-    return { summary: 'done', filesChanged: [], commandsRun: ['ls'] };
-  };
-  await runDungeon(deps);
-  assert.equal(events.filter((e) => e.type === 'partialHit').length, 1);
-  assert.equal(events.filter((e) => e.type === 'agentEvent').length, 5, 'all five are forwarded for the UI');
-});
 
 test('a save mid-fight records the monster HP, and loading restores it', async () => {
   const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/save 1', '/quit']);
@@ -720,4 +661,80 @@ test('the auto slot cannot be written by /save', async () => {
   const { deps, events } = makeFakeDeps([`/save ${AUTO_SAVE_SLOT}`, '/quit']);
   await runDungeon(deps);
   assert.ok(events.some((e) => e.type === 'saveFailed'));
+});
+
+type Ev = { type: string; [k: string]: unknown };
+function scriptedTurn(events: Ev[], result: Record<string, unknown> = { summary: 'done', filesChanged: [], commandsRun: [] }) {
+  return async (_p: string, _c: string, _s?: string, onEvent?: (e: any) => void) => {
+    for (const e of events) onEvent?.(e);
+    return result as any;
+  };
+}
+
+test('every successful tool result lands its own hit (25% of the prompt damage, 1..12); the full prompt damage closes', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  deps.runTurn = scriptedTurn([
+    { type: 'command', value: 'npm test', toolId: 't1' },
+    { type: 'toolResult', toolId: 't1', output: 'ok', isError: false },
+    { type: 'file', value: 'src/a.ts', toolId: 't2' },
+    { type: 'toolResult', toolId: 't2', output: 'ok', isError: false },
+  ]);
+  await runDungeon(deps);
+  const hits = events.filter((e) => e.type === 'partialHit').map((e) => (e.type === 'partialHit' ? e.damage : -1));
+  assert.deepEqual(hits, [12, 12], '225 * 0.25 capped at 12, once per successful action');
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 225, 'the closing blow is the whole prompt damage');
+});
+
+test('more work = more damage: a short prompt still wins by doing many actions', async () => {
+  const SHORT = 'x'.repeat(50); // 20 prompt damage → 5 per action
+  const actions = Array.from({ length: 10 }, (_, i) => [
+    { type: 'command', value: `step ${i}`, toolId: `t${i}` },
+    { type: 'toolResult', toolId: `t${i}`, output: 'ok', isError: false },
+  ]).flat();
+  const { deps } = makeFakeDeps([SHORT, '/quit']);
+  deps.runTurn = scriptedTurn(actions);
+  const summary = await runDungeon(deps);
+  assert.equal(summary.floorsCleared, 1, '10 actions x 5 + 20 closing = 70 > the 60-HP goblin');
+});
+
+test('failed tool results do not hit; calls alone do not hit; text and party events do not hit', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  deps.runTurn = scriptedTurn([
+    { type: 'text', value: 'hi' },
+    { type: 'agentStart', id: 'a1', agentType: 'wizard', description: 'scout' },
+    { type: 'command', value: 'ls', toolId: 't1', agentId: 'a1' },
+    { type: 'toolResult', toolId: 't1', output: 'blocked by hook', isError: true },
+    { type: 'command', value: 'pwd', toolId: 't2' },
+    { type: 'agentEnd', id: 'a1' },
+  ]);
+  await runDungeon(deps);
+  assert.equal(events.filter((e) => e.type === 'partialHit').length, 0);
+  assert.equal(events.filter((e) => e.type === 'agentEvent').length, 6, 'all are still forwarded for the UI');
+});
+
+test('action hits land even if the turn later errors; only the closing blow is skipped', async () => {
+  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action
+  deps.runTurn = scriptedTurn(
+    [{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }],
+    { summary: '', filesChanged: [], commandsRun: [], error: 'rate limited' },
+  );
+  const summary = await runDungeon(deps);
+  assert.deepEqual(events.filter((e) => e.type === 'partialHit').map((e) => (e.type === 'partialHit' ? e.damage : -1)), [10]);
+  assert.equal(events.filter((e) => e.type === 'attack').length, 0);
+  assert.equal(summary.floorsCleared, 0);
+});
+
+test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and draws a normal counter', async () => {
+  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']);
+  deps.runTurn = scriptedTurn(
+    [{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }],
+    { summary: 'partial', filesChanged: [], commandsRun: [], interrupted: true, sessionId: 's-int' },
+  );
+  await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'turnInterrupted'));
+  assert.equal(events.filter((e) => e.type === 'attack' || e.type === 'agentError').length, 0);
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 6, 'normal, not the 1.5x error counter');
+  assert.ok(events.some((e) => e.type === 'sessionSaved' && e.sessionId === 's-int'), 'the session is kept');
 });
