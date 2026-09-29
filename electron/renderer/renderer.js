@@ -1506,8 +1506,11 @@ async function refreshSessionPicker(folder) {
     option.textContent = `${s.title} · ${shortTime(s.lastModified)}${where}${s.sessionId === saved.sessionId ? ' (마지막)' : ''}`;
     sessionSelect.append(option);
   }
-  sessionSelect.value = sessions.some((s) => s.sessionId === saved.sessionId) ? saved.sessionId : '';
+  // Default is a brand-new world; continuing is always an explicit choice.
+  sessionSelect.value = '';
   sessionPicker.hidden = sessions.length === 0;
+  folderRunStates = saved.runStates ?? {};
+  renderSessionHint();
 }
 
 async function renderSessionHistory(sessionId, title) {
@@ -2156,3 +2159,15 @@ $('auth-check').addEventListener('click', async () => {
       ? `✅ API 키로 연결 (${a.apiKeySource})`
       : `✅ ${a.email ?? '로그인됨'}${a.subscriptionType ? ` · ${a.subscriptionType}` : ''}${a.apiKeySource ? ` · 키: ${a.apiKeySource}` : ''}`;
 });
+
+// What starting with the picked session will do.
+let folderRunStates = {};
+function renderSessionHint() {
+  const run = sessionSelect.value ? folderRunStates[sessionSelect.value] : undefined;
+  $('session-hint').textContent = !sessionSelect.value
+    ? '새로운 세계로 시작 (1층부터, 새 대화)'
+    : run
+      ? `이 세션의 저장 상태로 이어하기: ${floorText(run.floor)}, HP ${run.playerHp}/${run.playerMaxHp}`
+      : '이 세션의 대화를 이어서, 게임은 새로 시작';
+}
+sessionSelect.addEventListener('change', renderSessionHint);
