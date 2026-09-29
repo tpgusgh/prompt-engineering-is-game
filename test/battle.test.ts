@@ -208,6 +208,21 @@ test('hesitating is punished with a heavier counterattack', async () => {
   assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 9, '1.5x the normal 6');
 });
 
+for (const summary of ['수정할까요?', '어느 쪽으로 할까요?\n\n- A안\n- B안', 'Which one? **']) {
+  test(`the monster waits while the AI's reply asks the player something: ${JSON.stringify(summary)}`, async () => {
+    const { deps, events } = makeFakeDeps([WEAK_PROMPT, '/quit'], { summary, filesChanged: [], commandsRun: [] });
+    await runDungeon(deps);
+    assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 0);
+    assert.ok(events.some((e) => e.type === 'monsterWaits'));
+  });
+}
+
+test('a question mid-reply does not stop the counterattack', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT, '/quit'], { summary: '왜 안 됐을까? 원인은 오타였고 고쳤습니다.', filesChanged: [], commandsRun: [] });
+  await runDungeon(deps);
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1);
+});
+
 test('a monster killed by the turn does not counterattack', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
   await runDungeon(deps);

@@ -12,7 +12,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Real-time hits (work = damage)** — every successful command/edit lands its own hit as it completes (25% of the prompt damage, 1–12) and the full prompt damage closes the turn; failed actions don't hit. **⏹ Stop** ends a turn right away, and **your latest message** is shown beside the monster; touched files fly at the monster as their real OS icon.
 - **XP bar, level rewards, titles** — shows how far you are toward the next level (every 100 XP), like an HP bar; each new run starts with **one stat point per hero level**, and your title changes with level (견습 용사 apprentice … 전설의 프롬프터 legendary prompter); it fills as you defeat monsters mid-run, with a level-up message.
 - **Monster speech bubbles** — monsters talk: idle chatter that keeps changing, plus their own lines when hit, attacking, dying and more; the merchant and blacksmith chat too.
-- **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors). 0 HP = defeat. Clearing a floor heals you.
+- **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors) — unless the AI ends its reply with a question for you; then the monster waits for your answer. 0 HP = defeat. Clearing a floor heals you.
 - **Classes & weapons = Claude models** — pick a class on the setup screen (🗡 swordsman / 🧙 wizard / 🏹 archer); each names the model-weapons differently and attacks with its own lines. Stronger models hit harder (x0.8 – x1.5); switch any time mid-run.
 
   | Model | 🗡 Swordsman | 🧙 Wizard | 🏹 Archer |

@@ -5,6 +5,8 @@ export function formatBattleEvent(event: BattleEvent): string {
   switch (event.type) {
     case 'floorStart':
       return `\n${colorize(`Floor ${event.floor + 1}: ${event.monsterName} appears!`, 'bold')}\n${event.monsterArt}\n${renderHpBar(event.maxHp, event.maxHp)}\n`;
+    case 'monsterWaits':
+      return colorize('The AI is asking you something. The monster waits for your answer.', 'yellow') + '\n';
     case 'hesitate':
       return colorize('You hesitate. No attack this turn.', 'yellow') + '\n';
     case 'turnStart':

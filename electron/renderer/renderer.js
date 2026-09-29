@@ -1351,6 +1351,9 @@ function renderBattleEvent(event) {
       appendLog(event.isBoss ? `보스 ${currentMonsterName}이(가) 모습을 드러냈다!` : `${currentMonsterName}이(가) 나타났다!`, event.isBoss ? 'crit' : undefined);
       break;
     }
+    case 'monsterWaits':
+      appendLog(`❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
+      break;
     case 'hesitate':
       appendLog('망설였다. 이번 턴은 공격하지 못했다.');
       turnConcluded();

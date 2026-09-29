@@ -18,6 +18,7 @@ export type BattleEvent =
       maxHp: number;
     }
   | { type: 'hesitate' }
+  | { type: 'monsterWaits' }
   | { type: 'turnStart'; prompt: string }
   | { type: 'partialHit'; damage: number; agentEvent: AgentEvent }
   | { type: 'attack'; damage: number; crit: boolean; matchedKeywords: string[] }
@@ -152,6 +153,20 @@ export function actionDamage(promptDamage: number): number {
 
 function coinsForFloor(floor: number, isBoss: boolean): number {
   return (10 + floor * 2) * (isBoss ? BOSS_COIN_MULTIPLIER : 1);
+}
+
+// Does the reply end by asking the player something? (Same rule as the
+// quest modal: the last line ends with "?", or a trailing choice list
+// follows a line that does.) Then the monster waits for the answer.
+export function endsWithQuestion(text: string): boolean {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const isQ = (l?: string) => Boolean(l && /[?？][*_`)\s]*$/.test(l));
+  if (isQ(lines.at(-1))) return true;
+  const isItem = (l: string) => /^([-*+]|\d+[.)])\s/.test(l);
+  let i = lines.length - 1;
+  if (i < 0 || !isItem(lines[i])) return false;
+  while (i >= 0 && isItem(lines[i])) i--;
+  return isQ(lines[i]);
 }
 
 function counterDamage(monsterMaxHp: number, punished: boolean): number {
@@ -560,7 +575,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'sessionNearlyFull', usedTokens: turn.contextTokens, contextWindow: turn.contextWindow });
       }
 
-      if (hp > 0) {
+      if (hp > 0 && !turn.error && endsWithQuestion(turn.summary)) {
+        deps.onBattleEvent({ type: 'monsterWaits' });
+      } else if (hp > 0) {
         takeHit(counterDamage(maxHp, Boolean(turn.error)));
         if (playerHp <= 0) break;
       }
