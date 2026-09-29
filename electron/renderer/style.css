@@ -1561,3 +1561,7 @@ body {
   border-radius: 8px;
   cursor: pointer;
 }
+
+.unsaved-overlay { z-index: 110; }
+#unsaved-save { background: #a3be8c; color: #2e3440; border-color: #a3be8c; font-weight: bold; }
+#unsaved-discard { border-color: #bf616a; color: #bf616a; }

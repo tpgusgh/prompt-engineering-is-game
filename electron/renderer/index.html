@@ -248,6 +248,19 @@
       </div>
     </div>
 
+    <div id="unsaved-overlay" class="file-viewer-overlay unsaved-overlay" hidden>
+      <div class="exit-panel">
+        <h2>💾 저장하지 않은 변경이 있어요</h2>
+        <p id="unsaved-file" class="option-sub"></p>
+        <p>이대로 닫으면 편집한 내용이 사라진다.</p>
+        <div class="exit-actions">
+          <button type="button" id="unsaved-cancel">계속 편집</button>
+          <button type="button" id="unsaved-discard">저장 안 하고 닫기</button>
+          <button type="button" id="unsaved-save">저장하고 닫기</button>
+        </div>
+      </div>
+    </div>
+
     <div id="exit-overlay" class="file-viewer-overlay" hidden>
       <div class="exit-panel">
         <h2>잠시 쉬어갈까?</h2>

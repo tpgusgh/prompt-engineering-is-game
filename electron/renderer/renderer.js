@@ -1080,8 +1080,62 @@ refreshTreeBtn.addEventListener('click', refreshTree);
 // main.ts (which refuses writes outside the project folder); images view only.
 let editingPath = null;
 
+// Unsaved edits: closing the editor, opening another file, or closing the
+// window first asks whether to save (compared with the last saved content,
+// so editing back to the original counts as unchanged).
+let savedContent = null;
+const editorTextarea = () => fileViewerBodyEl.querySelector('textarea');
+function isEditorDirty() {
+  const ta = editorTextarea();
+  return Boolean(!fileViewerOverlay.hidden && editingPath && ta && !ta.readOnly && savedContent !== null && ta.value !== savedContent);
+}
+function renderDirty() {
+  fileViewerStatus.textContent = isEditorDirty() ? '● 저장 안 됨' : savedContent !== null && editingPath ? '저장됨' : fileViewerStatus.textContent;
+}
+let unsavedProceed = null;
+function guardUnsaved(proceed) {
+  if (!isEditorDirty()) return proceed();
+  unsavedProceed = proceed;
+  $('unsaved-file').textContent = editingPath;
+  $('unsaved-overlay').hidden = false;
+  $('unsaved-save').focus();
+}
+function closeUnsavedPrompt() {
+  $('unsaved-overlay').hidden = true;
+  unsavedProceed = null;
+}
+$('unsaved-cancel').addEventListener('click', () => {
+  closeUnsavedPrompt();
+  editorTextarea()?.focus();
+});
+$('unsaved-discard').addEventListener('click', () => {
+  const proceed = unsavedProceed;
+  closeUnsavedPrompt();
+  savedContent = null; // drop the edits
+  proceed?.();
+});
+$('unsaved-save').addEventListener('click', async () => {
+  const proceed = unsavedProceed;
+  if (await saveEditor()) {
+    closeUnsavedPrompt();
+    proceed?.();
+  } else closeUnsavedPrompt(); // keep editing; the status shows the error
+});
+// Closing the window/app with unsaved edits: main shows a native dialog.
+window.addEventListener('beforeunload', (e) => {
+  if (isEditorDirty()) {
+    e.preventDefault();
+    e.returnValue = false;
+  }
+});
+
 function openFileViewer(filePath) {
+  guardUnsaved(() => showFile(filePath));
+}
+
+function showFile(filePath) {
   editingPath = null;
+  savedContent = null;
   fileViewerTitleEl.textContent = filePath;
   fileViewerStatus.textContent = '';
   fileViewerSaveBtn.hidden = true;
@@ -1110,28 +1164,44 @@ function openFileViewer(filePath) {
       return;
     }
     editingPath = filePath;
+    savedContent = result.content;
     fileViewerSaveBtn.hidden = false;
-    textarea.addEventListener('input', () => {
-      fileViewerStatus.textContent = '수정됨';
-    });
+    textarea.addEventListener('input', renderDirty);
   });
 }
 
-fileViewerSaveBtn.addEventListener('click', async () => {
-  const textarea = fileViewerBodyEl.querySelector('textarea');
-  if (!editingPath || !textarea) return;
-  const result = await window.promptBattle.writeFile(editingPath, textarea.value);
+async function saveEditor() {
+  const textarea = editorTextarea();
+  if (!editingPath || !textarea) return false;
+  const content = textarea.value;
+  const result = await window.promptBattle.writeFile(editingPath, content);
   fileViewerStatus.textContent = result.ok ? '저장됨' : `저장 실패: ${result.message}`;
-  if (result.ok) refreshTree();
-});
+  if (result.ok) {
+    savedContent = content;
+    refreshTree();
+  }
+  return result.ok;
+}
+fileViewerSaveBtn.addEventListener('click', saveEditor);
 
 function closeFileViewer() {
   fileViewerOverlay.hidden = true;
   editingPath = null;
+  savedContent = null;
 }
-fileViewerCloseBtn.addEventListener('click', closeFileViewer);
+const requestCloseViewer = () => guardUnsaved(closeFileViewer);
+fileViewerCloseBtn.addEventListener('click', requestCloseViewer);
 fileViewerOverlay.addEventListener('click', (e) => {
-  if (e.target === fileViewerOverlay) closeFileViewer();
+  if (e.target === fileViewerOverlay) requestCloseViewer();
+});
+document.addEventListener('keydown', (e) => {
+  if (fileViewerOverlay.hidden) return;
+  if (e.key === 'Escape' && $('unsaved-overlay').hidden) requestCloseViewer();
+  // Cmd/Ctrl+S saves while editing.
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    saveEditor();
+  }
 });
 
 // ---------------------------------------------------------------------------

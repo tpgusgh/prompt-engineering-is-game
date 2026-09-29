@@ -56,7 +56,7 @@ These apply only to the game's sessions; your Claude Code settings are untouched
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)
 
-- **Top left, inventory**: the project's file tree — drag to move, drop files from Finder, `+📄` `+📁` to create, click to view/edit.
+- **Top left, inventory**: the project's file tree — drag to move, drop files from Finder, `+📄` `+📁` to create, click to view/edit (⌘S saves; closing with unsaved edits asks first).
 - **Bottom left, 🎒 bag**: bandages, potions, whetstones, amulets, smoke bombs — `사용` (use) is a free action.
 - **Middle**: the monster and its HP, your HP, weapon (model) and ⚡ attack speed switchers, ⭐ stat points (+1 per monster defeated).
 - **Log**: your bubbles (right), the AI's replies (left — typed live, markdown, important parts colored), and the commands/edits/reads it runs as separate **tool cards** (IN/OUT, done/failed).

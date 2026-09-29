@@ -59,6 +59,18 @@ function createWindow(): void {
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // The page blocks unload while the file editor has unsaved edits: ask.
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(mainWindow!, {
+      type: 'warning',
+      buttons: ['저장 안 하고 나가기', '계속 편집'],
+      defaultId: 1,
+      cancelId: 1,
+      message: '저장하지 않은 파일 변경이 있어요',
+      detail: '지금 나가면 편집한 내용이 사라집니다. 편집기에서 저장(⌘S)할 수 있어요.',
+    });
+    if (choice === 0) event.preventDefault(); // leave anyway
+  });
   mainWindow.on('closed', () => {
     // Closing mid-run: resolve the pending readInput() the same way EOF does
     // on the CLI (battle.ts treats null as "leave the dungeon"), so runDungeon
