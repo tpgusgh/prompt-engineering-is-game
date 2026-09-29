@@ -1,6 +1,7 @@
 import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { PARTY, PARTY_SYSTEM_PROMPT } from './party.ts';
 import { relabelForListing } from './transcripts.ts';
+import { toQueryOptions, createTurnCloser, type ClaudeSettings } from './claude-settings.ts';
 
 export interface TurnResult {
   summary: string;
@@ -19,7 +20,9 @@ export type AgentEvent =
   | { type: 'toolResult'; toolId: string; output: string; isError: boolean }
   | { type: 'agentStart'; id: string; agentType: string; description: string }
   | { type: 'agentEnd'; id: string }
-  | { type: 'text'; value: string };
+  | { type: 'text'; value: string }
+  // Background tasks (e.g. Bash run_in_background) still running this turn.
+  | { type: 'background'; running: number };
 
 export interface ExtractedInfo {
   filesChanged: string[];
@@ -212,7 +215,9 @@ export function toPlanUsage(response: unknown): PlanUsage | null {
 // any failure just hides the usage bar instead of breaking the game.
 // Spawns an idle `claude` process that never sends a prompt, so it costs no
 // model tokens.
-export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
+// Runs `ask` against an idle `claude` process that never receives a prompt
+// (no model tokens), for control-channel queries. Null on failure/timeout.
+async function withIdleQuery<T>(cwd: string, ask: (q: ReturnType<typeof query>) => Promise<T>): Promise<T | null> {
   let release = () => {};
   const idle = (async function* () {
     await new Promise<void>((r) => (release = r));
@@ -220,17 +225,37 @@ export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
   const q = query({ prompt: idle, options: { cwd, ...executableOverrideOptions() } });
   try {
     const timeout = new Promise<null>((r) => setTimeout(() => r(null), 15000));
-    const response = await Promise.race([
-      q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-      timeout,
-    ]);
-    return toPlanUsage(response);
+    return await Promise.race([ask(q), timeout]);
   } catch {
     return null;
   } finally {
     release();
     q.close();
   }
+}
+
+export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
+  return toPlanUsage(await withIdleQuery(cwd, (q) => q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })));
+}
+
+export interface ClaudeCapabilities {
+  // User/project/plugin skills and commands (Claude Code's builtins excluded).
+  skills: { name: string; description: string }[];
+  mcpServers: { name: string; status: string }[];
+}
+
+// What the settings tab can toggle for this folder.
+export async function fetchClaudeCapabilities(cwd: string): Promise<ClaudeCapabilities | null> {
+  return withIdleQuery(cwd, async (q) => {
+    const init = await q.initializationResult();
+    const mcp = await q.mcpServerStatus();
+    const seen = new Set<string>();
+    const skills = init.commands
+      .filter((c) => !c.builtin && !seen.has(c.name) && seen.add(c.name))
+      .map((c) => ({ name: c.name, description: c.description }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { skills, mcpServers: mcp.map((s) => ({ name: s.name, status: s.status })) };
+  });
 }
 
 const MAX_TOOL_OUTPUT = 4000;
@@ -295,6 +320,8 @@ export async function runAgentTurn(
   model?: string,
   // Let the main agent send out the wizard/swordsman/archer subagents.
   party = false,
+  // Effort, skills filter and blocked MCP servers from the settings tab.
+  claude?: ClaudeSettings,
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
   const commandsRun: string[] = [];
@@ -307,10 +334,23 @@ export async function runAgentTurn(
   const runningAgents = new Set<string>();
   // Tool calls shown to the player, awaiting their result (OUT).
   const shownTools = new Set<string>();
+  // The prompt goes in as a stream kept open until the turn is really over,
+  // so background tasks aren't killed at the first result and Claude's
+  // follow-up answer (when they finish) still arrives this turn.
+  let closeInput = () => {};
+  const inputClosed = new Promise<void>((r) => (closeInput = r));
+  const input = (async function* () {
+    yield { type: 'user' as const, message: { role: 'user' as const, content: prompt }, parent_tool_use_id: null };
+    await inputClosed;
+  })();
+  const closer = createTurnCloser();
+  // ponytail: hard cap on how long a turn may wait for background work.
+  const safety = setTimeout(() => closeInput(), 30 * 60 * 1000);
+  const settings = claude ? toQueryOptions(claude) : undefined;
 
   try {
     for await (const message of query({
-      prompt,
+      prompt: input,
       options: {
         cwd,
         ...(model ? { model } : {}),
@@ -322,6 +362,8 @@ export async function runAgentTurn(
         // set of available built-in tools") — `allowedTools` only auto-approves,
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
         tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', ...(party ? ['Agent'] : [])],
+        ...(settings ? { effort: settings.effort, disallowedTools: settings.disallowedTools } : {}),
+        ...(settings?.skills ? { skills: settings.skills } : {}),
         ...(party ? { agents: PARTY, systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: PARTY_SYSTEM_PROMPT } } : {}),
         // Stream text as it's written so the UI can type it out live.
         includePartialMessages: true,
@@ -358,10 +400,18 @@ export async function runAgentTurn(
       text += info.text;
       if (info.finalResult) finalResult = info.finalResult;
       if (info.error) error = info.error;
+      const m = message as any;
+      if (m?.type === 'system' && m.subtype === 'background_tasks_changed' && Array.isArray(m.tasks)) {
+        closer.onBackgroundTasks(m.tasks.length);
+        onEvent?.({ type: 'background', running: m.tasks.length });
+      }
+      if (m?.type === 'result' && closer.onResult(Boolean(info.error))) closeInput();
       if (info.sessionId) latestSessionId = info.sessionId;
       if (info.contextTokens !== undefined) contextTokens = info.contextTokens;
       if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
     }
+    clearTimeout(safety);
+    closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     // List the session in VS Code / `claude --resume` (see transcripts.ts).
     if (latestSessionId) await relabelForListing(latestSessionId).catch(() => false);
@@ -375,6 +425,8 @@ export async function runAgentTurn(
       contextWindow,
     };
   } catch (err) {
+    clearTimeout(safety);
+    closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     return {
       summary: '',

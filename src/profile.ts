@@ -5,6 +5,7 @@ import { MONSTER_COUNT } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
 import { VITALITY_HP } from './stats.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
+import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 
 export interface Profile {
   level: number;
@@ -21,10 +22,12 @@ export interface Profile {
   swordLevel: number;
   // Last class picked on the setup screen (names the weapons).
   heroClass: HeroClassId;
+  // Settings-tab controls for the game's Claude sessions.
+  claude: ClaudeSettings;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -65,6 +68,7 @@ function coerceProfile(parsed: unknown): Profile {
     maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
     heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
+    claude: coerceClaudeSettings(p?.claude),
   };
 }
 

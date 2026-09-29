@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
-import { runAgentTurn, fetchPlanUsage, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
+import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
+import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, type ClaudeSettings } from '../src/claude-settings.ts';
 import { loadSlots, writeSlot } from '../src/saves.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
 import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
@@ -105,6 +106,24 @@ ipcMain.handle('get-setup-info', async () => ({
   classes: HERO_CLASSES,
 }));
 
+// Settings tab: what can be toggled (skills, MCP servers) per folder, and
+// the chosen settings (saved in the profile; a running game picks changes up
+// on its next turn).
+const capabilityCache = new Map<string, Awaited<ReturnType<typeof fetchClaudeCapabilities>>>();
+ipcMain.handle('claude-capabilities', async (_event, cwd: string | null, refresh = false) => {
+  const dir = path.resolve(cwd ?? app.getPath('home'));
+  if (refresh || !capabilityCache.get(dir)) capabilityCache.set(dir, await fetchClaudeCapabilities(dir));
+  return capabilityCache.get(dir) ?? null;
+});
+let currentClaude: ClaudeSettings | null = null;
+ipcMain.handle('set-claude-settings', async (_event, settings: unknown) => {
+  const next = coerceClaudeSettings(settings);
+  currentClaude = next;
+  await saveProfile({ ...(await loadProfile()), claude: next });
+  return next;
+});
+ipcMain.handle('claude-settings-info', () => ({ levels: EFFORT_LEVELS, attackSpeed: ATTACK_SPEED }));
+
 ipcMain.handle('get-usage', () => fetchPlanUsage(currentCwd ?? app.getPath('home')));
 
 ipcMain.handle('set-model', (_event, model: string) => {
@@ -152,6 +171,7 @@ ipcMain.handle(
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
     const party = requested.party ?? true;
+    currentClaude = profile.claude;
     const heroClass = getHeroClass(options.heroClass).id;
     currentModel = getWeapon(options.model).model;
     const cwd = currentCwd;
@@ -179,7 +199,7 @@ ipcMain.handle(
     };
 
     const summary = await runDungeon({
-      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel, party),
+      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel, party, currentClaude ?? undefined),
       cwd,
       difficulty: options.difficulty,
       coins: slot ? slot.coins : profile.coins,
@@ -190,7 +210,7 @@ ipcMain.handle(
       bindExternalHit: (fn) => (externalHit = fn),
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
-      getDamageMultiplier: () => getWeapon(currentModel).multiplier,
+      getDamageMultiplier: () => getWeapon(currentModel).multiplier * ATTACK_SPEED[(currentClaude ?? profile.claude).effort].multiplier,
       // Hero stats are per-run: fresh each game, restored only from a save slot.
       stats: slot?.stats,
       statPoints: slot?.statPoints,
@@ -227,7 +247,8 @@ ipcMain.handle(
             }),
     });
 
-    const updated = { ...applyRun(profile, summary, options.themeId), heroClass };
+    // Settings changed mid-run win over the copy loaded at the start.
+    const updated = { ...applyRun(profile, summary, options.themeId), heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
     await saving;
 

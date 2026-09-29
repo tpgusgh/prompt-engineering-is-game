@@ -35,6 +35,27 @@
         <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 검 강화는 영구 (던전의 대장장이).</p>
       </fieldset>
       <fieldset>
+        <legend>⚙️ Claude 설정 <span class="option-sub">(이 게임의 세션에만 적용 · 내 Claude Code 설정은 안 바뀜)</span></legend>
+        <label class="setting-row">⚡ 공격 속도 (effort) <select id="effort-select"></select></label>
+        <div class="setting-row">
+          🧩 스킬
+          <label><input type="radio" name="skills-mode" value="all" /> 전부 켜기</label>
+          <label><input type="radio" name="skills-mode" value="none" /> 전부 끄기</label>
+          <label><input type="radio" name="skills-mode" value="custom" /> 골라서 켜기</label>
+          <span id="skill-count" class="option-sub"></span>
+        </div>
+        <div id="skill-picker" class="skill-picker" hidden>
+          <div class="skill-tools">
+            <input id="skill-search" placeholder="스킬 검색 (이름·설명)" autocomplete="off" />
+            <button type="button" id="skill-all-visible">보이는 것 켜기</button>
+            <button type="button" id="skill-none-visible">보이는 것 끄기</button>
+          </div>
+          <div id="skill-list" class="skill-list"></div>
+        </div>
+        <div class="setting-row">🔌 MCP 서버 <button type="button" id="caps-refresh" title="다시 불러오기">↻</button></div>
+        <div id="mcp-list" class="mcp-list"></div>
+      </fieldset>
+      <fieldset>
         <legend>AI 파티</legend>
         <label><input type="checkbox" id="party-mode" checked /> 🧙 마법사 · 🗡 검사 · 🏹 궁수 서브에이전트 사용 <span class="option-sub">(AI가 여러 에이전트를 동시에 보내 탐색·구현·검증 — 토큰을 더 씀)</span></label>
       </fieldset>
@@ -89,6 +110,7 @@
           </div>
           <span id="coin-label" class="coin-label"></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
+          <label class="weapon-select" title="effort: 느릴수록 깊게 생각하고 세게 때린다">⚡ <select id="effort-battle"></select></label>
           <span class="sound-controls">
             <button type="button" id="mute-btn" title="소리 켜기/끄기">🔊</button>
             <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />

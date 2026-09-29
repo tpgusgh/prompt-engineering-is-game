@@ -212,6 +212,7 @@ function refreshContinueOption() {
 async function loadSetup() {
   const info = await window.promptBattle.getSetupInfo();
   profile = info.profile;
+  claudeSettings = profile.claude;
   heroClasses = info.classes;
   chosenClass = profile.heroClass ?? chosenClass;
   weapons = info.weapons;
@@ -248,6 +249,7 @@ async function loadSetup() {
   renderClassOptions();
   renderWeaponOptions();
   refreshContinueOption();
+  renderClaudeSettings();
 }
 loadSetup();
 
@@ -441,14 +443,16 @@ const ROLES = {
 const roleOf = (type) => ROLES[type] ?? { icon: '🤖', name: type };
 const activeAgents = new Map(); // tool-use id -> { agentType, description }
 const agentTypeById = new Map(); // survives agentEnd, for late events
+let backgroundRunning = 0;
 function renderParty() {
   const el = $('party-status');
   const members = [...activeAgents.values()];
+  const bg = backgroundRunning > 0 ? `  ·  ⏳ 백그라운드 작업 ${backgroundRunning}개 (끝나면 Claude가 이어서 답함)` : '';
   if (members.length === 0) {
-    el.textContent = '프로세스 1개 (용사 단독)';
+    el.textContent = `프로세스 1개 (용사 단독)${bg}`;
     return;
   }
-  el.textContent = `프로세스 ${members.length + 1}개 동시 진행 · ` + members.map((m) => `${roleOf(m.agentType).icon} ${roleOf(m.agentType).name}: ${m.description}`).join('  ·  ');
+  el.textContent = `프로세스 ${members.length + 1}개 동시 진행 · ` + members.map((m) => `${roleOf(m.agentType).icon} ${roleOf(m.agentType).name}: ${m.description}`).join('  ·  ') + bg;
 }
 
 // Coding typing drill while the AI works: type a random line of code
@@ -1173,6 +1177,7 @@ function renderBattleEvent(event) {
       $('turn-panel').hidden = false;
       turnStatusEl.textContent = `AI가 ${weaponName()}을(를) 들고 작업 중...`;
       streamedThisTurn = false;
+      backgroundRunning = 0;
       activeAgents.clear();
       renderParty();
       startTurnTimer();
@@ -1203,6 +1208,13 @@ function renderBattleEvent(event) {
         renderParty();
         const r = roleOf(ae.agentType);
         appendLog(`${r.icon} ${r.name}가 출격했다: ${ae.description}`, `party-line party-${ae.agentType}`);
+        break;
+      }
+      if (ae.type === 'background') {
+        if (ae.running > backgroundRunning) appendLog(`⏳ 백그라운드 작업이 돌고 있다 (${ae.running}개). 끝나면 Claude가 결과를 알려준다.`, 'story-line');
+        else if (ae.running === 0 && backgroundRunning > 0) appendLog('⏳ 백그라운드 작업이 끝났다. Claude가 결과를 확인하는 중...', 'story-line');
+        backgroundRunning = ae.running;
+        renderParty();
         break;
       }
       if (ae.type === 'toolResult') {
@@ -1869,3 +1881,147 @@ function fillToolCard(ae) {
   const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 160;
   if (nearBottom) scrollLogToBottom();
 }
+
+// ---------------------------------------------------------------------------
+// Claude settings: effort (= attack speed), skills filter, MCP servers.
+// Saved in the profile; they only shape the game's own Claude sessions.
+let claudeSettings = { effort: 'high', skillsMode: 'all', enabledSkills: [], disabledMcp: [] };
+let speedInfo = null;
+let capabilities = null;
+
+async function saveClaude(patch) {
+  claudeSettings = await window.promptBattle.setClaudeSettings({ ...claudeSettings, ...patch });
+  if (profile) profile.claude = claudeSettings;
+  renderClaudeSettings();
+}
+
+function renderEffortSelects() {
+  if (!speedInfo) return;
+  for (const select of [$('effort-select'), $('effort-battle')]) {
+    select.textContent = '';
+    for (const level of speedInfo.levels) {
+      const { label, multiplier } = speedInfo.attackSpeed[level];
+      const option = document.createElement('option');
+      option.value = level;
+      option.textContent = select.id === 'effort-battle' ? `${label} x${multiplier}` : `${label} — ${level} (피해 x${multiplier})`;
+      select.append(option);
+    }
+    select.value = claudeSettings.effort;
+  }
+}
+for (const id of ['effort-select', 'effort-battle']) {
+  $(id).addEventListener('change', async (e) => {
+    await saveClaude({ effort: e.target.value });
+    if (id === 'effort-battle') {
+      const s = speedInfo.attackSpeed[claudeSettings.effort];
+      appendLog(`⚡ 공격 속도를 바꿨다: ${s.label} (effort ${claudeSettings.effort}, 피해 x${s.multiplier}) — 다음 공격부터`, 'story-line');
+    }
+  });
+}
+
+function renderSkills() {
+  for (const radio of document.querySelectorAll('input[name="skills-mode"]')) radio.checked = radio.value === claudeSettings.skillsMode;
+  const total = capabilities?.skills.length ?? 0;
+  $('skill-count').textContent =
+    claudeSettings.skillsMode === 'custom' ? `${claudeSettings.enabledSkills.length}/${total}개 켬` : claudeSettings.skillsMode === 'none' ? '모두 꺼짐' : `${total}개 전부`;
+  $('skill-picker').hidden = claudeSettings.skillsMode !== 'custom';
+  if (claudeSettings.skillsMode !== 'custom') return;
+  const list = $('skill-list');
+  list.textContent = '';
+  const q = $('skill-search').value.trim().toLowerCase();
+  const matches = (capabilities?.skills ?? []).filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
+  const enabled = new Set(claudeSettings.enabledSkills);
+  for (const s of matches.slice(0, 200)) {
+    const label = document.createElement('label');
+    label.className = 'skill-item';
+    label.title = s.description;
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = enabled.has(s.name);
+    box.addEventListener('change', () => {
+      const next = new Set(claudeSettings.enabledSkills);
+      if (box.checked) next.add(s.name);
+      else next.delete(s.name);
+      saveClaude({ enabledSkills: [...next] });
+    });
+    const name = document.createElement('strong');
+    name.textContent = s.name;
+    const desc = document.createElement('span');
+    desc.textContent = s.description;
+    label.append(box, name, desc);
+    list.append(label);
+  }
+  if (matches.length > 200) {
+    const more = document.createElement('div');
+    more.className = 'option-sub';
+    more.textContent = `… ${matches.length - 200}개 더 있음 — 검색으로 좁혀줘`;
+    list.append(more);
+  }
+  if (!capabilities) list.textContent = '스킬 목록 불러오는 중...';
+}
+for (const radio of document.querySelectorAll('input[name="skills-mode"]')) {
+  radio.addEventListener('change', () => saveClaude({ skillsMode: radio.value }));
+}
+$('skill-search').addEventListener('input', renderSkills);
+const visibleSkillNames = () => [...$('skill-list').querySelectorAll('.skill-item strong')].map((n) => n.textContent);
+$('skill-all-visible').addEventListener('click', () => saveClaude({ enabledSkills: [...new Set([...claudeSettings.enabledSkills, ...visibleSkillNames()])] }));
+$('skill-none-visible').addEventListener('click', () => {
+  const hide = new Set(visibleSkillNames());
+  saveClaude({ enabledSkills: claudeSettings.enabledSkills.filter((n) => !hide.has(n)) });
+});
+
+const MCP_STATUS = { connected: '연결됨', pending: '대기', failed: '실패', 'needs-auth': '인증 필요', disabled: '꺼짐' };
+function renderMcp() {
+  const list = $('mcp-list');
+  list.textContent = '';
+  if (!capabilities) {
+    list.textContent = 'MCP 서버 불러오는 중...';
+    return;
+  }
+  if (capabilities.mcpServers.length === 0) {
+    list.textContent = '설정된 MCP 서버가 없다';
+    return;
+  }
+  const off = new Set(claudeSettings.disabledMcp);
+  for (const server of capabilities.mcpServers) {
+    const label = document.createElement('label');
+    label.className = 'mcp-item';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !off.has(server.name);
+    box.addEventListener('change', () => {
+      const next = new Set(claudeSettings.disabledMcp);
+      if (box.checked) next.delete(server.name);
+      else next.add(server.name);
+      saveClaude({ disabledMcp: [...next] });
+    });
+    const name = document.createElement('span');
+    name.textContent = server.name;
+    const status = document.createElement('span');
+    status.className = `mcp-status mcp-${server.status}`;
+    status.textContent = MCP_STATUS[server.status] ?? server.status;
+    label.append(box, name, status);
+    list.append(label);
+  }
+}
+
+function renderClaudeSettings() {
+  renderEffortSelects();
+  renderSkills();
+  renderMcp();
+}
+
+async function loadCapabilities(refresh = false) {
+  capabilities = null;
+  renderClaudeSettings();
+  capabilities = await window.promptBattle.claudeCapabilities(chosenFolder, refresh);
+  if (!capabilities) capabilities = { skills: [], mcpServers: [] };
+  renderClaudeSettings();
+}
+$('caps-refresh').addEventListener('click', () => loadCapabilities(true));
+pickFolderBtn.addEventListener('click', () => setTimeout(() => chosenFolder && loadCapabilities(), 300));
+window.promptBattle.claudeSettingsInfo().then((info) => {
+  speedInfo = info;
+  renderClaudeSettings();
+});
+loadCapabilities();

@@ -1292,3 +1292,83 @@ body {
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* Claude settings */
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+.skill-picker {
+  border: 1px solid #3b4252;
+  border-radius: 6px;
+  padding: 6px;
+  margin: 4px 0 8px;
+}
+.skill-tools {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.skill-tools input {
+  flex: 1;
+  padding: 3px 6px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+}
+.skill-tools button,
+#caps-refresh {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.skill-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.skill-item {
+  display: grid;
+  grid-template-columns: auto minmax(8em, 16em) 1fr;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.skill-item strong { font-family: 'SF Mono', Menlo, monospace; font-weight: normal; color: #88c0d0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-item span { color: #7b88a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  font-size: 12.5px;
+}
+.mcp-item { display: flex; gap: 8px; align-items: center; }
+.mcp-status { font-size: 11px; padding: 0 6px; border-radius: 8px; background: #3b4252; }
+.mcp-connected { color: #a3be8c; }
+.mcp-failed { color: #bf616a; }
+.mcp-needs-auth { color: #ebcb8b; }
+#setup-screen .skill-tools button,
+#setup-screen #caps-refresh {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+#setup-screen .skill-tools input {
+  min-width: 0;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+}
