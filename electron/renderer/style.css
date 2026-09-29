@@ -1565,3 +1565,29 @@ body {
 .unsaved-overlay { z-index: 110; }
 #unsaved-save { background: #a3be8c; color: #2e3440; border-color: #a3be8c; font-weight: bold; }
 #unsaved-discard { border-color: #bf616a; color: #bf616a; }
+
+/* XP bar */
+.xp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.xp-row .hp-bar-track.xp {
+  width: 140px;
+  height: 8px;
+  margin: 0;
+}
+.xp-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #b48ead, #ebcb8b);
+  transition: width 0.5s ease;
+}
+.xp-level { color: #ebcb8b; font-weight: bold; }
+.xp-label { color: #aeb7c7; font-size: 11px; white-space: nowrap; }
+.setup-xp {
+  justify-content: center;
+  margin: -4px 0 10px;
+}
+.setup-xp .hp-bar-track.xp { width: 220px; }

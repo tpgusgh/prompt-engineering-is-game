@@ -88,8 +88,11 @@ export async function saveProfile(profile: Profile, homeDir: string = os.homedir
   await fs.writeFile(filePath, JSON.stringify(profile, null, 2), 'utf-8');
 }
 
+// Flat curve: every XP_PER_LEVEL XP is a level (the UI's XP bar fills toward it).
+export const XP_PER_LEVEL = 100;
+
 export function levelForXp(xp: number): number {
-  return Math.floor(xp / 100) + 1;
+  return Math.floor(xp / XP_PER_LEVEL) + 1;
 }
 
 export function addXp(profile: Profile, gained: number): Profile {

@@ -120,3 +120,10 @@ test('applyRun: defeat rewinds to the chapter start; progress never goes backwar
   assert.deepEqual(applyRun(ahead, summary({ nextFloor: 3 }), 'adventure').storyFloors, { adventure: 14 });
   assert.deepEqual(applyRun(base, summary({}), undefined).storyFloors, {}, 'CLI runs have no theme');
 });
+
+test('XP_PER_LEVEL is the level step the XP bar fills toward', async () => {
+  const { XP_PER_LEVEL } = await import('../src/profile.ts');
+  assert.equal(XP_PER_LEVEL, 100);
+  assert.equal(levelForXp(XP_PER_LEVEL * 3 - 1), 3);
+  assert.equal(levelForXp(XP_PER_LEVEL * 3), 4);
+});

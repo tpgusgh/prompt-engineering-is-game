@@ -10,7 +10,7 @@ import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type Claude
 import os from 'node:os';
 import { loadSlots, writeSlot } from '../src/saves.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
-import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
+import { loadProfile, saveProfile, applyRun, XP_PER_LEVEL } from '../src/profile.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
@@ -139,6 +139,7 @@ ipcMain.handle('get-setup-info', async () => ({
   statMaxLevel: STAT_MAX_LEVEL,
   swordMaxLevel: SWORD_MAX_LEVEL,
   classes: HERO_CLASSES,
+  xpPerLevel: XP_PER_LEVEL,
 }));
 
 // Settings tab: what can be toggled (skills, MCP servers) per folder, and

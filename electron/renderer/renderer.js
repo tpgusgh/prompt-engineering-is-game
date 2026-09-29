@@ -214,6 +214,9 @@ async function loadSetup() {
   profile = info.profile;
   claudeSettings = profile.claude;
   heroClasses = info.classes;
+  xpPerLevel = info.xpPerLevel ?? xpPerLevel;
+  runXp = 0;
+  renderXp();
   chosenClass = profile.heroClass ?? chosenClass;
   weapons = info.weapons;
   items = info.items;
@@ -1439,7 +1442,16 @@ function renderBattleEvent(event) {
     case 'playerDefeated':
       appendLog('용사가 쓰러졌다...', 'error');
       break;
-    case 'floorCleared':
+    case 'floorCleared': {
+      const before = levelOf(profile.xp + runXp);
+      runXp += event.xpGained;
+      const after = levelOf(profile.xp + runXp);
+      renderXp();
+      if (after > before) {
+        appendLog(`⬆️ 레벨 업! 용사 레벨 ${after}이(가) 되었다!`, 'victory');
+        sfx('fanfare');
+      }
+    }
       monsterPanel.classList.add('defeated');
       appendLog(`${currentMonsterName} 처치! +${event.xpGained} XP (체력 조금 회복)`, 'victory');
       break;
@@ -1768,6 +1780,8 @@ async function startGame({ loadSlot, slot }) {
   const from = slot ?? profile;
   coins = from.coins;
   bag = { ...from.bag };
+  runXp = 0;
+  renderXp();
   // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
   stats = { attack: 0, defense: 0, vitality: 0, ...slot?.stats };
   statPoints = slot?.statPoints ?? 0;
@@ -2312,3 +2326,19 @@ function renderSessionHint() {
       : '이 세션의 대화를 이어서, 게임은 새로 시작';
 }
 sessionSelect.addEventListener('change', renderSessionHint);
+
+// ---------------------------------------------------------------------------
+// XP bar: progress toward the next level (profile XP + what this run earned,
+// which the profile only banks when the run ends).
+let xpPerLevel = 100;
+let runXp = 0;
+const levelOf = (xp) => Math.floor(xp / xpPerLevel) + 1;
+function renderXp() {
+  if (!profile) return;
+  const total = profile.xp + runXp;
+  const into = total % xpPerLevel;
+  const pct = Math.round((into / xpPerLevel) * 100);
+  for (const el of document.querySelectorAll('[data-xp-level]')) el.textContent = `Lv.${levelOf(total)}`;
+  for (const el of document.querySelectorAll('[data-xp-fill]')) el.style.width = `${pct}%`;
+  for (const el of document.querySelectorAll('[data-xp-label]')) el.textContent = `${into} / ${xpPerLevel} XP (${pct}%)`;
+}
