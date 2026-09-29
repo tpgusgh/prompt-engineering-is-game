@@ -17,4 +17,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   },
   getFileIcon: (path) => ipcRenderer.invoke('get-file-icon', path),
   readFileContent: (path) => ipcRenderer.invoke('read-file-content', path),
+  getSetupInfo: () => ipcRenderer.invoke('get-setup-info'),
+  setModel: (model) => ipcRenderer.invoke('set-model', model),
+  listTree: () => ipcRenderer.invoke('list-tree'),
+  writeFile: (path, content) => ipcRenderer.invoke('write-file', path, content),
 });

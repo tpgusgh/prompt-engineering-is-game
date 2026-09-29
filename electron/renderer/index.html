@@ -8,11 +8,19 @@
   <body>
     <section id="setup-screen">
       <h1>프롬프트 배틀</h1>
+      <p id="profile-line" class="profile-line"></p>
       <button id="pick-folder-btn">프로젝트 폴더 선택</button>
       <p id="folder-path"></p>
       <fieldset>
         <legend>테마</legend>
-        <div id="theme-options"></div>
+        <div id="theme-options" class="option-list"></div>
+        <label id="continue-label" class="continue-label" hidden>
+          <input type="checkbox" id="continue-story" checked /> <span id="continue-text"></span>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>무기 (Claude 모델)</legend>
+        <div id="weapon-options" class="option-list"></div>
       </fieldset>
       <fieldset>
         <legend>난이도</legend>
@@ -25,24 +33,51 @@
     </section>
 
     <section id="dungeon-screen" hidden>
-      <div id="monster-panel">
-        <h2 id="monster-name"></h2>
-        <pre id="monster-art"></pre>
-        <div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
-        <p id="hp-label"></p>
+      <aside id="inventory">
+        <div class="inventory-header">
+          <span>인벤토리</span>
+          <button type="button" id="refresh-tree" title="새로고침">↻</button>
+        </div>
+        <div id="file-tree" class="file-tree"></div>
+      </aside>
+
+      <div id="battle-column">
+        <div id="chapter-banner" class="chapter-banner"></div>
+        <div id="monster-panel">
+          <h2 id="monster-name"></h2>
+          <div id="monster-art"></div>
+          <div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
+          <p id="hp-label"></p>
+        </div>
+
+        <div id="player-panel">
+          <div class="player-hp">
+            <span class="player-label">용사</span>
+            <div class="hp-bar-track player"><div id="player-hp-fill" class="hp-bar-fill player"></div></div>
+            <span id="player-hp-label"></span>
+          </div>
+          <label class="weapon-select">무기 <select id="weapon-select"></select></label>
+        </div>
+
+        <p id="turn-status" class="turn-status" hidden></p>
+        <div id="session-banner" class="session-banner" hidden>
+          <p id="session-banner-text"></p>
+          <pre id="session-banner-prompt"></pre>
+          <button type="button" id="session-banner-use">입력창에 넣기</button>
+        </div>
+        <div id="log"></div>
+        <form id="attack-form">
+          <input id="prompt-input" type="text" placeholder="공격 프롬프트를 입력하세요... (/new 로 새 세션)" autocomplete="off" />
+          <button type="submit">공격</button>
+          <button type="button" id="flee-btn">도망</button>
+        </form>
       </div>
-      <p id="turn-status" class="turn-status" hidden></p>
-      <div id="log"></div>
-      <form id="attack-form">
-        <input id="prompt-input" type="text" placeholder="공격 프롬프트를 입력하세요..." autocomplete="off" />
-        <button type="submit">공격</button>
-        <button type="button" id="flee-btn">도망</button>
-      </form>
     </section>
 
     <section id="summary-screen" hidden>
-      <h2>런 종료</h2>
+      <h2 id="summary-title">런 종료</h2>
       <p id="summary-text"></p>
+      <p id="summary-story" class="summary-story"></p>
       <button id="play-again-btn">다시 하기</button>
     </section>
 
@@ -50,7 +85,11 @@
       <div class="file-viewer-panel">
         <div class="file-viewer-header">
           <span id="file-viewer-title"></span>
-          <button type="button" id="file-viewer-close">✕</button>
+          <span class="file-viewer-actions">
+            <span id="file-viewer-status"></span>
+            <button type="button" id="file-viewer-save" hidden>저장</button>
+            <button type="button" id="file-viewer-close">✕</button>
+          </span>
         </div>
         <div id="file-viewer-body" class="file-viewer-body"></div>
       </div>

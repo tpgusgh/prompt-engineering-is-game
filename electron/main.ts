@@ -8,6 +8,7 @@ import { runDungeon, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn } from '../src/agent.ts';
 import { loadProfile, saveProfile, addXp } from '../src/profile.ts';
 import type { Difficulty } from '../src/monsters.ts';
+import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,28 +75,109 @@ ipcMain.handle('pick-folder', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('start-run', async (_event, options: { cwd: string; difficulty: Difficulty }) => {
-  const profile = await loadProfile();
+// The project folder of the run in progress — the only place the in-app
+// file editor is allowed to write.
+let currentCwd: string | null = null;
+// The weapon (Claude model) in hand; switchable mid-run via set-model.
+let currentModel = DEFAULT_WEAPON_ID;
 
-  const summary = await runDungeon({
-    runTurn: runAgentTurn,
-    cwd: options.cwd,
-    difficulty: options.difficulty,
-    onBattleEvent: (event: BattleEvent) => {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
-    },
-    readInput: () =>
-      new Promise<string | null>((resolve) => {
-        pendingInputResolve = resolve;
-      }),
-  });
+ipcMain.handle('get-setup-info', async () => ({ profile: await loadProfile(), weapons: WEAPONS }));
 
-  const updated = addXp(profile, summary.xpGained);
-  updated.totalWins += summary.floorsCleared;
-  updated.totalBattles += summary.floorsEngaged;
-  await saveProfile(updated);
+ipcMain.handle('set-model', (_event, model: string) => {
+  const weapon = getWeapon(model);
+  currentModel = weapon.model;
+  return weapon;
+});
 
-  return { summary, profile: updated };
+ipcMain.handle(
+  'start-run',
+  async (_event, options: { cwd: string; difficulty: Difficulty; model: string; themeId: string; startFloor: number }) => {
+    const profile = await loadProfile();
+    currentCwd = path.resolve(options.cwd);
+    currentModel = getWeapon(options.model).model;
+
+    const summary = await runDungeon({
+      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
+      cwd: currentCwd,
+      difficulty: options.difficulty,
+      startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
+      getDamageMultiplier: () => getWeapon(currentModel).multiplier,
+      onBattleEvent: (event: BattleEvent) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
+      },
+      readInput: () =>
+        new Promise<string | null>((resolve) => {
+          pendingInputResolve = resolve;
+        }),
+    });
+
+    const updated = addXp(profile, summary.xpGained);
+    updated.totalWins += summary.floorsCleared;
+    updated.totalBattles += summary.floorsEngaged;
+    updated.storyChapters = {
+      ...updated.storyChapters,
+      [options.themeId]: Math.max(updated.storyChapters[options.themeId] ?? 0, summary.chaptersCleared),
+    };
+    await saveProfile(updated);
+
+    return { summary, profile: updated };
+  },
+);
+
+function insideCwd(filePath: string): string | null {
+  if (!currentCwd) return null;
+  const resolved = path.resolve(currentCwd, filePath);
+  const rel = path.relative(currentCwd, resolved);
+  return rel === '' || rel.startsWith('..') || path.isAbsolute(rel) ? null : resolved;
+}
+
+const TREE_SKIP = new Set(['node_modules', '.git', 'release', 'dist', '.superpowers', '.claude', '.DS_Store']);
+const TREE_MAX_ENTRIES = 800;
+const TREE_MAX_DEPTH = 6;
+
+interface TreeNode {
+  name: string;
+  path: string;
+  type: 'dir' | 'file';
+  children?: TreeNode[];
+}
+
+// The project folder as an "inventory" tree, bounded so a huge repo can't
+// freeze the UI: skips build/vendor dirs, caps depth and total entries.
+ipcMain.handle('list-tree', async () => {
+  if (!currentCwd) return null;
+  let count = 0;
+  const walk = async (dir: string, depth: number): Promise<TreeNode[]> => {
+    if (depth > TREE_MAX_DEPTH || count >= TREE_MAX_ENTRIES) return [];
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name));
+    const nodes: TreeNode[] = [];
+    for (const entry of entries) {
+      if (TREE_SKIP.has(entry.name) || count >= TREE_MAX_ENTRIES) continue;
+      count += 1;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) nodes.push({ name: entry.name, path: full, type: 'dir', children: await walk(full, depth + 1) });
+      else if (entry.isFile()) nodes.push({ name: entry.name, path: full, type: 'file' });
+    }
+    return nodes;
+  };
+  return { root: currentCwd, children: await walk(currentCwd, 0), truncated: count >= TREE_MAX_ENTRIES };
+});
+
+ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
+  const target = insideCwd(filePath);
+  if (!target) return { ok: false, message: '프로젝트 폴더 밖의 파일은 수정할 수 없습니다.' };
+  try {
+    await fs.writeFile(target, content, 'utf-8');
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 ipcMain.on('submit-prompt', (_event, text: string) => {
