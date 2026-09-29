@@ -3,6 +3,7 @@ import electron from 'electron';
 const { app, BrowserWindow, ipcMain, dialog } = electron;
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn } from '../src/agent.ts';
 import { loadProfile, saveProfile, addXp } from '../src/profile.ts';
@@ -110,5 +111,49 @@ ipcMain.on('flee', () => {
     const resolve = pendingInputResolve;
     pendingInputResolve = null;
     resolve('/flee');
+  }
+});
+
+// The OS's own icon for a touched file — used for the "throw the file at the
+// monster" flourish. Never reads the file's actual content (see
+// read-file-content below for that), so this stays safe for any file type.
+ipcMain.handle('get-file-icon', async (_event, filePath: string) => {
+  try {
+    const icon = await app.getFileIcon(filePath, { size: 'normal' });
+    return icon.toDataURL();
+  } catch {
+    return null;
+  }
+});
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp']);
+const MAX_FILE_PREVIEW_CHARS = 100_000;
+
+// Backs the in-app file viewer: an image is shown directly (the renderer
+// loads it via its own file:// URL — no content passes through IPC); any
+// other file's text content is read here and capped, since a toucher could
+// be an enormous log file the agent generated.
+ipcMain.handle('read-file-content', async (_event, filePath: string) => {
+  const ext = path.extname(filePath).toLowerCase();
+  if (IMAGE_EXTENSIONS.has(ext)) {
+    return { kind: 'image', url: `file://${filePath}` };
+  }
+  try {
+    const stat = await fs.stat(filePath);
+    const buffer = await fs.readFile(filePath);
+    const isProbablyBinary = buffer.subarray(0, 1000).includes(0);
+    if (isProbablyBinary) {
+      return { kind: 'error', message: '바이너리 파일로 보입니다 — 텍스트 미리보기를 지원하지 않습니다.' };
+    }
+    const text = buffer.toString('utf-8');
+    const truncated = text.length > MAX_FILE_PREVIEW_CHARS;
+    return {
+      kind: 'text',
+      content: truncated ? text.slice(0, MAX_FILE_PREVIEW_CHARS) : text,
+      truncated,
+      size: stat.size,
+    };
+  } catch (err) {
+    return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
   }
 });

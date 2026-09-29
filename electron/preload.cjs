@@ -15,4 +15,6 @@ contextBridge.exposeInMainWorld('promptBattle', {
   onBattleEvent: (callback) => {
     ipcRenderer.on('battle-event', (_event, data) => callback(data));
   },
+  getFileIcon: (path) => ipcRenderer.invoke('get-file-icon', path),
+  readFileContent: (path) => ipcRenderer.invoke('read-file-content', path),
 });
