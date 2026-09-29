@@ -18,6 +18,34 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions.
 - **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 
+## Tour
+
+### 1. Setup
+![Setup screen](docs/screenshots/setup.png)
+
+Pick a project folder, a story theme, a weapon (Claude model) and a difficulty. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
+
+### 2. Battle
+![Battle screen](docs/screenshots/battle.png)
+
+- **Left, inventory**: your project's file tree. Files the AI touched are highlighted; click any file to view or edit it.
+- **Top**: chapter/floor banner, the monster and its HP.
+- **Middle bar**: your HP, coins and the weapon (model) switcher, with bag items as buttons below.
+- **Log**: your prompts (blue bubbles), live commands/file edits as they land hits, crit keywords, the AI's reply rendered as markdown, and monster counterattacks. It always stays scrolled to the newest message.
+- **Bottom**: prompt input plus `Attack` / `Flee` (50%) / `Exit`.
+
+The capture is a real turn: the prompt asked (in Korean) to fix a bug in `cart.js` step by step and add an edge-case test. The AI actually edited `src/cart.js`, created `test/cart.test.js` and ran `npm test`. Three keywords made it a crit.
+
+### 3. Merchant goblin
+![Merchant goblin](docs/screenshots/merchant.png)
+
+The merchant sometimes shows up after a clear. Click an item to buy it with coins, or `떠나기` (leave) to move on. Typing a prompt here closes the shop and attacks the next monster with it.
+
+### 4. Exit
+![Exit dialog](docs/screenshots/exit.png)
+
+`나가기` (Exit) asks whether to end today's adventure or keep playing. Ending saves your floor, coins, bag, and this folder's Claude session and chat history. Next time you open the folder, the earlier chat appears at the top of the log.
+
 ## Mac App
 
 ```bash
