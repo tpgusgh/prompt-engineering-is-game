@@ -1,5 +1,11 @@
 # 변경 내역 / Changelog
 
+## v0.5.0 — 2026-09-29
+
+### 새 기능
+- 코딩 타자에 **C 언어 16종, C++ 16종** 추가 (include, main, printf/scanf, fgets, 포인터 swap, malloc/calloc/free, 구조체, 매크로 / iostream, 범위 for, 스마트 포인터, unordered_map, erase-remove, 람다, 가상 함수, 템플릿, move, lock_guard, constexpr 등)
+- 모험 중 코딩 타자 영역의 **⚙️ 언어** 버튼으로 연습할 언어만 골라서 나오게 설정 (여러 개 선택 가능, 이 컴퓨터에 기억, "전부 보기"로 되돌리기)
+
 ## v0.4.1 — 2026-09-29
 
 ### 고침

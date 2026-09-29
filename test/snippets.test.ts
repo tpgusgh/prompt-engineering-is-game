@@ -15,3 +15,8 @@ test('every drill is one typeable ASCII line with a title and short + long expla
     assert.ok(s.title && s.short && s.long && s.lang, s.code);
   }
 });
+
+test('C and C++ each have a solid set of drills', () => {
+  assert.ok(SNIPPETS.filter((s) => s.lang === 'C').length >= 12, 'C');
+  assert.ok(SNIPPETS.filter((s) => s.lang === 'C++').length >= 12, 'C++');
+});

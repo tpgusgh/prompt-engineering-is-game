@@ -1527,3 +1527,37 @@ body {
   cursor: pointer;
 }
 .bag-item button:disabled { opacity: 0.45; cursor: default; }
+
+.typing-settings {
+  padding: 0 8px;
+  font-size: 11px;
+  background: #2e3440;
+  color: #d8dee9;
+  border: 1px solid #4c566a;
+  border-radius: 8px;
+  cursor: pointer;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.typing-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  background: #1f232b;
+  border: 1px solid #3b4252;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.typing-langs label { cursor: pointer; white-space: nowrap; }
+.typing-langs button {
+  padding: 0 8px;
+  font-size: 11px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #88c0d0;
+  border-radius: 8px;
+  cursor: pointer;
+}

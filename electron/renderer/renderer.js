@@ -483,11 +483,69 @@ function renderTypingTarget() {
   }
 }
 
+// Which languages to drill (remembered on this machine; empty = all).
+const TYPING_LANGS_KEY = 'pb-typing-langs';
+const ALL_LANGS = [...new Set(SNIPPETS.map((s) => s.lang))].sort((a, b) => a.localeCompare(b));
+let typingLangs = new Set();
+try {
+  typingLangs = new Set(JSON.parse(localStorage.getItem(TYPING_LANGS_KEY) || '[]').filter((l) => ALL_LANGS.includes(l)));
+} catch {}
+const typingPool = () => {
+  const pool = typingLangs.size ? SNIPPETS.filter((s) => typingLangs.has(s.lang)) : SNIPPETS;
+  return pool.length ? pool : SNIPPETS;
+};
+function saveTypingLangs() {
+  try {
+    localStorage.setItem(TYPING_LANGS_KEY, JSON.stringify([...typingLangs]));
+  } catch {}
+}
+function renderTypingLangs() {
+  const panel = $('typing-langs');
+  panel.textContent = '';
+  const count = (lang) => SNIPPETS.filter((s) => s.lang === lang).length;
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.textContent = typingLangs.size ? '전부 보기' : '✓ 전부';
+  all.addEventListener('click', () => {
+    typingLangs.clear();
+    saveTypingLangs();
+    renderTypingLangs();
+    if (typingActive) nextSnippet();
+  });
+  panel.append(all);
+  for (const lang of ALL_LANGS) {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = typingLangs.has(lang);
+    box.addEventListener('change', () => {
+      if (box.checked) typingLangs.add(lang);
+      else typingLangs.delete(lang);
+      saveTypingLangs();
+      renderTypingLangs();
+      // Switch right away if the current line is no longer in the pool.
+      if (typingActive && typingSnippet && !typingPool().includes(typingSnippet)) nextSnippet();
+    });
+    label.append(box, ` ${lang} `);
+    const n = document.createElement('span');
+    n.className = 'option-sub';
+    n.textContent = String(count(lang));
+    label.append(n);
+    panel.append(label);
+  }
+  $('typing-settings').textContent = typingLangs.size ? `⚙️ ${[...typingLangs].join(', ')}` : '⚙️ 언어: 전부';
+}
+$('typing-settings').addEventListener('click', () => {
+  $('typing-langs').hidden = !$('typing-langs').hidden;
+});
+renderTypingLangs();
+
 function nextSnippet() {
   clearTimeout(typingNextTimer);
+  const pool = typingPool();
   let pickOne;
-  do pickOne = SNIPPETS[Math.floor(Math.random() * SNIPPETS.length)];
-  while (SNIPPETS.length > 1 && pickOne === typingSnippet);
+  do pickOne = pool[Math.floor(Math.random() * pool.length)];
+  while (pool.length > 1 && pickOne === typingSnippet);
   typingSnippet = pickOne;
   typingStartedAt = 0;
   typingMistakes = 0;
