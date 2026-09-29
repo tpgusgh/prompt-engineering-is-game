@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
+  onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),
+  saveAndCloseDone: (ok) => ipcRenderer.send('save-and-close-done', ok),
   typingHit: () => ipcRenderer.invoke('typing-hit'),
   claudeCapabilities: (cwd, refresh) => ipcRenderer.invoke('claude-capabilities', cwd, refresh),
   setClaudeSettings: (settings) => ipcRenderer.invoke('set-claude-settings', settings),

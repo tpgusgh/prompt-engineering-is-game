@@ -1121,7 +1121,12 @@ $('unsaved-save').addEventListener('click', async () => {
     proceed?.();
   } else closeUnsavedPrompt(); // keep editing; the status shows the error
 });
-// Closing the window/app with unsaved edits: main shows a native dialog.
+// Closing the window/app with unsaved edits: main shows a native dialog;
+// on "save and leave" it asks us to save, and closes only if that worked.
+window.promptBattle.onSaveAndClose(async () => {
+  const ok = await saveEditor();
+  window.promptBattle.saveAndCloseDone(ok);
+});
 window.addEventListener('beforeunload', (e) => {
   if (isEditorDirty()) {
     e.preventDefault();

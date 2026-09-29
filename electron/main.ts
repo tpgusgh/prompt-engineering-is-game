@@ -63,13 +63,20 @@ function createWindow(): void {
   mainWindow.webContents.on('will-prevent-unload', (event) => {
     const choice = dialog.showMessageBoxSync(mainWindow!, {
       type: 'warning',
-      buttons: ['저장 안 하고 나가기', '계속 편집'],
-      defaultId: 1,
-      cancelId: 1,
+      buttons: ['저장하고 나가기', '저장 안 하고 나가기', '계속 편집'],
+      defaultId: 0,
+      cancelId: 2,
       message: '저장하지 않은 파일 변경이 있어요',
-      detail: '지금 나가면 편집한 내용이 사라집니다. 편집기에서 저장(⌘S)할 수 있어요.',
+      detail: '지금 나가면 편집한 내용이 사라집니다.',
     });
-    if (choice === 0) event.preventDefault(); // leave anyway
+    if (choice === 1) {
+      event.preventDefault(); // leave anyway
+    } else if (choice === 0) {
+      // Stay for now; the page saves, then reports back (save-and-close-done).
+      mainWindow?.webContents.send('save-and-close');
+    } else {
+      quitting = false;
+    }
   });
   mainWindow.on('closed', () => {
     // Closing mid-run: resolve the pending readInput() the same way EOF does
@@ -90,6 +97,21 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// Cmd+Q vs. closing the window: after "save and leave", finish whichever
+// the user started.
+let quitting = false;
+app.on('before-quit', () => {
+  quitting = true;
+});
+ipcMain.on('save-and-close-done', (_event, ok: boolean) => {
+  if (!ok) {
+    quitting = false; // the save failed: stay, the editor shows why
+    return;
+  }
+  if (quitting) app.quit();
+  else mainWindow?.close();
 });
 
 app.on('window-all-closed', () => {
