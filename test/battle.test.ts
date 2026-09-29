@@ -1,7 +1,7 @@
 // test/battle.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runDungeon, type BattleEvent } from '../src/battle.ts';
+import { runDungeon, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import type { TurnResult } from '../src/agent.ts';
 
 const ONE_SHOT_PROMPT = 'test refactor ' + 'x'.repeat(700); // crits at 225 damage, one-shots floors 0-2
@@ -603,7 +603,7 @@ test('/save with a bad slot is refused', async () => {
   const { deps, events } = makeFakeDeps(['/save 9', '/quit']);
   await runDungeon(deps);
   assert.ok(events.some((e) => e.type === 'saveFailed'));
-  assert.equal(events.filter((e) => e.type === 'snapshot' && e.slot > 0).length, 0);
+  assert.equal(events.filter((e) => e.type === 'snapshot' && e.slot > 0 && e.slot !== AUTO_SAVE_SLOT).length, 0);
 });
 
 test('playerHp starts a loaded run at the saved HP', async () => {
@@ -705,4 +705,19 @@ test('/use bandage heals a little (a cheaper potion)', async () => {
   const hp = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : -1));
   assert.deepEqual(hp, [94, 100], '94 + 15, capped at 100');
   assert.deepEqual(summary.bag, { bandage: 1 });
+});
+
+test('every floor start autosaves to the auto slot (4) with a fresh monster', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon({ ...deps, coins: 3 });
+  const autos = events.filter((e) => e.type === 'snapshot' && e.slot === AUTO_SAVE_SLOT);
+  assert.equal(autos.length, 2, 'floor 0 and floor 1');
+  const second = autos[1];
+  assert.ok(second.type === 'snapshot' && second.state.floor === 1 && second.state.coins === 13 && second.state.monsterHp === undefined);
+});
+
+test('the auto slot cannot be written by /save', async () => {
+  const { deps, events } = makeFakeDeps([`/save ${AUTO_SAVE_SLOT}`, '/quit']);
+  await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'saveFailed'));
 });

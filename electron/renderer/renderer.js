@@ -1701,14 +1701,16 @@ function slotSummary(slot) {
   return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 무기 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
 }
 
-function renderSlotRows(container, onPick, allowEmpty) {
+const AUTO_SLOT_INDEX = 3; // slot 4: the per-floor autosave
+function renderSlotRows(container, onPick, allowEmpty, includeAuto) {
   container.textContent = '';
   slots.forEach((slot, i) => {
+    if (i === AUTO_SLOT_INDEX && !includeAuto) return;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'slot-row';
     const strong = document.createElement('strong');
-    strong.textContent = `슬롯 ${i + 1}`;
+    strong.textContent = i === AUTO_SLOT_INDEX ? '🔄 자동 저장 (층마다)' : `슬롯 ${i + 1}`;
     const span = document.createElement('span');
     span.textContent = slot ? slotSummary(slot) : '비어 있음';
     btn.append(strong, span);
@@ -1720,7 +1722,7 @@ function renderSlotRows(container, onPick, allowEmpty) {
 
 async function refreshSlots() {
   slots = await window.promptBattle.listSlots();
-  renderSlotRows($('slot-list'), (n, slot) => slot && startGame({ loadSlot: n, slot }), false);
+  renderSlotRows($('slot-list'), (n, slot) => slot && startGame({ loadSlot: n, slot }), false, true);
 }
 refreshSlots();
 

@@ -1,5 +1,5 @@
 import { colorize, renderHpBar } from './ui.ts';
-import type { BattleEvent } from './battle.ts';
+import { AUTO_SAVE_SLOT, type BattleEvent } from './battle.ts';
 
 export function formatBattleEvent(event: BattleEvent): string {
   switch (event.type) {
@@ -92,7 +92,7 @@ export function formatBattleEvent(event: BattleEvent): string {
     case 'contextUsage':
       return '';
     case 'snapshot':
-      return event.slot === 0 ? '' : colorize('Save slots are available in the desktop app.', 'yellow') + '\n';
+      return event.slot === 0 || event.slot === AUTO_SAVE_SLOT ? '' : colorize('Save slots are available in the desktop app.', 'yellow') + '\n';
     case 'saveFailed':
       return colorize(`Save failed: ${event.reason}`, 'red') + '\n';
     case 'sessionSwitched':

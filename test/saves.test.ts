@@ -11,21 +11,23 @@ const slot: SaveSlot = {
   stats: { attack: 1, defense: 0, vitality: 1 }, statPoints: 2, swordLevel: 3, sessionId: 's1', monsterHp: 20,
 };
 
-test('three empty slots by default', async () => {
+test('three manual slots plus the auto slot, empty by default', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
   assert.equal(SLOT_COUNT, 3);
-  assert.deepEqual(await loadSlots(dir), [null, null, null]);
+  assert.deepEqual(await loadSlots(dir), [null, null, null, null]);
+  await writeSlot(4, slot, dir);
+  assert.deepEqual((await loadSlots(dir))[3], slot);
 });
 
 test('writeSlot round-trips into the right slot', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
   await writeSlot(2, slot, dir);
-  assert.deepEqual(await loadSlots(dir), [null, slot, null]);
+  assert.deepEqual(await loadSlots(dir), [null, slot, null, null]);
 });
 
 test('invalid slot data loads as empty', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
   await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
   await writeFile(path.join(dir, '.promptbattle', 'saves.json'), JSON.stringify({ 1: { floor: 'x' }, 3: slot }));
-  assert.deepEqual(await loadSlots(dir), [null, null, slot]);
+  assert.deepEqual(await loadSlots(dir), [null, null, slot, null]);
 });

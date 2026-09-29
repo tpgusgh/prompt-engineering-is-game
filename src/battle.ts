@@ -79,6 +79,8 @@ export interface RunState {
 }
 
 export const SAVE_SLOTS = 3;
+// Slot written automatically at the start of every floor (not by /save).
+export const AUTO_SAVE_SLOT = SAVE_SLOTS + 1;
 
 export interface BattleDeps {
   runTurn: (prompt: string, cwd: string, sessionId?: string, onEvent?: (event: AgentEvent) => void) => Promise<TurnResult>;
@@ -415,6 +417,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       maxHp,
     });
     if (hp < maxHp) deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
+    // Floor autosave: this floor, from the start of the fight.
+    deps.onBattleEvent({ type: 'snapshot', slot: AUTO_SAVE_SLOT, state: { ...currentState(), monsterHp: undefined } });
 
     let left = false;
     let fled = false;

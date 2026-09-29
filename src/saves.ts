@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { SAVE_SLOTS, type RunState } from './battle.ts';
+import { SAVE_SLOTS, AUTO_SAVE_SLOT, type RunState } from './battle.ts';
 
 export const SLOT_COUNT = SAVE_SLOTS;
 
@@ -48,10 +48,11 @@ async function loadRaw(homeDir: string): Promise<Record<string, unknown>> {
   }
 }
 
-// Slots 1..SLOT_COUNT as an array (index 0 = slot 1); empty or invalid = null.
+// Slots 1..SLOT_COUNT plus the auto slot (last) as an array (index 0 = slot
+// 1); empty or invalid = null.
 export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSlot | null)[]> {
   const raw = await loadRaw(homeDir);
-  return Array.from({ length: SLOT_COUNT }, (_, i) => {
+  return Array.from({ length: AUTO_SAVE_SLOT }, (_, i) => {
     const v = raw[String(i + 1)];
     return isSaveSlot(v) ? v : null;
   });

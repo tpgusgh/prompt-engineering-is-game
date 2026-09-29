@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, dialog, safeStorage } = electron;
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
-import { runDungeon, type BattleEvent } from '../src/battle.ts';
+import { runDungeon, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
@@ -324,6 +324,10 @@ ipcMain.handle(
             );
             persistFolder();
           }
+          return;
+        }
+        if (event.slot === AUTO_SAVE_SLOT) {
+          writeSlot(event.slot, data).catch(() => {}); // quiet: every floor
           return;
         }
         send(event);
