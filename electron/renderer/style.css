@@ -1108,43 +1108,106 @@ body {
   color: #d8dee9;
   margin: 2px 0 4px;
 }
-.bug-game {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.bug-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 30px);
-  gap: 3px;
-}
-.bug-cell {
-  width: 30px;
-  height: 26px;
-  padding: 0;
-  font-size: 16px;
-  background: #2e3440;
-  border: 1px solid #3b4252;
-  border-radius: 5px;
-  cursor: crosshair;
-}
-.bug-cell.bug {
-  background: #3b4252;
-  animation: bug-pop 0.18s ease-out;
-}
-.bug-cell.squashed {
-  background: #4c566a;
-}
-@keyframes bug-pop {
-  from { transform: scale(0.3); }
-  to { transform: scale(1); }
-}
-.bug-info {
+
+/* Coding typing drill */
+.typing-game {
   display: flex;
   flex-direction: column;
-  font-size: 12px;
-  gap: 1px;
+  gap: 4px;
 }
-.bug-info strong {
-  color: #a3be8c;
+.typing-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.typing-head strong { color: #a3be8c; }
+.typing-lang {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #3b4252;
+  color: #88c0d0;
+  font-size: 11px;
+}
+.typing-stats { margin-left: auto; color: #ebcb8b; font-size: 11px; }
+.typing-target {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 4px 8px;
+  background: #1f232b;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #7b88a1;
+}
+.typing-target .ok { color: #a3be8c; }
+.typing-target .bad { color: #2e3440; background: #bf616a; border-radius: 2px; }
+.typing-target .cursor { color: #eceff4; border-bottom: 2px solid #88c0d0; animation: pulse 1s steps(1) infinite; }
+.typing-input {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  padding: 4px 8px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+}
+.typing-input:focus { outline: none; border-color: #88c0d0; }
+.typing-hint { font-size: 11px; color: #ebcb8b; }
+.typing-explain {
+  padding: 6px 10px;
+  border-left: 3px solid #a3be8c;
+  background: #2b303b;
+  border-radius: 4px;
+  font-size: 12.5px;
+  cursor: pointer;
+  animation: pop-in 0.2s ease-out;
+}
+.typing-explain.long { cursor: default; }
+.typing-explain-title { font-weight: bold; color: #a3be8c; }
+.typing-explain button {
+  margin-top: 4px;
+  padding: 2px 10px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #a3be8c;
+  border-radius: 4px;
+  cursor: pointer;
+}
+@keyframes pop-in {
+  from { transform: scale(0.95); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+#log .typing-hit { color: #a3be8c; }
+
+/* Important parts of a reply */
+#log .markdown strong { color: #ebcb8b; }
+#log .markdown em { color: #b48ead; font-style: italic; }
+#log .markdown :not(pre) > code { color: #d08770; }
+#log .hl-ok { color: #a3be8c; font-weight: 600; }
+#log .hl-bad { color: #bf616a; font-weight: 600; }
+#log .hl-warn { color: #ebcb8b; font-weight: 600; }
+#log .hl-path { color: #88c0d0; text-decoration: underline dotted; }
+#log .markdown pre code { color: #d8dee9; }
+#log .tok-kw { color: #81a1c1; font-weight: 600; }
+#log .tok-str { color: #a3be8c; }
+#log .tok-num { color: #b48ead; }
+#log .tok-com { color: #616e88; font-style: italic; }
+
+.sound-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#mute-btn {
+  background: none;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 1px 5px;
+}
+#volume {
+  width: 70px;
 }

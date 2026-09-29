@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('promptBattle', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
+  typingHit: () => ipcRenderer.invoke('typing-hit'),
   getUsage: () => ipcRenderer.invoke('get-usage'),
   movePath: (src, destDir) => ipcRenderer.invoke('move-path', src, destDir),
   importFiles: (sources, destDir) => ipcRenderer.invoke('import-files', sources, destDir),

@@ -81,6 +81,7 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'itemUsed', itemId: 'potion' },
     { type: 'itemUseFailed', itemId: 'potion' },
     { type: 'counterBlocked' },
+    { type: 'typingHit', damage: 1 },
     { type: 'contextUsage', usedTokens: 1, contextWindow: 2 },
     { type: 'statPointsChanged', points: 1, stats: { attack: 0, defense: 0, vitality: 0 } },
     { type: 'statRaised', stat: 'attack', stats: { attack: 1, defense: 0, vitality: 0 }, points: 0 },

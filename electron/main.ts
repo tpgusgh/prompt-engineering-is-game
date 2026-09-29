@@ -39,9 +39,12 @@ let mainWindow: InstanceType<typeof BrowserWindow> | null = null;
 // A multi-window/multi-run version would need a per-session map instead.
 let pendingInputResolve: ((value: string | null) => void) | null = null;
 // Slash commands sent while a turn is running (the waiting mini-game's
-// /bonus, a stat button...) wait here for the next readInput instead of
+// stat button, save...) wait here for the next readInput instead of
 // being dropped. Plain prompts are never queued: the UI disables them mid-turn.
 let queuedCommands: string[] = [];
+// Lands a typing mini-game hit on the current monster (set by runDungeon).
+let externalHit: ((damage: number) => boolean) | null = null;
+ipcMain.handle('typing-hit', () => externalHit?.(1) ?? false);
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -178,6 +181,7 @@ ipcMain.handle(
       playerMaxHp: slot ? slot.playerMaxHp : profile.maxHp,
       playerHp: slot?.playerHp,
       monsterHp: slot?.monsterHp,
+      bindExternalHit: (fn) => (externalHit = fn),
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier,

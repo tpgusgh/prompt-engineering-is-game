@@ -1,6 +1,8 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
+import { SNIPPETS } from './typing-snippets.js';
+import { playMusic, stopMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const setupScreen = $('setup-screen');
@@ -364,7 +366,13 @@ async function refreshUsage(force) {
   usageFetchedAt = Date.now();
   if (!planUsage) planUsage = 'loading';
   renderUsage();
-  planUsage = (await window.promptBattle.getUsage()) ?? null;
+  const fetched = (await window.promptBattle.getUsage()) ?? null;
+  // Keep the last good numbers on a failed fetch, and retry next time.
+  if (fetched) planUsage = fetched;
+  else {
+    usageFetchedAt = 0;
+    if (planUsage === 'loading') planUsage = null;
+  }
   renderUsage();
 }
 for (const el of document.querySelectorAll('[data-usage]')) el.addEventListener('click', () => refreshUsage(true));
@@ -390,7 +398,7 @@ function turnConcluded() {
   setInputEnabled(true);
   refreshUsage(false);
   stopTurnTimer();
-  stopBugGame();
+  stopTyping();
   finalizeLive();
   $('turn-panel').hidden = true;
   refreshTree();
@@ -404,9 +412,15 @@ const fmtElapsed = (ms) => {
   const s = Math.floor(ms / 1000);
   return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초` : `${s}초`;
 };
+const PROMPT_PLACEHOLDER = promptInput.placeholder;
 function startTurnTimer() {
   turnStartedAt = Date.now();
-  const tick = () => ($('turn-timer').textContent = `⏱ ${fmtElapsed(Date.now() - turnStartedAt)}`);
+  const tick = () => {
+    const elapsed = fmtElapsed(Date.now() - turnStartedAt);
+    $('turn-timer').textContent = `⏱ ${elapsed}`;
+    turnStatusEl.textContent = `🤖 AI가 ${weaponName()}을(를) 들고 작업 중 · ${elapsed}째`;
+    promptInput.placeholder = `🤖 AI 작업 중... ⏱ ${elapsed}`;
+  };
   tick();
   clearInterval(turnTimer);
   turnTimer = setInterval(tick, 1000);
@@ -414,6 +428,7 @@ function startTurnTimer() {
 function stopTurnTimer() {
   clearInterval(turnTimer);
   turnTimer = null;
+  promptInput.placeholder = PROMPT_PLACEHOLDER;
   if (turnStartedAt) appendLog(`⏱ 이번 턴: ${fmtElapsed(Date.now() - turnStartedAt)}`, 'sys-line');
   turnStartedAt = 0;
 }
@@ -436,58 +451,116 @@ function renderParty() {
   el.textContent = `프로세스 ${members.length + 1}개 동시 진행 · ` + members.map((m) => `${roleOf(m.agentType).icon} ${roleOf(m.agentType).name}: ${m.description}`).join('  ·  ');
 }
 
-// Bug-squash: bugs pop up in a 3x3 grid while the AI works.
-let bugTimer = null;
-let bugsCaught = 0;
-function renderBugScore() {
-  $('bug-score').textContent = `잡은 버그 ${bugsCaught}/10`;
-}
-function startBugGame() {
-  bugsCaught = 0;
-  renderBugScore();
-  const grid = $('bug-grid');
-  grid.textContent = '';
-  const cells = Array.from({ length: 9 }, () => {
-    const cell = document.createElement('button');
-    cell.type = 'button';
-    cell.className = 'bug-cell';
-    cell.addEventListener('click', () => {
-      if (!cell.classList.contains('bug')) return;
-      cell.classList.remove('bug');
-      cell.classList.add('squashed');
-      cell.textContent = '💥';
-      setTimeout(() => {
-        cell.classList.remove('squashed');
-        cell.textContent = '';
-      }, 300);
-      bugsCaught = Math.min(10, bugsCaught + 1);
-      renderBugScore();
-    });
-    grid.append(cell);
-    return cell;
-  });
-  clearInterval(bugTimer);
-  bugTimer = setInterval(() => {
-    const cell = cells[Math.floor(Math.random() * cells.length)];
-    if (cell.classList.contains('bug') || cell.classList.contains('squashed')) return;
-    cell.classList.add('bug');
-    cell.textContent = Math.random() < 0.15 ? '🪲' : '🐛';
-    setTimeout(() => {
-      if (!cell.classList.contains('bug')) return;
-      cell.classList.remove('bug');
-      cell.textContent = '';
-    }, 850 + Math.random() * 500);
-  }, 650);
-}
-function stopBugGame() {
-  clearInterval(bugTimer);
-  bugTimer = null;
-  if (bugsCaught > 0) {
-    appendLog(`🐛 기다리는 동안 버그 ${bugsCaught}마리를 잡았다!`, 'coin-line');
-    window.promptBattle.submitPrompt(`/bonus ${bugsCaught}`);
+// Coding typing drill while the AI works: type a random line of code
+// exactly; finishing it deals 1 damage, shows what it does for 3s (tap for
+// the long explanation, which pauses), then the next line.
+const typingInput = $('typing-input');
+let typingSnippet = null;
+let typingStartedAt = 0;
+let typingMistakes = 0;
+let typingDone = 0;
+let typingNextTimer = null;
+let typingActive = false;
+let lastTypedTitle = '';
+
+function renderTypingTarget() {
+  const typed = typingInput.value;
+  const target = $('typing-target');
+  target.textContent = '';
+  const code = typingSnippet.code;
+  for (let i = 0; i < code.length; i++) {
+    const span = document.createElement('span');
+    span.textContent = code[i];
+    if (i < typed.length) span.className = typed[i] === code[i] ? 'ok' : 'bad';
+    else if (i === typed.length) span.className = 'cursor';
+    target.append(span);
   }
-  bugsCaught = 0;
 }
+
+function nextSnippet() {
+  clearTimeout(typingNextTimer);
+  let pickOne;
+  do pickOne = SNIPPETS[Math.floor(Math.random() * SNIPPETS.length)];
+  while (SNIPPETS.length > 1 && pickOne === typingSnippet);
+  typingSnippet = pickOne;
+  typingStartedAt = 0;
+  typingMistakes = 0;
+  typingInput.value = '';
+  typingInput.disabled = false;
+  $('typing-lang').textContent = typingSnippet.lang;
+  $('typing-explain').hidden = true;
+  renderTypingTarget();
+  if (typingActive) typingInput.focus();
+}
+
+function startTyping() {
+  typingActive = true;
+  typingDone = 0;
+  $('typing-stats').textContent = '';
+  nextSnippet();
+}
+
+function stopTyping() {
+  typingActive = false;
+  clearTimeout(typingNextTimer);
+  if (typingDone > 0) appendLog(`⌨️ 기다리는 동안 코드 ${typingDone}줄을 완성했다!`, 'coin-line');
+  typingDone = 0;
+}
+
+typingInput.addEventListener('input', async () => {
+  if (!typingSnippet) return;
+  const value = typingInput.value;
+  $('typing-hint').hidden = !/[\u3131-\u318e\uac00-\ud7a3]/.test(value);
+  if (!typingStartedAt && value) typingStartedAt = performance.now();
+  const i = value.length - 1;
+  if (i >= 0 && value[i] !== typingSnippet.code[i]) {
+    typingMistakes += 1;
+    sfx('typo');
+  } else if (i >= 0) sfx('key');
+  renderTypingTarget();
+  if (value !== typingSnippet.code) return;
+  // Completed.
+  typingInput.disabled = true;
+  typingDone += 1;
+  const minutes = Math.max(0.01, (performance.now() - typingStartedAt) / 60000);
+  const cpm = Math.round(typingSnippet.code.length / minutes);
+  const accuracy = Math.max(0, Math.round(100 - (typingMistakes / typingSnippet.code.length) * 100));
+  $('typing-stats').textContent = `${cpm}타/분 · 정확도 ${accuracy}% · ${typingDone}줄 완성`;
+  lastTypedTitle = typingSnippet.title;
+  sfx('typed');
+  window.promptBattle.typingHit();
+  const explain = $('typing-explain');
+  explain.hidden = false;
+  explain.className = 'typing-explain';
+  explain.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'typing-explain-title';
+  head.textContent = `✅ ${typingSnippet.title}`;
+  const body = document.createElement('div');
+  body.textContent = typingSnippet.short;
+  const more = document.createElement('div');
+  more.className = 'option-sub';
+  more.textContent = '눌러서 자세히 보기';
+  explain.append(head, body, more);
+  const snippet = typingSnippet;
+  explain.onclick = () => {
+    // Long view: pause the auto-advance until "next" is pressed.
+    clearTimeout(typingNextTimer);
+    explain.classList.add('long');
+    body.textContent = snippet.long;
+    more.textContent = '';
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.textContent = '다음 코드 ▶';
+    next.onclick = (e) => {
+      e.stopPropagation();
+      nextSnippet();
+    };
+    more.append(next);
+    explain.onclick = null;
+  };
+  typingNextTimer = setTimeout(() => typingActive && nextSnippet(), 3000);
+});
 
 // ---------------------------------------------------------------------------
 // Live typing: the AI's streamed text is typed into a bubble a few
@@ -511,6 +584,7 @@ function newBubble() {
   const finish = () => {
     el.classList.remove('typing');
     el.innerHTML = marked.parse(b.target);
+    decorateReply(el);
     attachChoices(el);
     scrollLogToBottom();
   };
@@ -696,6 +770,7 @@ function renderMarkdownLog(text, extraClass) {
   const wrapper = document.createElement('div');
   wrapper.className = `markdown ai-bubble${extraClass ? ` ${extraClass}` : ''}`;
   wrapper.innerHTML = marked.parse(text);
+  decorateReply(wrapper);
   logEl.appendChild(wrapper);
   if (!extraClass) attachChoices(wrapper);
   scrollLogToBottom();
@@ -986,7 +1061,89 @@ function continuationPrompt() {
   return `/new 이전 세션에서 하던 작업을 이어서 진행해줘.${recap ? ` 지금까지의 진행 상황: ${recap}` : ''}`;
 }
 
+// BGM per situation (theme/chapter battle, boss, shop, forge) and SFX.
+function soundFor(event) {
+  switch (event.type) {
+    case 'floorStart':
+      playMusic(event.isBoss ? 'boss' : activeTheme.id, { chapter: event.chapter });
+      sfx(event.isBoss ? 'boss' : 'monster');
+      break;
+    case 'partialHit':
+    case 'typingHit':
+      sfx('partial');
+      break;
+    case 'attack':
+      sfx(event.damage === 0 ? 'dodge' : event.crit ? 'crit' : 'hit');
+      break;
+    case 'monsterAttack':
+      sfx('hurt');
+      break;
+    case 'counterBlocked':
+      sfx('block');
+      break;
+    case 'floorCleared':
+      sfx('win');
+      break;
+    case 'chapterCleared':
+      sfx('fanfare');
+      break;
+    case 'coinsChanged':
+      sfx('coin');
+      break;
+    case 'purchased':
+      sfx('buy');
+      break;
+    case 'merchantOpen':
+      playMusic('shop');
+      break;
+    case 'blacksmithOpen':
+      playMusic('forge');
+      break;
+    case 'enhanceResult':
+      sfx(event.outcome === 'success' ? 'enhanceOk' : event.outcome === 'broken' ? 'shatter' : 'enhanceFail');
+      break;
+    case 'betResult':
+      sfx(event.won ? 'coin' : 'enhanceFail');
+      break;
+    case 'statRaised':
+      sfx('levelUp');
+      break;
+    case 'fleeAttempt':
+      sfx(event.success ? 'flee' : 'hurt');
+      break;
+    case 'playerDefeated':
+      stopMusic();
+      sfx('defeat');
+      break;
+    case 'agentEvent':
+      if (event.agentEvent.type === 'agentStart') sfx('party');
+      break;
+    case 'runEnded':
+      stopMusic();
+      break;
+  }
+}
+
+const muteBtn = $('mute-btn');
+const volumeSlider = $('volume');
+function renderSoundControls() {
+  const { volume, muted } = getAudioSettings();
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+  volumeSlider.value = String(volume);
+}
+muteBtn.addEventListener('click', () => {
+  toggleMute();
+  renderSoundControls();
+});
+volumeSlider.addEventListener('input', () => {
+  setVolume(Number(volumeSlider.value));
+  renderSoundControls();
+});
+renderSoundControls();
+playMusic('title');
+
 function renderBattleEvent(event) {
+  soundFor(event);
   switch (event.type) {
     case 'runStart':
       setBar(playerHpFill, playerHpLabel, event.playerHp, event.playerMaxHp, '');
@@ -1019,7 +1176,7 @@ function renderBattleEvent(event) {
       activeAgents.clear();
       renderParty();
       startTurnTimer();
-      startBugGame();
+      startTyping();
       break;
     case 'partialHit': {
       const type = event.agentEvent.agentId ? agentTypeById.get(event.agentEvent.agentId) : undefined;
@@ -1270,6 +1427,10 @@ function renderBattleEvent(event) {
       contextUsage = event;
       renderUsage();
       break;
+    case 'typingHit':
+      appendLog(`⌨️ 코드 타자 공격! "${lastTypedTitle}" 완성 — ${event.damage}의 피해!`, 'partial-hit typing-hit');
+      flashMonster();
+      break;
     case 'counterBlocked':
       appendLog(`${currentMonsterName}의 반격을 수호의 부적이 막아냈다!`, 'victory');
       break;
@@ -1513,6 +1674,7 @@ exitConfirmBtn.addEventListener('click', () => {
 playAgainBtn.addEventListener('click', async () => {
   summaryScreen.hidden = true;
   setupScreen.hidden = false;
+  playMusic('title');
   await loadSetup();
   await refreshSlots();
   if (chosenFolder) await refreshSessionPicker(chosenFolder);
@@ -1531,3 +1693,86 @@ promptInput.addEventListener('keydown', (e) => {
     if (!promptInput.disabled) attackForm.requestSubmit();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Color the important parts of a reply: success / failure / warning words and
+// file paths in prose, and a light syntax highlight inside code blocks.
+const HIGHLIGHTS = [
+  { cls: 'hl-bad', re: /(실패|오류|에러|버그|깨짐|\berror\b|\bfail(?:ed|ure|s)?\b|\bexception\b|❌|✗)/gi },
+  { cls: 'hl-ok', re: /(성공|통과|완료|해결|수정됨|고쳤|\bpass(?:ed|es)?\b|\bsuccess\b|✅|✓)/gi },
+  { cls: 'hl-warn', re: /(주의|경고|위험|\bwarning\b|\bTODO\b|⚠️?)/gi },
+  { cls: 'hl-path', re: /(?:[\w.-]+\/)*[\w.-]+\.(?:tsx?|jsx?|mjs|cjs|py|json|md|css|html|go|rs|java|kt|swift|c|cpp|h|sh|ya?ml|toml|sql|txt)\b/g },
+];
+
+function highlightText(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement.closest('pre, code, a, .hl') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    const marks = [];
+    for (const { cls, re } of HIGHLIGHTS) {
+      re.lastIndex = 0;
+      for (let m; (m = re.exec(text)); ) marks.push({ start: m.index, end: m.index + m[0].length, cls });
+    }
+    if (marks.length === 0) continue;
+    marks.sort((a, b) => a.start - b.start || b.end - a.end);
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    for (const mk of marks) {
+      if (mk.start < pos) continue; // overlapping: first one wins
+      frag.append(text.slice(pos, mk.start));
+      const span = document.createElement('span');
+      span.className = `hl ${mk.cls}`;
+      span.textContent = text.slice(mk.start, mk.end);
+      frag.append(span);
+      pos = mk.end;
+    }
+    frag.append(text.slice(pos));
+    node.replaceWith(frag);
+  }
+}
+
+const KEYWORDS = new Set(('const let var function return if else for while do switch case break continue new class extends import export from default async await try catch finally throw typeof instanceof in of yield ' +
+  'def lambda pass with as elif not and or is None True False self print ' +
+  'func go defer chan struct interface type package map range fn let mut impl pub use match enum trait ' +
+  'public private protected static void int string bool float double long char null true false this super ' +
+  'SELECT FROM WHERE JOIN ON GROUP BY ORDER INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX AND OR NOT LIMIT HAVING AS').split(/\s+/));
+
+function highlightCode(codeEl) {
+  const lang = (codeEl.className.match(/language-(\w+)/) || [])[1] || '';
+  const hashComments = /^(py|python|bash|sh|shell|zsh|yaml|yml|toml|ruby|rb|r|dockerfile|make)$/i.test(lang);
+  const src = codeEl.textContent;
+  const token = new RegExp(
+    [
+      hashComments ? '(#.*)' : '(\\/\\/.*|\\/\\*[\\s\\S]*?\\*\\/)',
+      '("(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`)',
+      '(\\b\\d+(?:\\.\\d+)?\\b)',
+      '([A-Za-z_][\\w]*)',
+    ].join('|'),
+    'g',
+  );
+  const frag = document.createDocumentFragment();
+  let pos = 0;
+  for (let m; (m = token.exec(src)); ) {
+    const [whole, comment, str, num, word] = m;
+    const cls = comment ? 'tok-com' : str ? 'tok-str' : num ? 'tok-num' : word && KEYWORDS.has(word) ? 'tok-kw' : null;
+    if (!cls) continue;
+    frag.append(src.slice(pos, m.index));
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = whole;
+    frag.append(span);
+    pos = m.index + whole.length;
+  }
+  frag.append(src.slice(pos));
+  codeEl.textContent = '';
+  codeEl.append(frag);
+}
+
+function decorateReply(el) {
+  highlightText(el);
+  for (const code of el.querySelectorAll('pre code')) highlightCode(code);
+}

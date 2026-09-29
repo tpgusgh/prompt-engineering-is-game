@@ -657,10 +657,26 @@ test('a save at the shop has no monster HP (the next monster starts fresh)', asy
   assert.ok(snap && snap.type === 'snapshot' && snap.state.monsterHp === undefined && snap.state.floor === 1);
 });
 
-test('/bonus claims waiting-game coins, capped per real turn', async () => {
-  const { deps, events } = makeFakeDeps(['/bonus 5', WEAK_PROMPT_2, '/bonus 50', '/bonus 3', '/quit']);
-  const summary = await runDungeon(deps);
-  const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : -1));
-  assert.deepEqual(gains, [10], 'nothing before any turn; after a turn at most 10, once');
-  assert.equal(summary.coins, 10);
+
+test('typing hits (bound by the host) deal damage only while a turn is running', async () => {
+  let hit: ((damage: number) => boolean) | undefined;
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  let outside: boolean | undefined;
+  deps.runTurn = async () => {
+    hit?.(1);
+    hit?.(1);
+    return { summary: '', filesChanged: [], commandsRun: [] };
+  };
+  const readInput = deps.readInput;
+  deps.readInput = async () => {
+    if (outside === undefined && hit) outside = hit(1); // before the first turn: refused
+    return readInput();
+  };
+  await runDungeon({ ...deps, bindExternalHit: (fn) => (hit = fn) });
+  assert.equal(outside, false);
+  assert.equal(events.filter((e) => e.type === 'typingHit').length, 2);
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 10);
+  const lastHp = events.filter((e) => e.type === 'hpChanged').pop();
+  assert.ok(lastHp && lastHp.type === 'hpChanged' && lastHp.hp === 60 - 2 - 10);
 });

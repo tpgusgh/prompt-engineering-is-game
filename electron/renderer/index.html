@@ -89,6 +89,10 @@
           </div>
           <span id="coin-label" class="coin-label"></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
+          <span class="sound-controls">
+            <button type="button" id="mute-btn" title="소리 켜기/끄기">🔊</button>
+            <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />
+          </span>
         </div>
         <div id="bag" class="bag"></div>
         <div id="stat-panel" class="stat-panel"></div>
@@ -135,13 +139,16 @@
             <span id="turn-timer" class="turn-timer"></span>
           </div>
           <div id="party-status" class="party-status"></div>
-          <div class="bug-game">
-            <div id="bug-grid" class="bug-grid"></div>
-            <div class="bug-info">
-              <strong>🐛 기다리는 동안 버그 잡기</strong>
-              <span id="bug-score"></span>
-              <span class="option-sub">나타나는 버그를 클릭! 턴이 끝나면 잡은 만큼 코인 (턴당 최대 10)</span>
+          <div class="typing-game">
+            <div class="typing-head">
+              <strong>⌨️ 기다리는 동안 코딩 타자</strong>
+              <span id="typing-lang" class="typing-lang"></span>
+              <span id="typing-stats" class="typing-stats"></span>
             </div>
+            <div id="typing-target" class="typing-target"></div>
+            <input id="typing-input" class="typing-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="위 코드를 똑같이 입력 (영문) — 완성하면 몬스터에게 1 피해" />
+            <div id="typing-hint" class="typing-hint" hidden>한/영 키로 영문 입력으로 바꿔줘</div>
+            <div id="typing-explain" class="typing-explain" hidden></div>
           </div>
         </div>
         <div id="session-banner" class="session-banner" hidden>

@@ -119,6 +119,8 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize(`Can't enhance: ${event.reason}`, 'red') + '\n';
     case 'blacksmithClosed':
       return colorize('The blacksmith goes back to the forge.', 'cyan') + '\n';
+    case 'typingHit':
+      return '';
     case 'counterBlocked':
       return colorize('Your amulet blocks the counterattack!', 'cyan') + '\n';
     case 'runEnded':

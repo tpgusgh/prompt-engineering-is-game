@@ -46,6 +46,7 @@ export type BattleEvent =
   | { type: 'itemUsed'; itemId: string }
   | { type: 'itemUseFailed'; itemId: string }
   | { type: 'counterBlocked' }
+  | { type: 'typingHit'; damage: number }
   | { type: 'contextUsage'; usedTokens: number; contextWindow: number }
   | { type: 'statPointsChanged'; points: number; stats: Stats }
   | { type: 'statRaised'; stat: StatId; stats: Stats; points: number }
@@ -102,6 +103,9 @@ export interface BattleDeps {
   stats?: Stats;
   statPoints?: number;
   swordLevel?: number;
+  // The host gets a function that lands extra hits (the typing mini-game)
+  // while an AI turn is running; it returns false when no turn is running.
+  bindExternalHit?: (hit: (damage: number) => boolean) => void;
   // Flee and merchant rolls; injectable so tests are deterministic.
   random?: () => number;
 }
@@ -130,8 +134,6 @@ const FLEE_CHANCE = 0.5;
 const MERCHANT_CHANCE = 0.3;
 const BLACKSMITH_CHANCE = 0.2;
 const BOSS_COIN_MULTIPLIER = 3;
-// Max coins the "while you wait" mini-game can bank per real turn.
-export const WAIT_BONUS_MAX = 10;
 
 function xpForFloor(floor: number): number {
   return 20 + floor * 5;
@@ -158,10 +160,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let swordLevel = deps.swordLevel ?? 0;
   // The current monster's HP: -1 while at a shop / between floors.
   let hp = -1;
+  let currentMaxHp = 0;
   let pendingMonsterHp = deps.monsterHp;
-  // Coins the waiting mini-game may still claim with /bonus; refilled after
-  // every real turn, emptied when claimed.
-  let bonusAllowance = 0;
+  let turnRunning = false;
   let sharpened = false; // whetstone: next attack x2
   let shielded = false; // amulet: next counterattack blocked
   // Input typed at the merchant that wasn't a shop command: replayed as the
@@ -284,15 +285,6 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'snapshot', slot, state });
       return true;
     }
-    if (input.startsWith('/bonus ')) {
-      const gained = Math.min(Math.max(0, Math.floor(Number(input.slice('/bonus '.length)) || 0)), bonusAllowance);
-      bonusAllowance = 0;
-      if (gained > 0) {
-        coins += gained;
-        deps.onBattleEvent({ type: 'coinsChanged', coins, gained });
-      }
-      return true;
-    }
     if (input.startsWith('/session ')) {
       const id = input.slice('/session '.length).trim();
       if (!id) return true;
@@ -388,12 +380,21 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }, () => deps.onBattleEvent({ type: 'merchantClosed' }));
   };
 
+  deps.bindExternalHit?.((damage) => {
+    if (!turnRunning || hp <= 0) return false;
+    hp = Math.max(0, hp - damage);
+    deps.onBattleEvent({ type: 'typingHit', damage });
+    deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
+    return true;
+  });
+
   while (true) {
     const spawned = spawnMonster(floor, deps.difficulty);
     const monsterIndex = floor % MONSTER_COUNT;
     const isBoss = monsterIndex === MONSTER_COUNT - 1;
     const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
     const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
+    currentMaxHp = maxHp;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
     deps.onBattleEvent({
@@ -493,10 +494,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       };
 
       let turn: TurnResult;
+      turnRunning = true;
       try {
         turn = await deps.runTurn(prompt, deps.cwd, sessionId, onAgentEvent);
       } catch (err) {
         turn = { summary: '', filesChanged: [], commandsRun: [], error: err instanceof Error ? err.message : String(err) };
+      } finally {
+        turnRunning = false;
       }
       // Only adopt a session id from a turn that actually succeeded — resuming
       // a session captured from a failed turn (a broken/never-saved session)
@@ -518,7 +522,6 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       }
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
-      bonusAllowance = WAIT_BONUS_MAX;
 
       if (turn.contextTokens !== undefined && turn.contextWindow !== undefined) {
         deps.onBattleEvent({ type: 'contextUsage', usedTokens: turn.contextTokens, contextWindow: turn.contextWindow });

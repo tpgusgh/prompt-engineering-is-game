@@ -22,8 +22,9 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Story themes & chapters** — Adventure / Hunt the Demon King / Bug Sweep. Every 6th floor is a chapter boss; clearing it continues the story, and your progress is saved so the next run picks up where you left off.
 - **Inventory** — the sidebar shows your project's file tree; open any file to view or edit and save it. **Drag** files/folders onto another folder to move them, and **drop files from Finder** to copy them in (a name clash becomes `name (1)`). `+📄` / `+📁` create a new file/folder inside the selected folder. Everything stays inside the project folder and nothing is overwritten. ↻ refresh re-reads the tree with an animation.
 - **AI party (subagents)** — three Claude subagents: 🧙 wizard (explore/research), 🗡 swordsman (implement), 🏹 archer (test/verify). When the AI splits work and sends several **at once**, the screen shows "N processes running" and what each is doing. The wizard's work strikes as spirits, the archer's as companions, the swordsman's as a blade under the archer's cover fire. Can be turned off on the setup screen (it uses more tokens).
-- **Turn timer & a game while you wait** — shows how long the AI has been working. Meanwhile, squash bugs popping up in a 3×3 grid for coins at the end of the turn (max 10 per turn).
-- **Readable AI output** — replies are **typed out live** into a chat bubble as the AI streams them, with clean markdown (headings, lists, code, tables). Your messages sit in right-hand bubbles and the log jumps to the bottom when you send. The input grows for long, multi-line prompts (Shift+Enter newline, Enter attack). A question followed by a list becomes clickable choices.
+- **Turn timer & coding typing drills while you wait** — the status line and the input show how long the AI has been working. Meanwhile, type a random line of code (80+ drills across 20+ languages/tools: JavaScript, Python, Go, Rust, SQL, Git, Docker…) exactly to deal 1 damage; a 3-second explanation of that code follows (tap for the long one), then the next line. Speed and accuracy are shown.
+- **BGM & sound effects** — synthesized chiptune, no audio files: a battle track per story theme that shifts key and tempo with each chapter, plus boss, merchant, blacksmith and title tracks; effects for hits, crits, damage taken, coins, enhance success/fail/break and typing. 🔊 button and volume slider.
+- **Readable AI output** — replies are **typed out live** into a chat bubble as the AI streams them, with clean markdown (headings, lists, code, tables), and **important parts colored**: bold text, success/pass (green), failure/error (red), warnings (yellow), file paths (blue), and syntax-highlighted code blocks. Your messages sit in right-hand bubbles and the log jumps to the bottom when you send. The input grows for long, multi-line prompts (Shift+Enter newline, Enter attack). A question followed by a list becomes clickable choices.
 - **Sessions** — after picking a folder, choose which of its Claude Code sessions to resume (terminal `claude` sessions included) or start a new one. Mid-run, the `세션` (session) button **swaps** to another session and shows its transcript in the log. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session. Game sessions also **appear in VS Code's Claude Code session list and `claude --resume`**: SDK-started sessions are normally hidden there, so after each turn the game relabels only the `entrypoint` field of the local transcript (`~/.claude/projects/…/<session-id>.jsonl`) to `cli`. Conversation content is untouched, and usage was already reported as SDK.
 - **Save / load (3 slots)** — in battle, `저장` (save) stores floor, HP, coins, bag, stats, sword level and the Claude session into a slot (free action). `불러오기` (load) on the setup screen restarts that folder, theme and weapon from the saved floor (including the HP of the monster you were fighting).
 - **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
@@ -88,6 +89,16 @@ promptbattle --difficulty normal
 ```
 
 Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>`, `/bet odd|even <coins>`, `/leave` at the merchant, `/enhance` at the blacksmith, and `/stat attack|defense|vitality`, `/save 1-3`, `/session <id>` any time. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
+
+## Versions / releases
+
+Versions are published as [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases), each with the `.dmg` attached, so you can install without building. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+Cutting a release (maintainers):
+```bash
+npm version minor        # bump package.json and create the vX.Y.Z tag
+npm run release          # test → build .dmg → push the tag → GitHub release with the .dmg
+```
 
 ## Setup
 
