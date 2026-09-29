@@ -1205,6 +1205,10 @@ function renderBattleEvent(event) {
         appendLog(`${r.icon} ${r.name}가 출격했다: ${ae.description}`, `party-line party-${ae.agentType}`);
         break;
       }
+      if (ae.type === 'toolResult') {
+        fillToolCard(ae);
+        break;
+      }
       if (ae.type === 'agentEnd') {
         const member = activeAgents.get(ae.id);
         activeAgents.delete(ae.id);
@@ -1216,15 +1220,10 @@ function renderBattleEvent(event) {
         break;
       }
       finalizeLive();
-      const isFile = ae.type === 'file';
-      const who = ae.agentId ? `${roleOf(agentTypeById.get(ae.agentId)).icon} ` : '';
-      const line = appendLog(`${who}${isFile ? '→ 수정 중' : '→ 실행 중'}: ${ae.value}`, ae.type);
-      if (isFile) {
-        touchedFiles.add(event.agentEvent.value);
-        line.classList.add('clickable');
-        line.title = '클릭해서 파일 보기/수정';
-        line.addEventListener('click', () => openFileViewer(event.agentEvent.value));
-        throwFileIcon(event.agentEvent.value);
+      openToolCard(ae);
+      if (ae.type === 'file') {
+        touchedFiles.add(ae.value);
+        throwFileIcon(ae.value);
       }
       break;
     }
@@ -1459,7 +1458,9 @@ async function refreshSessionPicker(folder) {
   for (const s of sessions) {
     const option = document.createElement('option');
     option.value = s.sessionId;
-    option.textContent = `${s.title} · ${shortTime(s.lastModified)}${s.sessionId === saved.sessionId ? ' (마지막)' : ''}`;
+    const run = saved.runStates?.[s.sessionId];
+    const where = run ? ` · 💾 ${floorText(run.floor)} HP ${run.playerHp}/${run.playerMaxHp}` : '';
+    option.textContent = `${s.title} · ${shortTime(s.lastModified)}${where}${s.sessionId === saved.sessionId ? ' (마지막)' : ''}`;
     sessionSelect.append(option);
   }
   sessionSelect.value = sessions.some((s) => s.sessionId === saved.sessionId) ? saved.sessionId : '';
@@ -1556,6 +1557,11 @@ $('save-close').addEventListener('click', () => ($('save-overlay').hidden = true
 startBtn.addEventListener('click', () => startGame({}));
 
 async function startGame({ loadSlot, slot }) {
+  // Picking a Claude session resumes its autosaved run too (main does the
+  // same lookup); treat it like a slot for the starting UI state.
+  if (!slot && chosenFolder && !sessionPicker.hidden && sessionSelect.value) {
+    slot = (await window.promptBattle.getFolderSession(chosenFolder)).runStates?.[sessionSelect.value];
+  }
   if (slot) {
     chosenFolder = slot.cwd;
     chosenThemeId = slot.themeId;
@@ -1599,7 +1605,10 @@ async function startGame({ loadSlot, slot }) {
   } else {
     renderHistory((await window.promptBattle.getFolderSession(chosenFolder)).history);
   }
-  if (slot) appendLog(`💾 슬롯 ${loadSlot}을(를) 불러왔다. ${slotSummary(slot)}`, 'story-line');
+  if (slot) {
+    const from = loadSlot ? `슬롯 ${loadSlot}을(를)` : '이 세션의 자동 저장을';
+    appendLog(`💾 ${from} 불러왔다. ${slotSummary(slot)}`, 'story-line');
+  }
   contextUsage = null;
   refreshUsage(true);
   try {
@@ -1775,4 +1784,88 @@ function highlightCode(codeEl) {
 function decorateReply(el) {
   highlightText(el);
   for (const code of el.querySelectorAll('pre code')) highlightCode(code);
+}
+
+// ---------------------------------------------------------------------------
+// Tool cards: what the AI *does* (commands, edits, reads) is shown as a
+// compact IN/OUT card, visually apart from what it *says* (chat bubbles).
+const toolCards = new Map(); // toolId -> { card, out }
+const OUT_PREVIEW_LINES = 6;
+
+function openToolCard(ae) {
+  const card = document.createElement('div');
+  const party = ae.agentId ? agentTypeById.get(ae.agentId) : undefined;
+  card.className = `tool-card running${party ? ` party-${party}` : ''}`;
+  const isFile = ae.type === 'file';
+  const isRead = /^(Read|Grep|Glob) /.test(ae.value);
+  const tool = isFile ? 'Edit' : isRead ? ae.value.split(' ')[0] : 'Bash';
+  const icon = isFile ? '✏️' : isRead ? '🔍' : '⚙️';
+  const who = party ? `${roleOf(party).icon} ${roleOf(party).name} · ` : '';
+  const head = document.createElement('div');
+  head.className = 'tool-head';
+  head.textContent = `${who}${icon} ${tool}${ae.detail ? ` · ${ae.detail}` : ''}`;
+  const status = document.createElement('span');
+  status.className = 'tool-status';
+  status.textContent = '실행 중…';
+  head.append(status);
+
+  const inRow = document.createElement('div');
+  inRow.className = 'tool-row';
+  const inLabel = document.createElement('span');
+  inLabel.className = 'tool-label';
+  inLabel.textContent = 'IN';
+  const inBody = document.createElement('code');
+  inBody.className = 'tool-in';
+  inBody.textContent = isRead ? ae.value.slice(tool.length + 1) : ae.value;
+  if (isFile) {
+    inBody.classList.add('clickable');
+    inBody.title = '클릭해서 파일 보기/수정';
+    inBody.addEventListener('click', () => openFileViewer(ae.value));
+  }
+  inRow.append(inLabel, inBody);
+
+  const out = document.createElement('div');
+  out.className = 'tool-row tool-out-row';
+  out.hidden = true;
+  card.append(head, inRow, out);
+  logEl.appendChild(card);
+  scrollLogToBottom();
+  if (ae.toolId) toolCards.set(ae.toolId, { card, out, status });
+}
+
+function fillToolCard(ae) {
+  const entry = toolCards.get(ae.toolId);
+  if (!entry) return;
+  toolCards.delete(ae.toolId);
+  const { card, out, status } = entry;
+  card.classList.remove('running');
+  card.classList.add(ae.isError ? 'failed' : 'done');
+  status.textContent = ae.isError ? '실패' : '완료';
+  const text = ae.output.trim();
+  if (!text) return;
+  const label = document.createElement('span');
+  label.className = 'tool-label';
+  label.textContent = 'OUT';
+  const pre = document.createElement('pre');
+  pre.className = 'tool-out';
+  const lines = text.split('\n');
+  const long = lines.length > OUT_PREVIEW_LINES;
+  pre.textContent = long ? lines.slice(0, OUT_PREVIEW_LINES).join('\n') : text;
+  out.append(label, pre);
+  if (long) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'tool-more';
+    more.textContent = `▾ 전체 보기 (${lines.length}줄)`;
+    let open = false;
+    more.addEventListener('click', () => {
+      open = !open;
+      pre.textContent = open ? text : lines.slice(0, OUT_PREVIEW_LINES).join('\n');
+      more.textContent = open ? '▴ 접기' : `▾ 전체 보기 (${lines.length}줄)`;
+    });
+    out.append(more);
+  }
+  out.hidden = false;
+  const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 160;
+  if (nearBottom) scrollLogToBottom();
 }

@@ -55,6 +55,8 @@ export type BattleEvent =
   | { type: 'enhanceResult'; outcome: 'success' | 'fail' | 'broken'; swordLevel: number; coins: number; odds: EnhanceOdds }
   | { type: 'enhanceFailed'; reason: string }
   | { type: 'blacksmithClosed' }
+  // slot 1..SAVE_SLOTS = a manual save; slot 0 = the autosave taken every
+  // time the game waits for input (the host keys it by Claude session).
   | { type: 'snapshot'; slot: number; state: RunState }
   | { type: 'saveFailed'; reason: string }
   | { type: 'sessionSwitched'; sessionId: string }
@@ -169,6 +171,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // next floor's first input, so a prompt typed there isn't lost.
   let carried: string | null = null;
   const nextInput = async () => {
+    autosave();
     if (carried === null) return deps.readInput();
     const input = carried;
     carried = null;
@@ -265,6 +268,14 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     deps.onBattleEvent({ type: 'statRaised', stat: id, stats: { ...stats }, points: statPoints });
   };
 
+  // floor is the one being fought, or (at a shop) the next one.
+  const currentState = (): RunState => ({
+    floor, playerHp, playerMaxHp, coins, bag: { ...bag }, stats: { ...stats }, statPoints, swordLevel,
+    ...(sessionId ? { sessionId } : {}),
+    ...(hp > 0 ? { monsterHp: hp } : {}),
+  });
+  const autosave = () => deps.onBattleEvent({ type: 'snapshot', slot: 0, state: currentState() });
+
   // `/save N` and `/session <id>` — free actions allowed anywhere, like /stat.
   const freeCommand = (input: string): boolean => {
     if (input.startsWith('/stat ')) {
@@ -277,12 +288,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'saveFailed', reason: `슬롯은 1~${SAVE_SLOTS}번이다` });
         return true;
       }
-      const state: RunState = {
-        floor, playerHp, playerMaxHp, coins, bag: { ...bag }, stats: { ...stats }, statPoints, swordLevel,
-        ...(sessionId ? { sessionId } : {}),
-        ...(hp > 0 ? { monsterHp: hp } : {}),
-      };
-      deps.onBattleEvent({ type: 'snapshot', slot, state });
+      deps.onBattleEvent({ type: 'snapshot', slot, state: currentState() });
       return true;
     }
     if (input.startsWith('/session ')) {
@@ -303,6 +309,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // player left the dungeon from the shop.
   const visitShop = async (handle: (input: string) => boolean, onClose: () => void): Promise<boolean> => {
     while (true) {
+      autosave();
       const raw = await deps.readInput();
       if (raw === null) return false;
       const input = raw.trim();

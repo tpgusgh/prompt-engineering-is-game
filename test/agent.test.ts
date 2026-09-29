@@ -212,3 +212,33 @@ test('read-only tool uses (Read/Glob/Grep) are listed, so a scouting subagent ca
   });
   assert.deepEqual(info.readsRun, ['Read /p/src/cart.js', 'Grep total', 'Glob src/**']);
 });
+
+test('tool calls come out in order with their ids (for IN/OUT cards)', () => {
+  const info = extractToolInfo({
+    type: 'assistant',
+    message: { content: [
+      { type: 'tool_use', name: 'Bash', id: 'b1', input: { command: 'npm test', description: 'Run the tests' } },
+      { type: 'tool_use', name: 'Edit', id: 'e1', input: { file_path: '/p/a.ts' } },
+      { type: 'tool_use', name: 'Read', id: 'r1', input: { file_path: '/p/b.ts' } },
+    ] },
+  });
+  assert.deepEqual(info.toolCalls, [
+    { id: 'b1', kind: 'command', value: 'npm test', detail: 'Run the tests' },
+    { id: 'e1', kind: 'file', value: '/p/a.ts' },
+    { id: 'r1', kind: 'read', value: 'Read /p/b.ts' },
+  ]);
+});
+
+test('tool results carry their output text and error flag, capped', () => {
+  const info = extractToolInfo({
+    type: 'user',
+    message: { content: [
+      { type: 'tool_result', tool_use_id: 'b1', content: 'ok\n3 passed' },
+      { type: 'tool_result', tool_use_id: 'b2', is_error: true, content: [{ type: 'text', text: 'exit 1' }] },
+      { type: 'tool_result', tool_use_id: 'b3', content: 'x'.repeat(10000) },
+    ] },
+  });
+  assert.deepEqual(info.toolOutputs[0], { id: 'b1', output: 'ok\n3 passed', isError: false });
+  assert.deepEqual(info.toolOutputs[1], { id: 'b2', output: 'exit 1', isError: true });
+  assert.ok(info.toolOutputs[2].output.length <= 4100);
+});

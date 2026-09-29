@@ -15,7 +15,8 @@ export interface TurnResult {
 // Live events from a turn. command/file land hits; agentId marks ones done
 // by a party subagent (the id of the Agent tool call that started it).
 export type AgentEvent =
-  | { type: 'command' | 'file'; value: string; agentId?: string }
+  | { type: 'command' | 'file'; value: string; agentId?: string; toolId?: string; detail?: string }
+  | { type: 'toolResult'; toolId: string; output: string; isError: boolean }
   | { type: 'agentStart'; id: string; agentType: string; description: string }
   | { type: 'agentEnd'; id: string }
   | { type: 'text'; value: string };
@@ -32,6 +33,9 @@ export interface ExtractedInfo {
   agentStarts: { id: string; agentType: string; description: string }[];
   // Read-only tool uses, e.g. "Read src/a.ts" — hits only when a subagent does them.
   readsRun: string[];
+  // Every tool call in order, with its id, so results can be matched (IN/OUT cards).
+  toolCalls: { id: string; kind: 'command' | 'file' | 'read'; value: string; detail?: string }[];
+  toolOutputs: { id: string; output: string; isError: boolean }[];
   toolResultIds: string[];
   // Streamed text from the main agent (stream_event text_delta).
   textDelta?: string;
@@ -65,10 +69,17 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   const agentStarts: ExtractedInfo['agentStarts'] = [];
   const readsRun: string[] = [];
   const toolResultIds: string[] = [];
+  const toolCalls: ExtractedInfo['toolCalls'] = [];
+  const toolOutputs: ExtractedInfo['toolOutputs'] = [];
 
   if (m?.type === 'user' && Array.isArray(m.message?.content)) {
     for (const block of m.message.content) {
-      if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string') toolResultIds.push(block.tool_use_id);
+      if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+        toolResultIds.push(block.tool_use_id);
+        const raw = typeof block.content === 'string' ? block.content : textOf(block.content);
+        const output = raw.length > MAX_TOOL_OUTPUT ? `${raw.slice(0, MAX_TOOL_OUTPUT)}\n… (${raw.length - MAX_TOOL_OUTPUT}자 생략)` : raw;
+        toolOutputs.push({ id: block.tool_use_id, output, isError: block.is_error === true });
+      }
     }
   }
 
@@ -88,19 +99,30 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
             description: typeof block.input?.description === 'string' ? block.input.description : '',
           });
         }
-        if (block.name === 'Read' && typeof block.input?.file_path === 'string') readsRun.push(`Read ${block.input.file_path}`);
+        const id = typeof block.id === 'string' ? block.id : '';
+        if (block.name === 'Read' && typeof block.input?.file_path === 'string') {
+          readsRun.push(`Read ${block.input.file_path}`);
+          toolCalls.push({ id, kind: 'read', value: `Read ${block.input.file_path}` });
+        }
         if ((block.name === 'Grep' || block.name === 'Glob') && typeof block.input?.pattern === 'string') {
           readsRun.push(`${block.name} ${block.input.pattern}`);
+          toolCalls.push({ id, kind: 'read', value: `${block.name} ${block.input.pattern}` });
         }
         if (block.name === 'Bash' && typeof block.input?.command === 'string') {
           commandsRun.push(block.input.command);
+          toolCalls.push({
+            id, kind: 'command', value: block.input.command,
+            ...(typeof block.input.description === 'string' ? { detail: block.input.description } : {}),
+          });
         }
         if ((block.name === 'Write' || block.name === 'Edit') && typeof block.input?.file_path === 'string') {
           filesChanged.push(block.input.file_path);
+          toolCalls.push({ id, kind: 'file', value: block.input.file_path });
         }
         // sdk-tools.d.ts NotebookEditInput uses `notebook_path`, not `file_path`.
         if (block.name === 'NotebookEdit' && typeof block.input?.notebook_path === 'string') {
           filesChanged.push(block.input.notebook_path);
+          toolCalls.push({ id, kind: 'file', value: block.input.notebook_path });
         }
       }
       // A subagent's own narration isn't the reply to the player.
@@ -146,7 +168,7 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
 
   return {
     filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow,
-    agentStarts, readsRun, toolResultIds, textDelta, parentToolUseId,
+    agentStarts, readsRun, toolCalls, toolOutputs, toolResultIds, textDelta, parentToolUseId,
   };
 }
 
@@ -210,6 +232,8 @@ export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
     q.close();
   }
 }
+
+const MAX_TOOL_OUTPUT = 4000;
 
 export interface SessionSummary {
   sessionId: string;
@@ -281,6 +305,8 @@ export async function runAgentTurn(
   let contextTokens: number | undefined;
   let contextWindow: number | undefined;
   const runningAgents = new Set<string>();
+  // Tool calls shown to the player, awaiting their result (OUT).
+  const shownTools = new Set<string>();
 
   try {
     for await (const message of query({
@@ -310,17 +336,22 @@ export async function runAgentTurn(
         runningAgents.add(a.id);
         onEvent?.({ type: 'agentStart', ...a });
       }
-      for (const f of info.filesChanged) {
-        if (!filesChanged.has(f)) onEvent?.({ type: 'file', value: f, ...(agentId ? { agentId } : {}) });
-        filesChanged.add(f);
+      for (const c of info.commandsRun) commandsRun.push(c);
+      for (const call of info.toolCalls) {
+        const tag = { ...(agentId ? { agentId } : {}), ...(call.id ? { toolId: call.id } : {}), ...(call.detail ? { detail: call.detail } : {}) };
+        if (call.kind === 'file') {
+          filesChanged.add(call.value);
+          onEvent?.({ type: 'file', value: call.value, ...tag });
+        } else if (call.kind === 'command' || agentId) {
+          // The main agent's reads stay quiet; a subagent's reads are its
+          // whole job (the wizard), so they count as actions.
+          onEvent?.({ type: 'command', value: call.value, ...tag });
+        } else continue;
+        if (call.id) shownTools.add(call.id);
       }
-      for (const c of info.commandsRun) {
-        commandsRun.push(c);
-        onEvent?.({ type: 'command', value: c, ...(agentId ? { agentId } : {}) });
+      for (const out of info.toolOutputs) {
+        if (shownTools.delete(out.id)) onEvent?.({ type: 'toolResult', toolId: out.id, output: out.output, isError: out.isError });
       }
-      // The main agent's reads stay quiet (as before); a subagent's reads are
-      // its whole job (the wizard), so they count as actions.
-      if (agentId) for (const r of info.readsRun) onEvent?.({ type: 'command', value: r, agentId });
       for (const id of info.toolResultIds) {
         if (runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
       }

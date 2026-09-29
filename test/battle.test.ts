@@ -587,7 +587,7 @@ test('/save N snapshots the run as a free action (no turn, no counter)', async (
   const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/save 2', '/quit']);
   deps.runTurn = async () => ({ summary: '', filesChanged: [], commandsRun: [], sessionId: 'sess-1' });
   await runDungeon({ ...deps, coins: 7, swordLevel: 3, statPoints: 1, bag: { potion: 1 } });
-  const snap = events.find((e) => e.type === 'snapshot');
+  const snap = events.find((e) => e.type === 'snapshot' && e.slot === 2);
   assert.ok(snap && snap.type === 'snapshot');
   if (snap && snap.type === 'snapshot') {
     assert.equal(snap.slot, 2);
@@ -603,7 +603,7 @@ test('/save with a bad slot is refused', async () => {
   const { deps, events } = makeFakeDeps(['/save 9', '/quit']);
   await runDungeon(deps);
   assert.ok(events.some((e) => e.type === 'saveFailed'));
-  assert.equal(events.filter((e) => e.type === 'snapshot').length, 0);
+  assert.equal(events.filter((e) => e.type === 'snapshot' && e.slot > 0).length, 0);
 });
 
 test('playerHp starts a loaded run at the saved HP', async () => {
@@ -630,18 +630,19 @@ test('only command/file events land partial hits; text and party events do not',
     onEvent?.({ type: 'text', value: 'hi' });
     onEvent?.({ type: 'agentStart', id: 'a1', agentType: 'wizard', description: 'scout' });
     onEvent?.({ type: 'command', value: 'ls', agentId: 'a1' });
+    onEvent?.({ type: 'toolResult', toolId: 't1', output: 'a.txt', isError: false });
     onEvent?.({ type: 'agentEnd', id: 'a1' });
     return { summary: 'done', filesChanged: [], commandsRun: ['ls'] };
   };
   await runDungeon(deps);
   assert.equal(events.filter((e) => e.type === 'partialHit').length, 1);
-  assert.equal(events.filter((e) => e.type === 'agentEvent').length, 4, 'all four are forwarded for the UI');
+  assert.equal(events.filter((e) => e.type === 'agentEvent').length, 5, 'all five are forwarded for the UI');
 });
 
 test('a save mid-fight records the monster HP, and loading restores it', async () => {
   const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/save 1', '/quit']);
   await runDungeon(deps);
-  const snap = events.find((e) => e.type === 'snapshot');
+  const snap = events.find((e) => e.type === 'snapshot' && e.slot === 1);
   assert.ok(snap && snap.type === 'snapshot' && snap.state.monsterHp === 50, '60 - 10');
 
   const loaded = makeFakeDeps(['/quit']);
@@ -653,7 +654,7 @@ test('a save mid-fight records the monster HP, and loading restores it', async (
 test('a save at the shop has no monster HP (the next monster starts fresh)', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/save 1', '/leave', '/quit']);
   await runDungeon({ ...deps, random: seq(0.1, 0.99) });
-  const snap = events.find((e) => e.type === 'snapshot');
+  const snap = events.find((e) => e.type === 'snapshot' && e.slot === 1);
   assert.ok(snap && snap.type === 'snapshot' && snap.state.monsterHp === undefined && snap.state.floor === 1);
 });
 
@@ -679,4 +680,21 @@ test('typing hits (bound by the host) deal damage only while a turn is running',
   assert.ok(attack && attack.type === 'attack' && attack.damage === 10);
   const lastHp = events.filter((e) => e.type === 'hpChanged').pop();
   assert.ok(lastHp && lastHp.type === 'hpChanged' && lastHp.hp === 60 - 2 - 10);
+});
+
+test('autosave: a slot-0 snapshot is emitted each time the game waits for input, with the live state', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/stat vitality', '/quit']);
+  deps.runTurn = async () => ({ summary: '', filesChanged: [], commandsRun: [], sessionId: 'sess-a' });
+  await runDungeon({ ...deps, statPoints: 1 });
+  const autos = events.filter((e) => e.type === 'snapshot' && e.slot === 0);
+  assert.equal(autos.length, 3, 'one before each of the three inputs');
+  const last = autos[autos.length - 1];
+  assert.ok(last.type === 'snapshot');
+  if (last.type === 'snapshot') {
+    assert.equal(last.state.sessionId, 'sess-a');
+    assert.equal(last.state.monsterHp, 50);
+    assert.equal(last.state.playerHp, 104, '94 after the counter, +10 from vitality');
+    assert.equal(last.state.playerMaxHp, 110);
+    assert.deepEqual(last.state.stats, { attack: 0, defense: 0, vitality: 1 });
+  }
 });

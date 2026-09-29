@@ -1211,3 +1211,84 @@ body {
 #volume {
   width: 70px;
 }
+
+/* Tool cards (what the AI does), distinct from chat bubbles (what it says) */
+#log .tool-card {
+  white-space: normal;
+  max-width: 92%;
+  margin: 6px 0 6px 14px;
+  padding: 6px 10px;
+  background: #1c2028;
+  border: 1px solid #3b4252;
+  border-left: 3px solid #5e81ac;
+  border-radius: 6px;
+  font-size: 12px;
+}
+#log .tool-card.running { border-left-color: #ebcb8b; }
+#log .tool-card.done { border-left-color: #a3be8c; }
+#log .tool-card.failed { border-left-color: #bf616a; }
+#log .tool-card.party-wizard { background: #221f2b; }
+#log .tool-card.party-archer { background: #1f2620; }
+#log .tool-card.party-swordsman { background: #26231c; }
+#log .tool-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: #d8dee9;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+#log .tool-status {
+  margin-left: auto;
+  font-weight: normal;
+  font-size: 11px;
+  color: #7b88a1;
+}
+#log .tool-card.running .tool-status { color: #ebcb8b; }
+#log .tool-card.done .tool-status { color: #a3be8c; }
+#log .tool-card.failed .tool-status { color: #bf616a; }
+#log .tool-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 2px;
+}
+#log .tool-label {
+  flex: none;
+  width: 30px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  color: #616e88;
+  padding-top: 2px;
+}
+#log .tool-in {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: #88c0d0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#log .tool-in.clickable { cursor: pointer; text-decoration: underline dotted; }
+#log .tool-out {
+  flex: 1;
+  margin: 0;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #aeb7c7;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 50vh;
+  overflow: auto;
+}
+#log .tool-card.failed .tool-out { color: #d08770; }
+#log .tool-out-row { flex-wrap: wrap; }
+#log .tool-more {
+  margin-left: 38px;
+  padding: 0 8px;
+  font-size: 11px;
+  background: none;
+  color: #88c0d0;
+  border: 1px solid #3b4252;
+  border-radius: 4px;
+  cursor: pointer;
+}

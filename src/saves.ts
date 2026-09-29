@@ -23,7 +23,7 @@ const isCount = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && 
 const isCounts = (v: unknown) =>
   !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every(isCount);
 
-function isSlot(v: any): v is SaveSlot {
+export function isSaveSlot(v: any): v is SaveSlot {
   return (
     !!v &&
     isCount(v.savedAt) &&
@@ -53,7 +53,7 @@ export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSl
   const raw = await loadRaw(homeDir);
   return Array.from({ length: SLOT_COUNT }, (_, i) => {
     const v = raw[String(i + 1)];
-    return isSlot(v) ? v : null;
+    return isSaveSlot(v) ? v : null;
   });
 }
 

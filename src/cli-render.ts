@@ -92,7 +92,7 @@ export function formatBattleEvent(event: BattleEvent): string {
     case 'contextUsage':
       return '';
     case 'snapshot':
-      return colorize('Save slots are available in the desktop app.', 'yellow') + '\n';
+      return event.slot === 0 ? '' : colorize('Save slots are available in the desktop app.', 'yellow') + '\n';
     case 'saveFailed':
       return colorize(`Save failed: ${event.reason}`, 'red') + '\n';
     case 'sessionSwitched':

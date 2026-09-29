@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { isSaveSlot, type SaveSlot } from './saves.ts';
 
 // Per project folder: the Claude session to resume and the chat log shown
 // when the folder is opened again.
@@ -12,6 +13,9 @@ export interface ChatEntry {
 export interface FolderSession {
   sessionId?: string;
   history: ChatEntry[];
+  // Autosaved game state per Claude session id: resuming a session resumes
+  // its run (floor, HP, monster HP, stats...) too.
+  runStates?: Record<string, SaveSlot>;
 }
 
 export const HISTORY_LIMIT = 200;
@@ -30,13 +34,21 @@ async function loadAll(homeDir: string): Promise<Record<string, unknown>> {
 }
 
 function coerce(value: unknown): FolderSession {
-  const v = value as { sessionId?: unknown; history?: unknown } | null | undefined;
+  const v = value as { sessionId?: unknown; history?: unknown; runStates?: unknown } | null | undefined;
   const history = Array.isArray(v?.history)
     ? v.history.filter(
         (e): e is ChatEntry => !!e && (e.role === 'user' || e.role === 'assistant') && typeof e.text === 'string',
       )
     : [];
-  return typeof v?.sessionId === 'string' ? { sessionId: v.sessionId, history } : { history };
+  const runStates: Record<string, SaveSlot> = {};
+  if (v?.runStates && typeof v.runStates === 'object') {
+    for (const [id, state] of Object.entries(v.runStates)) if (isSaveSlot(state)) runStates[id] = state;
+  }
+  return {
+    ...(typeof v?.sessionId === 'string' ? { sessionId: v.sessionId } : {}),
+    history,
+    ...(Object.keys(runStates).length ? { runStates } : {}),
+  };
 }
 
 export async function loadFolderSession(cwd: string, homeDir: string = os.homedir()): Promise<FolderSession> {

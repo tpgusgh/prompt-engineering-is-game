@@ -138,8 +138,14 @@ ipcMain.handle(
     },
   ) => {
     const profile = await loadProfile();
-    const slot = requested.loadSlot ? (await loadSlots())[requested.loadSlot - 1] : null;
-    if (requested.loadSlot && !slot) throw new Error(`슬롯 ${requested.loadSlot}이(가) 비어 있습니다.`);
+    const manual = requested.loadSlot ? (await loadSlots())[requested.loadSlot - 1] : null;
+    if (requested.loadSlot && !manual) throw new Error(`슬롯 ${requested.loadSlot}이(가) 비어 있습니다.`);
+    // Resuming a Claude session also resumes that session's autosaved run.
+    const autosaved =
+      !manual && requested.sessionId
+        ? (await loadFolderSession(path.resolve(requested.cwd))).runStates?.[requested.sessionId]
+        : undefined;
+    const slot = manual ?? autosaved ?? null;
     const options = slot
       ? { ...requested, cwd: slot.cwd, difficulty: slot.difficulty, model: slot.model, themeId: slot.themeId, startFloor: slot.floor, sessionId: slot.sessionId, heroClass: slot.heroClass ?? requested.heroClass }
       : requested;
@@ -158,7 +164,7 @@ ipcMain.handle(
     const folder: FolderSession = await loadFolderSession(cwd);
     let saving = Promise.resolve();
     const persistFolder = () => {
-      const snapshot = { ...folder, history: [...folder.history] };
+      const snapshot = { ...folder, history: [...folder.history], runStates: { ...folder.runStates } };
       saving = saving.then(() => saveFolderSession(cwd, snapshot)).catch(() => {});
     };
     const trackHistory = (event: BattleEvent) => {
@@ -191,14 +197,27 @@ ipcMain.handle(
       swordLevel: slot ? slot.swordLevel : profile.swordLevel,
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
-        send(event);
-        if (event.type === 'snapshot') {
-          const savedAt = Date.now();
-          const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel, heroClass };
-          writeSlot(event.slot, data)
-            .then(() => send({ type: 'slotSaved', slot: event.slot, data }))
-            .catch((err) => send({ type: 'saveFailed', reason: err instanceof Error ? err.message : String(err) }));
+        if (event.type !== 'snapshot') {
+          send(event);
+          return;
         }
+        const savedAt = Date.now();
+        const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel, heroClass };
+        if (event.slot === 0) {
+          if (data.sessionId) {
+            // Autosave, keyed by Claude session; keep the 30 most recent.
+            const all = { ...folder.runStates, [data.sessionId]: data };
+            folder.runStates = Object.fromEntries(
+              Object.entries(all).sort(([, a], [, b]) => b.savedAt - a.savedAt).slice(0, 30),
+            );
+            persistFolder();
+          }
+          return;
+        }
+        send(event);
+        writeSlot(event.slot, data)
+          .then(() => send({ type: 'slotSaved', slot: event.slot, data }))
+          .catch((err) => send({ type: 'saveFailed', reason: err instanceof Error ? err.message : String(err) }));
       },
       readInput: () =>
         queuedCommands.length > 0

@@ -36,3 +36,15 @@ test('appendHistory keeps only the newest HISTORY_LIMIT entries', () => {
   assert.equal(history.length, HISTORY_LIMIT);
   assert.equal(history[0].text, '5');
 });
+
+test('per-session run states (autosaves) round-trip; invalid ones are dropped', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  const good = {
+    savedAt: 1, cwd: '/proj/a', themeId: 'adventure', difficulty: 'normal', model: 'claude-sonnet-5', heroClass: 'wizard',
+    floor: 2, playerHp: 60, playerMaxHp: 110, coins: 10, bag: {}, stats: { attack: 0, defense: 0, vitality: 1 },
+    statPoints: 0, swordLevel: 0, sessionId: 's-a', monsterHp: 54,
+  };
+  await saveFolderSession('/proj/a', { sessionId: 's-a', history: [], runStates: { 's-a': good, bad: { floor: 'x' } as never } }, dir);
+  const loaded = await loadFolderSession('/proj/a', dir);
+  assert.deepEqual(loaded.runStates, { 's-a': good });
+});
