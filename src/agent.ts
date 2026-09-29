@@ -1,5 +1,6 @@
 import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { PARTY, PARTY_SYSTEM_PROMPT } from './party.ts';
+import { relabelForListing } from './transcripts.ts';
 
 export interface TurnResult {
   summary: string;
@@ -331,6 +332,8 @@ export async function runAgentTurn(
       if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
     }
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
+    // List the session in VS Code / `claude --resume` (see transcripts.ts).
+    if (latestSessionId) await relabelForListing(latestSessionId).catch(() => false);
     return {
       summary: (finalResult ?? text).trim(),
       filesChanged: [...filesChanged],
