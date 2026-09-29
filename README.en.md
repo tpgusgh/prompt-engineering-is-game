@@ -68,6 +68,8 @@ These apply only to the game's sessions; your Claude Code settings are untouched
 
 A live timer, the **AI party** (🧙 wizard explores · 🗡 swordsman implements · 🏹 archer verifies) with how many processes run at once, and how many background tasks are pending. Long jobs go to the 🦅 **courier** subagent in the background, and Claude follows up with the result when it's done. Meanwhile, **type a line of code** exactly for 1 damage plus an explanation of that code (tap for more).
 
+The **👥 agents** tab (top right) lists the last 10 subagents: how long running ones have been going, how long finished ones ran, and on click their job, actions (✓/✗) and final report.
+
 ### 4. Quests (when the AI asks you something)
 ![Quest](docs/screenshots/quest.png)
 

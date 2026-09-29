@@ -401,6 +401,7 @@ function setInputEnabled(enabled) {
 // the end), so hpChanged can't mean "turn over" — only these events do.
 function turnConcluded() {
   setInputEnabled(true);
+  endOpenAgentRuns();
   refreshUsage(false);
   stopTurnTimer();
   stopTyping();
@@ -1380,6 +1381,7 @@ function renderBattleEvent(event) {
         break;
       }
       if (ae.type === 'agentStart') {
+        recordAgentStart(ae);
         finalizeLive();
         activeAgents.set(ae.id, ae);
         agentTypeById.set(ae.id, ae.agentType);
@@ -1397,9 +1399,11 @@ function renderBattleEvent(event) {
       }
       if (ae.type === 'toolResult') {
         fillToolCard(ae);
+        recordAgentResult(ae);
         break;
       }
       if (ae.type === 'agentEnd') {
+        recordAgentEnd(ae);
         const member = activeAgents.get(ae.id);
         activeAgents.delete(ae.id);
         renderParty();
@@ -1411,6 +1415,7 @@ function renderBattleEvent(event) {
       }
       finalizeLive();
       openToolCard(ae);
+      recordAgentAction(ae);
       if (ae.type === 'file') {
         touchedFiles.add(ae.value);
         throwFileIcon(ae.value);
@@ -2369,3 +2374,121 @@ $('stop-turn').addEventListener('click', async () => {
     btn.textContent = '⏹ 멈추기';
   }
 });
+
+// ---------------------------------------------------------------------------
+// Agents tab: the last 10 subagents — live elapsed time while running, how
+// long they ran once done; click one for its job, actions and final report.
+const AGENT_RUNS_MAX = 10;
+const agentRuns = []; // newest first
+const openAgentRuns = new Set();
+const clockTime = (ms) => new Date(ms).toLocaleTimeString('ko-KR', { hour12: false });
+const runById = (id) => agentRuns.find((r) => r.id === id);
+
+function recordAgentStart(ae) {
+  agentRuns.unshift({ id: ae.id, type: ae.agentType, description: ae.description, startedAt: Date.now(), endedAt: null, actions: [], report: '' });
+  while (agentRuns.length > AGENT_RUNS_MAX) agentRuns.pop();
+  renderAgents();
+}
+function recordAgentAction(ae) {
+  const run = ae.agentId && runById(ae.agentId);
+  if (!run) return;
+  run.actions.push({ toolId: ae.toolId, kind: ae.type, value: ae.value, ok: null });
+  renderAgents();
+}
+function recordAgentResult(ae) {
+  for (const run of agentRuns) {
+    const action = run.actions.find((a) => a.toolId === ae.toolId);
+    if (action) {
+      action.ok = !ae.isError;
+      renderAgents();
+      return;
+    }
+  }
+}
+function recordAgentEnd(ae) {
+  const run = runById(ae.id);
+  if (!run) return;
+  run.endedAt = Date.now();
+  if (ae.report) run.report = ae.report;
+  renderAgents();
+}
+// A turn that ends (or is stopped) ends its subagents too.
+function endOpenAgentRuns() {
+  for (const run of agentRuns) if (!run.endedAt) run.endedAt = Date.now();
+  renderAgents();
+}
+
+function renderAgents() {
+  const running = agentRuns.filter((r) => !r.endedAt).length;
+  $('agents-btn').textContent = running ? `👥 에이전트 · 🟢 ${running}개 진행 중` : `👥 에이전트${agentRuns.length ? ` (${agentRuns.length})` : ''}`;
+  $('agents-btn').classList.toggle('live', running > 0);
+  if ($('agents-drawer').hidden) return;
+  const list = $('agents-list');
+  list.textContent = '';
+  if (agentRuns.length === 0) {
+    list.textContent = '아직 출격한 서브에이전트가 없다. AI 파티를 켜거나 오래 걸리는 일을 시키면 여기에 기록된다.';
+    return;
+  }
+  for (const run of agentRuns) {
+    const role = roleOf(run.type);
+    const item = document.createElement('div');
+    item.className = `agent-run${run.endedAt ? ' done' : ' running'}${openAgentRuns.has(run.id) ? ' open' : ''}`;
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'agent-run-head';
+    const who = document.createElement('strong');
+    who.textContent = `${role.icon} ${role.name}`;
+    const what = document.createElement('span');
+    what.className = 'agent-run-desc';
+    what.textContent = run.description || '(설명 없음)';
+    const time = document.createElement('span');
+    time.className = 'agent-run-time';
+    time.textContent = run.endedAt
+      ? `✅ ${fmtElapsed(run.endedAt - run.startedAt)} 동안`
+      : `🟢 ${fmtElapsed(Date.now() - run.startedAt)}째`;
+    head.append(who, what, time);
+    head.addEventListener('click', () => {
+      if (openAgentRuns.has(run.id)) openAgentRuns.delete(run.id);
+      else openAgentRuns.add(run.id);
+      renderAgents();
+    });
+    item.append(head);
+    if (openAgentRuns.has(run.id)) {
+      const detail = document.createElement('div');
+      detail.className = 'agent-run-detail';
+      const meta = document.createElement('div');
+      meta.className = 'option-sub';
+      meta.textContent = `시작 ${clockTime(run.startedAt)}${run.endedAt ? ` · 끝 ${clockTime(run.endedAt)}` : ' · 진행 중'} · 작업 ${run.actions.length}개`;
+      detail.append(meta);
+      if (run.actions.length) {
+        const ul = document.createElement('ul');
+        ul.className = 'agent-run-actions';
+        for (const a of run.actions) {
+          const li = document.createElement('li');
+          li.textContent = `${a.ok === null ? '⏳' : a.ok ? '✓' : '✗'} ${a.kind === 'file' ? '✏️' : '⚙️'} ${a.value}`;
+          if (a.ok === false) li.className = 'failed';
+          ul.append(li);
+        }
+        detail.append(ul);
+      }
+      if (run.report) {
+        const report = document.createElement('div');
+        report.className = 'markdown agent-run-report';
+        report.innerHTML = marked.parse(run.report);
+        decorateReply(report);
+        detail.append(report);
+      }
+      item.append(detail);
+    }
+    list.append(item);
+  }
+}
+$('agents-btn').addEventListener('click', () => {
+  $('agents-drawer').hidden = !$('agents-drawer').hidden;
+  renderAgents();
+});
+$('agents-close').addEventListener('click', () => ($('agents-drawer').hidden = true));
+// Live elapsed times.
+setInterval(() => {
+  if (agentRuns.some((r) => !r.endedAt)) renderAgents();
+}, 1000);

@@ -21,7 +21,8 @@ export type AgentEvent =
   | { type: 'command' | 'file'; value: string; agentId?: string; toolId?: string; detail?: string }
   | { type: 'toolResult'; toolId: string; output: string; isError: boolean }
   | { type: 'agentStart'; id: string; agentType: string; description: string }
-  | { type: 'agentEnd'; id: string }
+  // report: the subagent's final answer (its Agent tool result / task summary).
+  | { type: 'agentEnd'; id: string; report?: string }
   | { type: 'text'; value: string }
   // Background tasks (e.g. Bash run_in_background) still running this turn.
   | { type: 'background'; running: number };
@@ -49,6 +50,7 @@ export interface ExtractedInfo {
   // Background task lifecycle, keyed by the tool call that launched it.
   tasksStarted: string[];
   tasksFinished: string[];
+  taskReports: Record<string, string>;
   // Set on messages produced inside a subagent.
   parentToolUseId?: string;
 }
@@ -96,9 +98,13 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   const messageStart = m?.type === 'stream_event' && !parentToolUseId && m.event?.type === 'message_start';
   const tasksStarted: string[] = [];
   const tasksFinished: string[] = [];
+  const taskReports: Record<string, string> = {};
   if (m?.type === 'system' && typeof m.tool_use_id === 'string') {
     if (m.subtype === 'task_started') tasksStarted.push(m.tool_use_id);
-    if (m.subtype === 'task_notification') tasksFinished.push(m.tool_use_id);
+    if (m.subtype === 'task_notification') {
+      tasksFinished.push(m.tool_use_id);
+      if (typeof m.summary === 'string') taskReports[m.tool_use_id] = m.summary;
+    }
   }
 
   let textDelta: string | undefined;
@@ -187,7 +193,7 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   return {
     filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow,
     agentStarts, readsRun, toolCalls, toolOutputs, toolResultIds, textDelta, parentToolUseId,
-    messageStart, tasksStarted, tasksFinished,
+    messageStart, tasksStarted, tasksFinished, taskReports,
   };
 }
 
@@ -371,6 +377,7 @@ export async function runAgentTurn(
   let contextWindow: number | undefined;
   const runningAgents = new Set<string>();
   const backgroundAgents = new Set<string>();
+  const agentReports = new Map<string, string>();
   let textSent = false;
   // Tool calls shown to the player, awaiting their result (OUT).
   const shownTools = new Set<string>();
@@ -438,7 +445,10 @@ export async function runAgentTurn(
       // running until its task notification arrives.
       for (const id of info.tasksStarted) if (runningAgents.has(id)) backgroundAgents.add(id);
       for (const id of info.tasksFinished) {
-        if (backgroundAgents.delete(id) && runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
+        if (backgroundAgents.delete(id) && runningAgents.delete(id)) {
+          const report = info.taskReports[id];
+          onEvent?.({ type: 'agentEnd', id, ...(report ? { report } : {}) });
+        }
       }
       for (const a of info.agentStarts) {
         runningAgents.add(a.id);
@@ -459,10 +469,15 @@ export async function runAgentTurn(
       }
       for (const out of info.toolOutputs) {
         if (shownTools.delete(out.id)) onEvent?.({ type: 'toolResult', toolId: out.id, output: out.output, isError: out.isError });
+        // A foreground subagent's Agent call result is its final report.
+        if (runningAgents.has(out.id) && !backgroundAgents.has(out.id)) agentReports.set(out.id, out.output);
       }
       for (const id of info.toolResultIds) {
         if (backgroundAgents.has(id)) continue;
-        if (runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
+        if (runningAgents.delete(id)) {
+          const report = agentReports.get(id);
+          onEvent?.({ type: 'agentEnd', id, ...(report ? { report } : {}) });
+        }
       }
       text += info.text;
       if (info.finalResult) finalResult = info.finalResult;

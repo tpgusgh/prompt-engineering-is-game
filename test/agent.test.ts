@@ -253,3 +253,8 @@ test('task notifications report which Agent tool call a background task belonged
   assert.deepEqual(info.tasksFinished, ['tu_9']);
   assert.deepEqual(extractToolInfo({ type: 'system', subtype: 'task_started', task_id: 't1', tool_use_id: 'tu_9' }).tasksStarted, ['tu_9']);
 });
+
+test('a background task notification carries its summary as the agent report', () => {
+  const info = extractToolInfo({ type: 'system', subtype: 'task_notification', task_id: 't1', tool_use_id: 'tu_9', status: 'completed', summary: 'Tests: 12 passed' });
+  assert.deepEqual(info.taskReports, { tu_9: 'Tests: 12 passed' });
+});

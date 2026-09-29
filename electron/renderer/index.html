@@ -113,7 +113,10 @@
       </aside>
 
       <div id="battle-column">
-        <div id="chapter-banner" class="chapter-banner"></div>
+        <div class="battle-top">
+          <div id="chapter-banner" class="chapter-banner"></div>
+          <button type="button" id="agents-btn" class="agents-btn" title="서브에이전트 기록 (최근 10개)">👥 에이전트</button>
+        </div>
         <div id="monster-panel">
           <h2 id="monster-name"></h2>
           <div class="monster-stage">
@@ -258,6 +261,14 @@
         </div>
       </div>
     </div>
+
+    <aside id="agents-drawer" class="agents-drawer" hidden>
+      <div class="agents-head">
+        <strong>👥 서브에이전트 (최근 10개)</strong>
+        <button type="button" id="agents-close">✕</button>
+      </div>
+      <div id="agents-list" class="agents-list"></div>
+    </aside>
 
     <div id="unsaved-overlay" class="file-viewer-overlay unsaved-overlay" hidden>
       <div class="exit-panel">
