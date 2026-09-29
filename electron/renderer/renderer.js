@@ -662,6 +662,7 @@ function newBubble() {
   };
   b.push = (text) => {
     b.target += text;
+    typingBehind.add(b);
     if (!b.raf) b.raf = requestAnimationFrame(frame);
   };
   function frame() {
@@ -672,6 +673,8 @@ function newBubble() {
     else {
       b.raf = 0;
       if (b.closing) finish();
+      typingBehind.delete(b);
+      drainBattleEvents();
     }
   }
   // Soft close: keeps typing what it has, then renders the final markdown.
@@ -1651,7 +1654,18 @@ function renderBattleEvent(event) {
   }
 }
 
-window.promptBattle.onBattleEvent(renderBattleEvent);
+// Battle events wait while a reply is still being typed out, so the
+// monster's counter (and the hit log) never shows up before the AI has
+// finished talking on screen.
+const battleQueue = [];
+const typingBehind = new Set(); // bubbles whose shown text lags the stream
+function drainBattleEvents() {
+  while (battleQueue.length && typingBehind.size === 0) renderBattleEvent(battleQueue.shift());
+}
+window.promptBattle.onBattleEvent((event) => {
+  battleQueue.push(event);
+  drainBattleEvents();
+});
 
 // ---------------------------------------------------------------------------
 // Claude sessions: the setup picker and the in-battle switcher both list this
