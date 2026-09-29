@@ -6,7 +6,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 
 ## Features
 
-- **Prompts are attacks** — longer prompts and keywords ("step by step", "test", "edge case", "refactor", "why", "example") deal more damage; 2+ keywords is a critical hit.
+- **Prompts are attacks** — longer prompts and keywords ("step by step", "test", "edge case", "refactor", "why", "example") deal more damage; 2+ different keywords is a critical hit. Korean equivalents count too (단계별, 테스트, 엣지 케이스, 리팩토링, 왜, 예시, ...).
 - **Real-time hits** — every command the AI runs or file it edits lands a hit as it happens; touched files fly at the monster as their real OS icon.
 - **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors). 0 HP = defeat. Clearing a floor heals you.
 - **Weapons = Claude models** — Haiku dagger (x0.8), Sonnet longsword (x1), Opus demon blade (x1.25), Fable holy sword (x1.5). Switch any time mid-run.

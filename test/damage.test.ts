@@ -39,3 +39,15 @@ test('an extremely long prompt with keywords still clamps before the crit multip
   assert.equal(result.crit, true);
   assert.equal(result.damage, 225);
 });
+
+test('Korean keywords count toward crit', () => {
+  const result = calculateDamage('이 함수를 단계별로 리팩토링하고 테스트도 추가해줘');
+  assert.equal(result.crit, true);
+  assert.deepEqual(result.matchedKeywords, ['단계별', '테스트', '리팩토링']);
+});
+
+test('English and Korean forms of the same keyword count once', () => {
+  const result = calculateDamage('test 테스트');
+  assert.equal(result.matchedKeywords.length, 1);
+  assert.equal(result.crit, false);
+});
