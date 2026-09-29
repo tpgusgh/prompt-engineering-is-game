@@ -2,7 +2,7 @@
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
 import { SNIPPETS } from './typing-snippets.js';
-import { playMusic, stopMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
+import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const setupScreen = $('setup-screen');
@@ -2157,19 +2157,25 @@ function showQuest(el) {
   }
   $('quest-answer').value = '';
   $('quest-overlay').hidden = false;
+  pushMusic('quest');
   sfx('party');
   $('quest-answer').focus();
 }
 function answerQuest(text) {
   const answer = text.trim();
   if (!answer || !inputEnabled) return;
-  $('quest-overlay').hidden = true;
+  closeQuest();
   promptInput.value = answer;
   attackForm.requestSubmit();
 }
 $('quest-submit').addEventListener('click', () => answerQuest($('quest-answer').value));
-$('quest-later').addEventListener('click', () => {
+function closeQuest() {
+  if ($('quest-overlay').hidden) return;
   $('quest-overlay').hidden = true;
+  popMusic();
+}
+$('quest-later').addEventListener('click', () => {
+  closeQuest();
   promptInput.focus();
 });
 $('quest-answer').addEventListener('keydown', (e) => {

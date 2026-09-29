@@ -1,6 +1,7 @@
-// Synthesized chiptune BGM and sound effects (Web Audio, no audio files).
-// Music: a 32-step (two-bar) sequencer per track, with the story theme picking
-// the track and the chapter transposing/speeding it up. SFX: short one-shots.
+// BGM and sound effects. Music: the recorded tracks in ./music (looped,
+// crossfaded), falling back to a synthesized chiptune sequencer for any
+// track without a file or whose file fails to load. SFX: short synthesized
+// one-shots (Web Audio).
 
 const STORE_KEY = 'pb-audio';
 let settings = { volume: 0.6, muted: false };
@@ -121,22 +122,99 @@ const CHAPTER_SHIFT = [0, 2, -3, 5, -2, 3];
 
 let music = null; // { id, track, step, nextTime, timer, transpose, bpm }
 
-export function playMusic(key, { chapter = 1 } = {}) {
+// Recorded tracks (Suno), keyed like TRACKS; a missing/broken one falls back.
+const FILE_TRACKS = new Set(['title', 'adventure', 'demon-king', 'debug-quest', 'boss', 'shop', 'forge', 'quest']);
+const brokenFiles = new Set();
+const FILE_GAIN = 0.9;
+const FADE = 0.7;
+let fileMusic = null; // { key, el, gain }
+let current = null; // last playMusic request, for push/pop
+const stack = [];
+
+function fadeOutFile() {
+  if (!fileMusic) return;
+  const { el, gain } = fileMusic;
+  fileMusic = null;
+  const t = ctx.currentTime;
+  gain.gain.cancelScheduledValues(t);
+  gain.gain.setValueAtTime(gain.gain.value, t);
+  gain.gain.linearRampToValueAtTime(0, t + FADE);
+  setTimeout(() => {
+    el.pause();
+    el.removeAttribute('src');
+    el.load();
+  }, FADE * 1000 + 50);
+}
+
+function playFile(key, opts) {
+  const el = new Audio(`music/${key}.m4a`);
+  el.loop = true;
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  ctx.createMediaElementSource(el).connect(gain).connect(musicGain);
+  const t = ctx.currentTime;
+  gain.gain.linearRampToValueAtTime(FILE_GAIN, t + FADE);
+  const fallback = () => {
+    if (brokenFiles.has(key)) return;
+    brokenFiles.add(key);
+    if (fileMusic?.el === el) {
+      fileMusic = null;
+      playMusic(key, opts);
+    }
+  };
+  el.addEventListener('error', fallback);
+  el.play().catch(fallback);
+  fileMusic = { key, el, gain };
+}
+
+export function playMusic(key, opts = {}) {
+  current = { key, opts };
+  const useFile = FILE_TRACKS.has(key) && !brokenFiles.has(key);
+  if (useFile) {
+    if (fileMusic?.key === key) return;
+    ensure();
+    stopSynth();
+    fadeOutFile();
+    playFile(key, opts);
+    return;
+  }
+  playSynth(key, opts);
+}
+
+// Temporarily switch (e.g. the quest window), then go back.
+export function pushMusic(key) {
+  if (current) stack.push(current);
+  playMusic(key);
+}
+export function popMusic() {
+  const prev = stack.pop();
+  if (prev) playMusic(prev.key, prev.opts);
+}
+
+function playSynth(key, { chapter = 1 } = {}) {
   const track = TRACKS[key] ?? TRACKS.adventure;
   const transpose = CHAPTER_SHIFT[(chapter - 1) % CHAPTER_SHIFT.length];
   const bpm = Math.min(track.bpm + (chapter - 1) * 4, track.bpm + 24);
   const id = `${key}:${transpose}:${bpm}`;
   if (music && music.id === id) return;
-  stopMusic();
+  stopSynth();
   ensure();
+  fadeOutFile();
   music = { id, track, step: 0, nextTime: ctx.currentTime + 0.08, transpose, bpm };
   music.timer = setInterval(scheduleMusic, 25);
 }
 
-export function stopMusic() {
+function stopSynth() {
   if (!music) return;
   clearInterval(music.timer);
   music = null;
+}
+
+export function stopMusic() {
+  stopSynth();
+  if (ctx) fadeOutFile();
+  current = null;
+  stack.length = 0;
 }
 
 function scheduleMusic() {
