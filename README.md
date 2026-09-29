@@ -93,7 +93,9 @@ AI가 답을 요구하면 퀘스트 창이 크게 뜬다. 선택지를 누르거
 
 "오늘 모험 종료하기" 또는 "이어하기". 종료해도 진행 층, 코인, 가방, 무기 강화, 이 폴더의 Claude 세션과 대화 기록이 저장된다. 세션마다 게임 상태가 자동 저장되어 세션을 골라 이어하면 그대로 이어진다.
 
-## Mac 앱
+## 데스크톱 앱 (Mac · Linux · Windows)
+
+[GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases)에서 OS에 맞는 파일을 받으면 된다: Mac(Apple Silicon)은 `.dmg`, Linux(x64)는 `.AppImage`(`chmod +x` 후 실행), Windows(x64)는 설치 `.exe`. 직접 빌드하려면:
 
 ```bash
 git clone https://github.com/tpgusgh/prompt-engineering-is-game.git
@@ -102,9 +104,11 @@ npm install
 npm run electron:build
 ```
 
-`release/` 폴더에 `.dmg`가 생긴다. 열어서 프롬프트 배틀을 응용 프로그램 폴더로 드래그하거나, 빌드된 `.app`을 바로 실행하면 된다.
+Mac에서 실행하면 `release/` 폴더에 `.dmg`가 생긴다 (Linux/Windows는 `npx electron-builder --linux` / `--win`). 열어서 프롬프트 배틀을 응용 프로그램 폴더로 드래그하거나, 빌드된 `.app`을 바로 실행하면 된다.
 
-**처음 실행할 때:** macOS가 "확인되지 않은 개발자" 경고를 띄울 수 있다 — 공증(notarization)을 받지 않은 앱이라서 그렇다 (유료 Apple Developer 계정 필요). 앱을 우클릭 → 열기 → 확인. 한 번만 하면 된다. (Mac에 Apple Development 서명 인증서가 있으면 `electron-builder`가 자동으로 사용해서 경고가 안 뜰 수도 있다.) 현재는 Apple Silicon(arm64)만 지원.
+**처음 실행할 때:** macOS가 "확인되지 않은 개발자" 경고를 띄울 수 있다 — 공증(notarization)을 받지 않은 앱이라서 그렇다 (유료 Apple Developer 계정 필요). 앱을 우클릭 → 열기 → 확인. 한 번만 하면 된다. (Mac에 Apple Development 서명 인증서가 있으면 `electron-builder`가 자동으로 사용해서 경고가 안 뜰 수도 있다.) Mac은 현재 Apple Silicon(arm64)만 지원.
+
+**Windows:** 서명되지 않은 설치 파일이라 SmartScreen이 "Windows의 PC 보호"를 띄울 수 있다 — 추가 정보 → 실행. **Linux:** AppImage 실행에 FUSE가 필요할 수 있다(`libfuse2`).
 
 ## CLI
 
@@ -118,12 +122,12 @@ promptbattle --difficulty normal
 
 ## 버전 / 릴리스
 
-버전은 [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases)로 관리한다. 릴리스마다 `.dmg`가 첨부되어 있어 빌드 없이 받아서 설치할 수 있다. 변경 내역은 [CHANGELOG.md](CHANGELOG.md).
+버전은 [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases)로 관리한다. 릴리스마다 Mac `.dmg`, Linux `.AppImage`, Windows `.exe`가 첨부되어 있어 빌드 없이 받아서 설치할 수 있다. 변경 내역은 [CHANGELOG.md](CHANGELOG.md).
 
 새 버전 내기 (관리자용):
 ```bash
 npm version minor        # package.json 버전 올리고 vX.Y.Z 태그 생성
-npm run release          # 테스트 → .dmg 빌드 → 태그 푸시 → GitHub 릴리스에 .dmg 첨부
+npm run release          # 테스트 → Mac/Linux/Windows 빌드 → 태그 푸시 → GitHub 릴리스에 첨부
 ```
 
 ## 설정

@@ -41,10 +41,38 @@
         "dmg"
       ],
       "category": "public.app-category.developer-tools",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "files": [
+        "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-win32-*/**"
+      ]
     },
     "directories": {
       "output": "release"
-    }
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "files": [
+        "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-win32-*/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl/**"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false,
+      "files": [
+        "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**"
+      ]
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   }
 }

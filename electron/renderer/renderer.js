@@ -949,7 +949,7 @@ function treeStatus(text, isError) {
   treeStatus.timer = setTimeout(() => (el.hidden = true), 3500);
 }
 
-const baseName = (p) => p.split('/').filter(Boolean).pop();
+const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop();
 
 // A drop onto a folder (or the empty tree area = project root): an entry
 // dragged from the tree moves; files dragged in from Finder are copied.
@@ -1751,7 +1751,7 @@ $('session-close').addEventListener('click', () => ($('session-overlay').hidden 
 // the setup screen with the slot's folder, theme, weapon and state.
 function slotSummary(slot) {
   const theme = THEMES.find((t) => t.id === slot.themeId);
-  const folderName = slot.cwd.split('/').filter(Boolean).pop();
+  const folderName = slot.cwd.split(/[\\/]/).filter(Boolean).pop();
   return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 무기 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
 }
 

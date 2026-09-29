@@ -93,7 +93,9 @@ Enhance your weapon with coins (up to +10). Success gets less likely as it climb
 
 "End today's adventure" or "keep playing". Ending saves your floor, coins, bag, weapon level, and this folder's Claude session and chat history. Each session also autosaves the game state, so resuming a session resumes the run.
 
-## Mac App
+## Desktop App (Mac · Linux · Windows)
+
+Grab the file for your OS from [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases): `.dmg` for Mac (Apple Silicon), `.AppImage` for Linux x64 (`chmod +x`, then run), the installer `.exe` for Windows x64. To build it yourself:
 
 ```bash
 git clone https://github.com/tpgusgh/prompt-engineering-is-game.git
@@ -102,9 +104,11 @@ npm install
 npm run electron:build
 ```
 
-This produces a `.dmg` under `release/`. Open it and drag Prompt Battle into Applications, or run the built `.app` directly.
+On a Mac this produces a `.dmg` under `release/` (Linux/Windows: `npx electron-builder --linux` / `--win`). Open it and drag Prompt Battle into Applications, or run the built `.app` directly.
 
-**First launch:** macOS may say the app "cannot be opened because the developer cannot be verified" — it isn't notarized (that needs a paid Apple Developer account). Right-click the app → Open, then confirm. Only needed once. (If your machine has an Apple Development signing identity, `electron-builder` uses it automatically and you may see no warning.) Apple Silicon (arm64) only for now.
+**First launch:** macOS may say the app "cannot be opened because the developer cannot be verified" — it isn't notarized (that needs a paid Apple Developer account). Right-click the app → Open, then confirm. Only needed once. (If your machine has an Apple Development signing identity, `electron-builder` uses it automatically and you may see no warning.) Mac builds are Apple Silicon (arm64) only for now.
+
+**Windows:** the installer isn't signed, so SmartScreen may show "Windows protected your PC" — More info → Run anyway. **Linux:** AppImages may need FUSE (`libfuse2`).
 
 ## CLI
 
@@ -118,12 +122,12 @@ Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to
 
 ## Versions / releases
 
-Versions are published as [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases), each with the `.dmg` attached, so you can install without building. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Versions are published as [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases), each with the Mac `.dmg`, Linux `.AppImage` and Windows `.exe` attached, so you can install without building. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 Cutting a release (maintainers):
 ```bash
 npm version minor        # bump package.json and create the vX.Y.Z tag
-npm run release          # test → build .dmg → push the tag → GitHub release with the .dmg
+npm run release          # test → Mac/Linux/Windows builds → push the tag → GitHub release with all three
 ```
 
 ## Setup

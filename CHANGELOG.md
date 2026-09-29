@@ -1,5 +1,11 @@
 # 변경 내역 / Changelog
 
+## v0.15.0 — 2026-09-29
+
+### 새 기능
+- **Linux · Windows 버전**: 릴리스마다 Mac `.dmg`와 함께 Linux(x64) `.AppImage`, Windows(x64) 설치 `.exe`를 올린다. 각 빌드에는 그 OS용 Claude Code 실행 파일만 들어간다
+- Windows 경로(`\`)에서도 인벤토리 파일 이름과 저장 슬롯 폴더 이름이 제대로 보이게 수정
+
 ## v0.14.0 — 2026-09-29
 
 ### 변경

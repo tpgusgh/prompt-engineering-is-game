@@ -23,15 +23,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Only in a packaged app does the SDK's native `claude` binary need to be
 // found at its asarUnpack'd path instead of the SDK's own default lookup —
-// see the comment on executableOverrideOptions() in src/agent.ts. Mac
-// arm64-only for v1, matching this project's only electron-builder target.
+// see the comment on executableOverrideOptions() in src/agent.ts. Each
+// build ships only its own platform's package (see "build" in package.json).
 if (app.isPackaged) {
   process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE = path.join(
     process.resourcesPath,
     'app.asar.unpacked',
     'node_modules',
-    '@anthropic-ai/claude-agent-sdk-darwin-arm64',
-    'claude',
+    `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`,
+    process.platform === 'win32' ? 'claude.exe' : 'claude',
   );
 }
 
