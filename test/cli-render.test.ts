@@ -19,7 +19,7 @@ test('hesitate prints the hesitate line', () => {
 });
 
 test('turnStart prints a working indicator', () => {
-  const out = stripAnsi(formatBattleEvent({ type: 'turnStart' }));
+  const out = stripAnsi(formatBattleEvent({ type: 'turnStart', prompt: 'fix it' }));
   assert.equal(out, 'Focusing your attack...\n');
 });
 
@@ -67,6 +67,18 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'chapterCleared', chapter: 1 },
     { type: 'sessionReset' },
     { type: 'sessionNearlyFull', usedTokens: 170000, contextWindow: 200000 },
+    { type: 'sessionSaved', sessionId: 's1' },
+    { type: 'fleeAttempt', success: true },
+    { type: 'fleeBlocked' },
+    { type: 'coinsChanged', coins: 20, gained: 10 },
+    { type: 'merchantOpen', coins: 20, items: [] },
+    { type: 'purchased', itemId: 'potion', coins: 0 },
+    { type: 'purchaseFailed', itemId: 'crystal', reason: 'poor' },
+    { type: 'merchantClosed' },
+    { type: 'bagChanged', bag: { potion: 1 } },
+    { type: 'itemUsed', itemId: 'potion' },
+    { type: 'itemUseFailed', itemId: 'potion' },
+    { type: 'counterBlocked' },
   ];
   for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);
 });
@@ -92,4 +104,20 @@ test('floorCleared prints the victory line with XP', () => {
 
 test('runEnded prints nothing (cli.ts prints its own final summary from the returned BattleSummary)', () => {
   assert.equal(formatBattleEvent({ type: 'runEnded', floorsCleared: 3, floorsEngaged: 3, xpGained: 75 }), '');
+});
+
+test('merchantOpen lists every item with its /buy id and price', () => {
+  const out = stripAnsi(
+    formatBattleEvent({ type: 'merchantOpen', coins: 40, items: [{ id: 'potion', name: '회복 물약', price: 30, description: 'HP 40 회복' }] }),
+  );
+  assert.match(out, /\/buy potion/);
+  assert.match(out, /30/);
+  assert.match(out, /40 coins/);
+});
+
+test('fleeAttempt reports success and failure differently', () => {
+  assert.notEqual(
+    stripAnsi(formatBattleEvent({ type: 'fleeAttempt', success: true })),
+    stripAnsi(formatBattleEvent({ type: 'fleeAttempt', success: false })),
+  );
 });

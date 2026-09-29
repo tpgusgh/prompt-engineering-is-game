@@ -120,3 +120,34 @@ export function monsterSvg(index, isBoss) {
     ${isBoss ? BOSS_CROWN : ''}
   </svg>`;
 }
+
+// The merchant goblin: a friendly goblin with a pointed hat, a pack of wares
+// and a coin. Same viewBox/animation class as the monsters.
+const MERCHANT = `<defs>
+    <radialGradient id="mer-skin" cx="45%" cy="40%" r="65%"><stop offset="0%" stop-color="#b6ec8a"/><stop offset="100%" stop-color="#4f8f2f"/></radialGradient>
+    <radialGradient id="mer-coin" cx="40%" cy="35%" r="70%"><stop offset="0%" stop-color="#fff2b0"/><stop offset="100%" stop-color="#c9982a"/></radialGradient>
+  </defs>
+  <ellipse cx="100" cy="188" rx="60" ry="8" fill="#000" opacity=".35"/>
+  <path d="M134 110 Q182 100 180 150 Q178 184 138 180 Z" fill="#8a5a2b" stroke="#4e3115" stroke-width="3"/>
+  <path d="M142 118 Q170 116 170 136" stroke="#c49a5a" stroke-width="3" fill="none"/>
+  <path d="M58 150 Q100 124 142 150 L136 184 L64 184 Z" fill="#4c6fa5" stroke="#2c4570" stroke-width="3"/>
+  <rect x="64" y="160" width="72" height="8" fill="#ebcb8b"/>
+  <polygon points="46,92 12,78 52,112" fill="#6fb843" stroke="#2f5f1b" stroke-width="3"/>
+  <polygon points="154,92 188,78 148,112" fill="#6fb843" stroke="#2f5f1b" stroke-width="3"/>
+  <circle cx="100" cy="108" r="50" fill="url(#mer-skin)" stroke="#2f5f1b" stroke-width="3"/>
+  <path d="M46 76 Q100 60 154 76 L100 -2 Z" fill="#b04a5a" stroke="#6e2230" stroke-width="3"/>
+  <ellipse cx="100" cy="74" rx="58" ry="10" fill="#8e3445" stroke="#6e2230" stroke-width="3"/>
+  <circle cx="100" cy="0" r="7" fill="#ebcb8b"/>
+  <path d="M70 102 Q80 94 90 102" stroke="#1b1b1b" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M110 102 Q120 94 130 102" stroke="#1b1b1b" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="72" cy="118" rx="7" ry="4" fill="#e88a9a" opacity=".6"/><ellipse cx="128" cy="118" rx="7" ry="4" fill="#e88a9a" opacity=".6"/>
+  <path d="M80 124 Q100 142 120 124" stroke="#3b1a12" stroke-width="4" fill="#3b1a12" stroke-linecap="round"/>
+  <rect x="93" y="124" width="7" height="7" fill="#fffbe6"/>
+  <circle cx="44" cy="150" r="17" fill="url(#mer-coin)" stroke="#8a6d2b" stroke-width="3"/>
+  <text x="44" y="156" text-anchor="middle" font-size="16" font-weight="bold" fill="#8a6d2b" font-family="monospace">$</text>`;
+
+export function merchantSvg() {
+  return `<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+    <g class="monster-body">${MERCHANT}</g>
+  </svg>`;
+}

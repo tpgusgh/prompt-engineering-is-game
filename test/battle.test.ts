@@ -20,6 +20,7 @@ function makeFakeDeps(inputs: string[], turnResult: TurnResult = { summary: 'ok'
       onBattleEvent: (event: BattleEvent) => events.push(event),
       cwd: '/fake/cwd',
       difficulty: 'normal' as const,
+      random: () => 0.99, // no merchant, flee fails — override per test
     },
     events,
     runTurnCalls,
@@ -58,12 +59,6 @@ test('EOF (null input) ends the run immediately with no floors cleared or engage
   assert.equal(runTurnCalls.length, 0);
 });
 
-test('/flee behaves the same as /quit', async () => {
-  const { deps } = makeFakeDeps([ONE_SHOT_PROMPT, '/flee']);
-  const summary = await runDungeon(deps);
-  assert.equal(summary.floorsCleared, 1);
-  assert.equal(summary.floorsEngaged, 1);
-});
 
 test('an agent turn that throws emits an agentError event and deals no damage', async () => {
   let calls = 0;
@@ -239,7 +234,8 @@ test('emits a final runEnded event matching the returned summary', async () => {
   }
 });
 
-const WEAK_PROMPT = 'x'; // 10 damage, no crit — floor 0's 60-HP goblin survives it
+const WEAK_PROMPT = 'x';
+const WEAK_PROMPT_2 = 'y'; // same 10 damage, distinguishable in runTurn calls // 10 damage, no crit — floor 0's 60-HP goblin survives it
 
 test('the monster counterattacks after every real turn it survives', async () => {
   const { deps, events } = makeFakeDeps([WEAK_PROMPT, '/quit']);
@@ -349,4 +345,145 @@ test('warns once when the session context passes 80% of the window', async () =>
   const warnings = events.filter((e) => e.type === 'sessionNearlyFull');
   assert.equal(warnings.length, 1);
   assert.ok(warnings[0].type === 'sessionNearlyFull' && warnings[0].usedTokens === 170000 && warnings[0].contextWindow === 200000);
+});
+
+// Returns the given values in order, then repeats the last one.
+function seq(...values: number[]) {
+  let i = 0;
+  return () => values[Math.min(i++, values.length - 1)];
+}
+
+test('successful flee (roll < 0.5) skips to the next floor with no XP, no coins, no heal', async () => {
+  const { deps, events, runTurnCalls } = makeFakeDeps(['/flee', '/quit']);
+  const summary = await runDungeon({ ...deps, random: () => 0.1 });
+  assert.ok(events.some((e) => e.type === 'fleeAttempt' && e.success));
+  const floors = events.filter((e) => e.type === 'floorStart').map((e) => (e.type === 'floorStart' ? e.floor : -1));
+  assert.deepEqual(floors, [0, 1]);
+  assert.equal(summary.floorsCleared, 0);
+  assert.equal(summary.xpGained, 0);
+  assert.equal(summary.coins, 0);
+  assert.equal(summary.nextFloor, 1);
+  assert.equal(runTurnCalls.length, 0);
+});
+
+test('failed flee costs the turn: the monster counterattacks and the floor stays', async () => {
+  const { deps, events } = makeFakeDeps(['/flee', '/quit']);
+  await runDungeon({ ...deps, random: () => 0.9 });
+  assert.ok(events.some((e) => e.type === 'fleeAttempt' && !e.success));
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 6);
+  assert.equal(events.filter((e) => e.type === 'floorStart').length, 1);
+});
+
+test('cannot flee from a boss, and trying costs nothing', async () => {
+  const { deps, events } = makeFakeDeps(['/flee', '/quit']);
+  await runDungeon({ ...deps, startFloor: 5, random: () => 0.1 });
+  assert.ok(events.some((e) => e.type === 'fleeBlocked'));
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 0);
+});
+
+test('clearing a floor earns coins (boss pays triple); coins carry over from startCoins', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 5 });
+  assert.ok(events.some((e) => e.type === 'coinsChanged' && e.gained === 10 && e.coins === 15));
+  assert.equal(summary.coins, 15);
+
+  const boss = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const bossSummary = await runDungeon({ ...boss.deps, startFloor: 5, getDamageMultiplier: () => 10 });
+  assert.equal(bossSummary.coins, (10 + 5 * 2) * 3);
+});
+
+test('the merchant appears after a clear on a low roll; /buy spends coins, /leave moves on', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/buy potion', '/buy crystal', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 50, random: seq(0.1, 0.99) });
+  assert.ok(events.some((e) => e.type === 'merchantOpen' && e.coins === 60));
+  assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'potion' && e.coins === 30));
+  assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'crystal'), '30 coins cannot buy an 80-coin crystal');
+  assert.ok(events.some((e) => e.type === 'merchantClosed'));
+  assert.equal(summary.coins, 30);
+  assert.deepEqual(summary.bag, { potion: 1 });
+});
+
+test('typing a prompt at the merchant closes the shop and attacks the next monster with it', async () => {
+  const { deps, runTurnCalls } = makeFakeDeps([ONE_SHOT_PROMPT, WEAK_PROMPT_2, '/quit']);
+  await runDungeon({ ...deps, random: seq(0.1, 0.99) });
+  assert.deepEqual(runTurnCalls, [ONE_SHOT_PROMPT, WEAK_PROMPT_2]);
+});
+
+test('life crystal raises max HP permanently and is reported in the summary', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/buy crystal', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 100, random: seq(0.1, 0.99) });
+  assert.equal(summary.playerMaxHp, 110);
+  assert.ok(events.some((e) => e.type === 'playerHpChanged' && e.maxHp === 110));
+  assert.deepEqual(summary.bag, {});
+});
+
+test('/use potion heals as a free action (no counterattack) and consumes the item', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/use potion', '/use potion', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { potion: 1 }, playerMaxHp: 100 });
+  const hp = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : -1));
+  assert.deepEqual(hp, [94, 100]);
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1, 'only the attack drew a counter');
+  assert.ok(events.some((e) => e.type === 'itemUseFailed' && e.itemId === 'potion'), 'second use: none left');
+  assert.deepEqual(summary.bag, {});
+});
+
+test('whetstone doubles the next attack only', async () => {
+  const { deps, events } = makeFakeDeps(['/use whetstone', WEAK_PROMPT_2, WEAK_PROMPT_2, '/quit']);
+  await runDungeon({ ...deps, bag: { whetstone: 1 } });
+  const attacks = events.filter((e) => e.type === 'attack').map((e) => (e.type === 'attack' ? e.damage : -1));
+  assert.deepEqual(attacks, [20, 10]);
+});
+
+test('amulet blocks the next counterattack', async () => {
+  const { deps, events } = makeFakeDeps(['/use amulet', WEAK_PROMPT_2, WEAK_PROMPT_2, '/quit']);
+  await runDungeon({ ...deps, bag: { amulet: 1 } });
+  assert.equal(events.filter((e) => e.type === 'counterBlocked').length, 1);
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1);
+});
+
+test('smoke bomb flees for sure; wasted on a boss it is not consumed', async () => {
+  const { deps, events } = makeFakeDeps(['/use smoke', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { smoke: 1 } });
+  assert.ok(events.some((e) => e.type === 'fleeAttempt' && e.success));
+  assert.deepEqual(summary.bag, {});
+
+  const boss = makeFakeDeps(['/use smoke', '/quit']);
+  const bossSummary = await runDungeon({ ...boss.deps, startFloor: 5, bag: { smoke: 1 } });
+  assert.ok(boss.events.some((e) => e.type === 'fleeBlocked'));
+  assert.deepEqual(bossSummary.bag, { smoke: 1 });
+});
+
+test('turnStart carries the prompt text (for chat history)', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'turnStart' && e.prompt === WEAK_PROMPT_2));
+});
+
+test('initialSessionId resumes a saved session; each adopted id is announced via sessionSaved', async () => {
+  const seen: (string | undefined)[] = [];
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  deps.runTurn = async (_p: string, _c: string, sessionId?: string) => {
+    seen.push(sessionId);
+    return { summary: '', filesChanged: [], commandsRun: [], sessionId: 'saved-1' };
+  };
+  await runDungeon({ ...deps, initialSessionId: 'saved-1' });
+  assert.deepEqual(seen, ['saved-1']);
+  assert.ok(events.some((e) => e.type === 'sessionSaved' && e.sessionId === 'saved-1'));
+});
+
+test('a resumed session that fails before ever succeeding is dropped for a fresh one', async () => {
+  const seen: (string | undefined)[] = [];
+  let n = 0;
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, WEAK_PROMPT_2, '/quit']);
+  deps.runTurn = async (_p: string, _c: string, sessionId?: string) => {
+    seen.push(sessionId);
+    n += 1;
+    return n === 1
+      ? { summary: '', filesChanged: [], commandsRun: [], error: 'No conversation found' }
+      : { summary: '', filesChanged: [], commandsRun: [], sessionId: 'fresh' };
+  };
+  await runDungeon({ ...deps, initialSessionId: 'stale' });
+  assert.deepEqual(seen, ['stale', undefined]);
+  assert.ok(events.some((e) => e.type === 'sessionReset'));
 });

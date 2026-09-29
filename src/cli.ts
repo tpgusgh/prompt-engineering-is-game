@@ -4,7 +4,7 @@ import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { runDungeon, type BattleSummary } from './battle.ts';
 import { runAgentTurn } from './agent.ts';
-import { loadProfile, saveProfile, addXp } from './profile.ts';
+import { loadProfile, saveProfile, applyRun } from './profile.ts';
 import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
 import { formatBattleEvent } from './cli-render.ts';
@@ -28,6 +28,9 @@ async function main(): Promise<void> {
       runTurn: runAgentTurn,
       cwd: process.cwd(),
       difficulty,
+      coins: profile.coins,
+      bag: profile.bag,
+      playerMaxHp: profile.maxHp,
       onBattleEvent: (event) => stdout.write(formatBattleEvent(event)),
       readInput: async () => {
         stdout.write('\n> ');
@@ -39,14 +42,12 @@ async function main(): Promise<void> {
     rl.close();
   }
 
-  const updated = addXp(profile, summary.xpGained);
-  updated.totalWins += summary.floorsCleared;
-  updated.totalBattles += summary.floorsEngaged;
+  const updated = applyRun(profile, summary, undefined);
   await saveProfile(updated);
 
   console.log(
     colorize(
-      `\nRun complete: ${summary.floorsCleared} floor(s) cleared, +${summary.xpGained} XP. Now level ${updated.level} (${updated.xp} total XP).`,
+      `\nRun complete: ${summary.floorsCleared} floor(s) cleared, +${summary.xpGained} XP, ${summary.coins} coins. Now level ${updated.level} (${updated.xp} total XP).`,
       'bold',
     ),
   );

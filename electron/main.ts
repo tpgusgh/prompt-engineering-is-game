@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn } from '../src/agent.ts';
-import { loadProfile, saveProfile, addXp } from '../src/profile.ts';
+import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
+import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
+import { ITEMS } from '../src/items.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,7 +83,7 @@ let currentCwd: string | null = null;
 // The weapon (Claude model) in hand; switchable mid-run via set-model.
 let currentModel = DEFAULT_WEAPON_ID;
 
-ipcMain.handle('get-setup-info', async () => ({ profile: await loadProfile(), weapons: WEAPONS }));
+ipcMain.handle('get-setup-info', async () => ({ profile: await loadProfile(), weapons: WEAPONS, items: ITEMS }));
 
 ipcMain.handle('set-model', (_event, model: string) => {
   const weapon = getWeapon(model);
@@ -89,20 +91,49 @@ ipcMain.handle('set-model', (_event, model: string) => {
   return weapon;
 });
 
+ipcMain.handle('get-folder-session', (_event, cwd: string) => loadFolderSession(path.resolve(cwd)));
+
 ipcMain.handle(
   'start-run',
-  async (_event, options: { cwd: string; difficulty: Difficulty; model: string; themeId: string; startFloor: number }) => {
+  async (
+    _event,
+    options: { cwd: string; difficulty: Difficulty; model: string; themeId: string; startFloor: number; resumeSession: boolean },
+  ) => {
     const profile = await loadProfile();
     currentCwd = path.resolve(options.cwd);
     currentModel = getWeapon(options.model).model;
+    const cwd = currentCwd;
+
+    // The folder's session id + chat log, saved as the run goes so a crash
+    // or closed window loses nothing. Saves are chained to never interleave.
+    const folder: FolderSession = await loadFolderSession(cwd);
+    let saving = Promise.resolve();
+    const persistFolder = () => {
+      const snapshot = { ...folder, history: [...folder.history] };
+      saving = saving.then(() => saveFolderSession(cwd, snapshot)).catch(() => {});
+    };
+    const trackHistory = (event: BattleEvent) => {
+      if (event.type === 'turnStart') folder.history = appendHistory(folder.history, { role: 'user', text: event.prompt });
+      else if (event.type === 'agentSummary') folder.history = appendHistory(folder.history, { role: 'assistant', text: event.summary });
+      else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
+      else if (event.type === 'sessionSaved') folder.sessionId = event.sessionId;
+      else if (event.type === 'sessionReset') delete folder.sessionId;
+      else return;
+      persistFolder();
+    };
 
     const summary = await runDungeon({
       runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
-      cwd: currentCwd,
+      cwd,
       difficulty: options.difficulty,
+      coins: profile.coins,
+      bag: profile.bag,
+      playerMaxHp: profile.maxHp,
+      initialSessionId: options.resumeSession ? folder.sessionId : undefined,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier,
       onBattleEvent: (event: BattleEvent) => {
+        trackHistory(event);
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
       },
       readInput: () =>
@@ -111,14 +142,9 @@ ipcMain.handle(
         }),
     });
 
-    const updated = addXp(profile, summary.xpGained);
-    updated.totalWins += summary.floorsCleared;
-    updated.totalBattles += summary.floorsEngaged;
-    updated.storyChapters = {
-      ...updated.storyChapters,
-      [options.themeId]: Math.max(updated.storyChapters[options.themeId] ?? 0, summary.chaptersCleared),
-    };
+    const updated = applyRun(profile, summary, options.themeId);
     await saveProfile(updated);
+    await saving;
 
     return { summary, profile: updated };
   },
@@ -188,13 +214,6 @@ ipcMain.on('submit-prompt', (_event, text: string) => {
   }
 });
 
-ipcMain.on('flee', () => {
-  if (pendingInputResolve) {
-    const resolve = pendingInputResolve;
-    pendingInputResolve = null;
-    resolve('/flee');
-  }
-});
 
 // The OS's own icon for a touched file — used for the "throw the file at the
 // monster" flourish. Never reads the file's actual content (see

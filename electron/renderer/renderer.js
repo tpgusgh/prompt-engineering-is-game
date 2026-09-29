@@ -1,6 +1,6 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
-import { monsterSvg } from './monster-art.js';
+import { monsterSvg, merchantSvg } from './monster-art.js';
 
 const $ = (id) => document.getElementById(id);
 const setupScreen = $('setup-screen');
@@ -47,6 +47,19 @@ const fileViewerBodyEl = $('file-viewer-body');
 const fileViewerCloseBtn = $('file-viewer-close');
 const fileViewerSaveBtn = $('file-viewer-save');
 const fileViewerStatus = $('file-viewer-status');
+const resumeLabel = $('resume-label');
+const resumeCheckbox = $('resume-session');
+const resumeText = $('resume-text');
+const coinLabel = $('coin-label');
+const bagEl = $('bag');
+const merchantPanel = $('merchant-panel');
+const merchantArtEl = $('merchant-art');
+const merchantItemsEl = $('merchant-items');
+const merchantLeaveBtn = $('merchant-leave');
+const exitBtn = $('exit-btn');
+const exitOverlay = $('exit-overlay');
+const exitConfirmBtn = $('exit-confirm');
+const exitCancelBtn = $('exit-cancel');
 
 // ---------------------------------------------------------------------------
 // Story. Each theme is a chain of chapters; every chapter ends in a boss
@@ -95,6 +108,10 @@ function chapterInfo(theme, chapter) {
 }
 
 let weapons = [];
+let items = [];
+let coins = 0;
+let bag = {};
+let inputEnabled = false;
 let profile = null;
 let chosenFolder = null;
 let chosenThemeId = THEMES[0].id;
@@ -108,12 +125,15 @@ function weaponLabel(w) {
   return `${w.name} — ${w.flavor} (x${w.multiplier})`;
 }
 
+const savedFloor = (themeId) => profile?.storyFloors?.[themeId] ?? 0;
+const floorText = (floor) => `챕터 ${Math.floor(floor / 6) + 1} ${(floor % 6) + 1}/6층`;
+
 function refreshContinueOption() {
-  const cleared = profile?.storyChapters?.[chosenThemeId] ?? 0;
+  const floor = savedFloor(chosenThemeId);
   const theme = THEMES.find((t) => t.id === chosenThemeId);
-  if (cleared > 0 && theme) {
+  if (floor > 0 && theme) {
     continueLabel.hidden = false;
-    continueText.textContent = `이어하기: 챕터 ${cleared + 1} "${chapterInfo(theme, cleared + 1).title}"부터`;
+    continueText.textContent = `이어하기: ${floorText(floor)} "${chapterInfo(theme, Math.floor(floor / 6) + 1).title}"부터`;
   } else {
     continueLabel.hidden = true;
   }
@@ -123,7 +143,8 @@ async function loadSetup() {
   const info = await window.promptBattle.getSetupInfo();
   profile = info.profile;
   weapons = info.weapons;
-  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승`;
+  items = info.items;
+  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp}`;
 
   themeOptionsEl.textContent = '';
   for (const theme of THEMES) {
@@ -138,11 +159,11 @@ async function loadSetup() {
       refreshContinueOption();
     });
     label.append(input, ` ${theme.title}`);
-    const cleared = profile.storyChapters?.[theme.id] ?? 0;
-    if (cleared > 0) {
+    const floor = savedFloor(theme.id);
+    if (floor > 0) {
       const sub = document.createElement('span');
       sub.className = 'option-sub';
-      sub.textContent = `(챕터 ${cleared}까지 클리어)`;
+      sub.textContent = `(${floorText(floor)}까지 진행)`;
       label.append(sub);
     }
     themeOptionsEl.append(label);
@@ -175,9 +196,12 @@ loadSetup();
 // A turn can take a while (real file/bash work). Without this, a click while
 // one is in flight is silently dropped by main.ts (no pending resolver yet).
 function setInputEnabled(enabled) {
+  inputEnabled = enabled;
   promptInput.disabled = !enabled;
   attackSubmitBtn.disabled = !enabled;
   fleeBtn.disabled = !enabled;
+  exitBtn.disabled = !enabled;
+  for (const btn of document.querySelectorAll('.bag button, .merchant-panel button')) btn.disabled = !enabled;
 }
 
 // A turn emits several hpChanged events (one per partial hit, plus one at
@@ -194,16 +218,94 @@ pickFolderBtn.addEventListener('click', async () => {
     chosenFolder = folder;
     folderPathEl.textContent = folder;
     startBtn.disabled = false;
+    const saved = await window.promptBattle.getFolderSession(folder);
+    resumeLabel.hidden = !saved.sessionId;
+    resumeCheckbox.checked = true;
+    resumeText.textContent = `이 폴더의 이전 Claude 세션 이어가기 (대화 기록 ${saved.history.length}개)`;
   }
 });
+
+function scrollLogToBottom() {
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
 function appendLog(text, className) {
   const line = document.createElement('div');
   if (className) line.className = className;
   line.textContent = text;
   logEl.appendChild(line);
-  logEl.scrollTop = logEl.scrollHeight;
+  scrollLogToBottom();
   return line;
+}
+
+function appendUserChat(text, extraClass) {
+  const line = appendLog(text, `user-chat${extraClass ? ` ${extraClass}` : ''}`);
+  line.dataset.who = '나';
+  return line;
+}
+
+const itemName = (id) => items.find((i) => i.id === id)?.name ?? id;
+
+function renderCoins() {
+  coinLabel.textContent = `🪙 ${coins}`;
+}
+
+// The bag: each item is a button that uses it (a free action, no turn spent).
+function renderBag() {
+  bagEl.textContent = '';
+  const entries = Object.entries(bag).filter(([, n]) => n > 0);
+  bagEl.hidden = entries.length === 0;
+  for (const [id, count] of entries) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = `${itemName(id)} x${count}`;
+    btn.title = items.find((i) => i.id === id)?.description ?? '';
+    btn.disabled = !inputEnabled;
+    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/use ${id}`));
+    bagEl.append(btn);
+  }
+}
+
+function openMerchant(event) {
+  monsterPanel.hidden = true;
+  fleeBtn.disabled = true; // nothing to flee from in the shop
+  merchantPanel.hidden = false;
+  merchantArtEl.innerHTML = merchantSvg();
+  merchantItemsEl.textContent = '';
+  for (const item of event.items) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'merchant-item';
+    btn.disabled = !inputEnabled;
+    const name = document.createElement('strong');
+    name.textContent = item.name;
+    const desc = document.createElement('span');
+    desc.textContent = item.description;
+    const price = document.createElement('span');
+    price.className = 'price';
+    price.textContent = `🪙 ${item.price}`;
+    btn.append(name, desc, price);
+    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${item.id}`));
+    merchantItemsEl.append(btn);
+  }
+}
+
+function closeMerchant() {
+  merchantPanel.hidden = true;
+  monsterPanel.hidden = false;
+  fleeBtn.disabled = !inputEnabled;
+}
+
+// Previous chats in this folder, shown dimmed above today's adventure.
+function renderHistory(history) {
+  if (history.length === 0) return;
+  const shown = history.slice(-50);
+  appendLog(`— 이 폴더의 이전 대화 기록 (${shown.length}/${history.length}) —`, 'history-header');
+  for (const entry of shown) {
+    if (entry.role === 'user') appendUserChat(entry.text, 'history');
+    else renderMarkdownLog(entry.text, 'history');
+  }
+  appendLog('— 오늘의 모험 —', 'history-header');
 }
 
 function setBar(fillEl, labelEl, hp, maxHp, suffix) {
@@ -244,15 +346,15 @@ const weaponName = () => weapons.find((w) => w.model === weaponSelect.value)?.na
 // Renders the AI's markdown reply properly (headers/bold/lists). If it ends
 // with a question followed by a list, the list items become clickable
 // choices that fill the input.
-function renderMarkdownLog(text) {
+function renderMarkdownLog(text, extraClass) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'markdown';
+  wrapper.className = `markdown${extraClass ? ` ${extraClass}` : ''}`;
   wrapper.innerHTML = marked.parse(text);
   logEl.appendChild(wrapper);
 
   const children = Array.from(wrapper.children);
   const lastList = children[children.length - 1];
-  if (lastList && (lastList.tagName === 'UL' || lastList.tagName === 'OL')) {
+  if (!extraClass && lastList && (lastList.tagName === 'UL' || lastList.tagName === 'OL')) {
     const priorText = children[children.length - 2];
     if (priorText && /[?？]\s*$/.test(priorText.textContent.trim())) {
       const buttonRow = document.createElement('div');
@@ -271,7 +373,7 @@ function renderMarkdownLog(text) {
       logEl.appendChild(buttonRow);
     }
   }
-  logEl.scrollTop = logEl.scrollHeight;
+  scrollLogToBottom();
 }
 
 // The touched file's real OS icon flies from the input to the monster.
@@ -453,6 +555,7 @@ function renderBattleEvent(event) {
       turnConcluded();
       break;
     case 'turnStart':
+      appendUserChat(event.prompt);
       turnStatusEl.hidden = false;
       turnStatusEl.textContent = `AI가 ${weaponName()}을(를) 들고 작업 중...`;
       break;
@@ -525,6 +628,56 @@ function renderBattleEvent(event) {
       sessionBannerPrompt.textContent = continuationPrompt();
       sessionBanner.hidden = false;
       break;
+    case 'sessionSaved':
+      break;
+    case 'fleeAttempt':
+      appendLog(event.success ? '도망쳤다! 보상 없이 다음 층으로 향한다.' : '도망치지 못했다! 한 턴을 날렸다.', event.success ? 'story-line' : 'error');
+      break;
+    case 'fleeBlocked':
+      appendLog('보스에게선 도망칠 수 없다!', 'error');
+      break;
+    case 'coinsChanged':
+      coins = event.coins;
+      renderCoins();
+      appendLog(`🪙 +${event.gained} 코인 (보유 ${event.coins})`, 'coin-line');
+      break;
+    case 'merchantOpen':
+      coins = event.coins;
+      renderCoins();
+      appendLog('상인 고블린이 나타났다! "헤헤, 구경하고 가~"', 'coin-line');
+      openMerchant(event);
+      break;
+    case 'purchased':
+      coins = event.coins;
+      renderCoins();
+      appendLog(`${itemName(event.itemId)}을(를) 샀다! (남은 코인 ${event.coins})`, 'victory');
+      break;
+    case 'purchaseFailed':
+      appendLog(`살 수 없다: ${event.reason}`, 'error');
+      break;
+    case 'merchantClosed':
+      appendLog('상인 고블린: "또 와~"', 'story-line');
+      closeMerchant();
+      break;
+    case 'bagChanged':
+      bag = event.bag;
+      renderBag();
+      break;
+    case 'itemUsed': {
+      const lines = {
+        potion: '회복 물약을 마셨다! 체력이 회복된다.',
+        whetstone: '숫돌로 무기를 갈았다! 다음 공격은 2배.',
+        amulet: '수호의 부적이 빛난다! 다음 반격을 막아준다.',
+      };
+      appendLog(lines[event.itemId] ?? `${itemName(event.itemId)} 사용!`, 'victory');
+      break;
+    }
+    case 'itemUseFailed':
+      appendLog(`${itemName(event.itemId)}을(를) 쓸 수 없다.`, 'error');
+      break;
+    case 'counterBlocked':
+      appendLog(`${currentMonsterName}의 반격을 수호의 부적이 막아냈다!`, 'victory');
+      break;
     case 'runEnded':
       break;
   }
@@ -536,8 +689,9 @@ startBtn.addEventListener('click', async () => {
   if (!chosenFolder) return;
   const difficulty = document.querySelector('input[name="difficulty"]:checked').value;
   activeTheme = THEMES.find((t) => t.id === chosenThemeId) || THEMES[0];
-  const cleared = profile?.storyChapters?.[activeTheme.id] ?? 0;
-  const startFloor = cleared > 0 && continueCheckbox.checked ? cleared * 6 : 0;
+  const floor = savedFloor(activeTheme.id);
+  const startFloor = floor > 0 && continueCheckbox.checked ? floor : 0;
+  const resumeSession = !resumeLabel.hidden && resumeCheckbox.checked;
   weaponSelect.value = chosenWeapon;
   touchedFiles.clear();
   lastSummary = '';
@@ -546,20 +700,29 @@ startBtn.addEventListener('click', async () => {
   setupScreen.hidden = true;
   dungeonScreen.hidden = false;
   logEl.textContent = '';
+  coins = profile.coins;
+  bag = { ...profile.bag };
+  renderCoins();
+  closeMerchant();
+  exitOverlay.hidden = true;
   setInputEnabled(true);
+  renderBag();
+  const saved = await window.promptBattle.getFolderSession(chosenFolder);
+  renderHistory(saved.history);
+  if (resumeSession) appendLog('이전 세션을 이어서 모험을 계속한다.', 'story-line');
   try {
-    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor });
+    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, resumeSession });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated } = await runPromise;
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;
     summaryTitleEl.textContent = summary.defeated ? '패배...' : '런 종료';
-    summaryTextEl.textContent = `${summary.floorsCleared}층 클리어, +${summary.xpGained} XP 획득. 현재 레벨 ${updated.level} (총 ${updated.xp} XP).`;
-    const nextChapter = summary.chaptersCleared + 1;
+    summaryTextEl.textContent = `${summary.floorsCleared}층 클리어, +${summary.xpGained} XP 획득, 보유 코인 ${summary.coins}. 현재 레벨 ${updated.level} (총 ${updated.xp} XP).`;
+    const resumeFloor = savedFloor(activeTheme.id);
     summaryStoryEl.textContent =
-      summary.chaptersCleared > 0
-        ? `${activeTheme.title}: 챕터 ${summary.chaptersCleared}까지 클리어. 다음엔 챕터 ${nextChapter} "${chapterInfo(activeTheme, nextChapter).title}"부터 이어할 수 있다.`
+      resumeFloor > 0
+        ? `${activeTheme.title}: 다음엔 ${floorText(resumeFloor)} "${chapterInfo(activeTheme, Math.floor(resumeFloor / 6) + 1).title}"부터 이어할 수 있다. 이 폴더의 세션도 이어갈 수 있다.`
         : '';
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
@@ -574,16 +737,33 @@ startBtn.addEventListener('click', async () => {
 attackForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = promptInput.value;
+  const trimmed = text.trim();
   promptInput.value = '';
-  // A bare "/new" only resets the session — no turn follows, so nothing
-  // would ever re-enable the input if it were disabled here.
-  if (text.trim() !== '/new') setInputEnabled(false);
+  // Only a real agent turn (or an empty hesitate) waits on an event that
+  // re-enables input; slash commands (/new alone, /use, /buy, /flee...)
+  // resolve instantly, so disabling for them would lock the input.
+  // At the merchant an empty line just leaves the shop (no hesitate follows).
+  const atMerchant = !merchantPanel.hidden;
+  const startsTurn = (!trimmed.startsWith('/') && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
+  if (startsTurn) setInputEnabled(false);
   window.promptBattle.submitPrompt(text);
+  scrollLogToBottom();
 });
 
-fleeBtn.addEventListener('click', () => {
+fleeBtn.addEventListener('click', () => window.promptBattle.submitPrompt('/flee'));
+merchantLeaveBtn.addEventListener('click', () => window.promptBattle.submitPrompt('/leave'));
+
+exitBtn.addEventListener('click', () => {
+  exitOverlay.hidden = false;
+});
+exitCancelBtn.addEventListener('click', () => {
+  exitOverlay.hidden = true;
+  promptInput.focus();
+});
+exitConfirmBtn.addEventListener('click', () => {
+  exitOverlay.hidden = true;
   setInputEnabled(false);
-  window.promptBattle.flee();
+  window.promptBattle.submitPrompt('/quit');
 });
 
 playAgainBtn.addEventListener('click', async () => {

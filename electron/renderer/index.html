@@ -11,6 +11,9 @@
       <p id="profile-line" class="profile-line"></p>
       <button id="pick-folder-btn">프로젝트 폴더 선택</button>
       <p id="folder-path"></p>
+      <label id="resume-label" class="continue-label" hidden>
+        <input type="checkbox" id="resume-session" checked /> <span id="resume-text"></span>
+      </label>
       <fieldset>
         <legend>테마</legend>
         <div id="theme-options" class="option-list"></div>
@@ -56,7 +59,21 @@
             <div class="hp-bar-track player"><div id="player-hp-fill" class="hp-bar-fill player"></div></div>
             <span id="player-hp-label"></span>
           </div>
+          <span id="coin-label" class="coin-label"></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select></label>
+        </div>
+        <div id="bag" class="bag"></div>
+
+        <div id="merchant-panel" class="merchant-panel" hidden>
+          <h2>상인 고블린</h2>
+          <div class="merchant-body">
+            <div id="merchant-art"></div>
+            <div>
+              <p class="merchant-greeting">"헤헤, 좋은 물건 있어. 코인만 있다면 말이지."</p>
+              <div id="merchant-items" class="merchant-items"></div>
+              <button type="button" id="merchant-leave">떠나기</button>
+            </div>
+          </div>
         </div>
 
         <p id="turn-status" class="turn-status" hidden></p>
@@ -69,7 +86,8 @@
         <form id="attack-form">
           <input id="prompt-input" type="text" placeholder="공격 프롬프트를 입력하세요... (/new 로 새 세션)" autocomplete="off" />
           <button type="submit">공격</button>
-          <button type="button" id="flee-btn">도망</button>
+          <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>
+          <button type="button" id="exit-btn">나가기</button>
         </form>
       </div>
     </section>
@@ -80,6 +98,17 @@
       <p id="summary-story" class="summary-story"></p>
       <button id="play-again-btn">다시 하기</button>
     </section>
+
+    <div id="exit-overlay" class="file-viewer-overlay" hidden>
+      <div class="exit-panel">
+        <h2>잠시 쉬어갈까?</h2>
+        <p>오늘 모험을 끝내도 진행 층수, 코인, 가방, 이 폴더의 Claude 세션과 대화 기록이 저장된다. 다음에 이어할 수 있다.</p>
+        <div class="exit-actions">
+          <button type="button" id="exit-confirm">오늘 모험 종료하기</button>
+          <button type="button" id="exit-cancel">이어하기</button>
+        </div>
+      </div>
+    </div>
 
     <div id="file-viewer-overlay" class="file-viewer-overlay" hidden>
       <div class="file-viewer-panel">

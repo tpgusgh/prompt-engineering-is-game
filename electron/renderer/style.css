@@ -49,6 +49,8 @@ body {
   flex-direction: column;
   padding: 12px 16px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 #dungeon-screen.player-hit #battle-column {
   animation: screen-shake 0.3s;
@@ -386,6 +388,7 @@ body {
 }
 #log {
   flex: 1;
+  min-height: 0; /* lets the log scroll instead of pushing the input off-screen */
   overflow-y: auto;
   font-family: 'SF Mono', Menlo, monospace;
   font-size: 13px;
@@ -553,4 +556,123 @@ body {
   max-width: 100%;
   display: block;
   margin: 0 auto;
+}
+
+#log .user-chat {
+  margin: 10px 0 4px auto;
+  max-width: 80%;
+  width: fit-content;
+  padding: 6px 10px;
+  background: #5e81ac;
+  color: #eceff4;
+  border-radius: 10px 10px 2px 10px;
+}
+#log .user-chat::before {
+  content: attr(data-who) ': ';
+  font-weight: bold;
+  opacity: 0.8;
+}
+#log .history {
+  opacity: 0.55;
+}
+#log .history-header {
+  text-align: center;
+  color: #81a1c1;
+  margin: 10px 0;
+}
+#log .coin-line {
+  color: #ebcb8b;
+}
+.coin-label {
+  color: #ebcb8b;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.bag {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.bag button {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: #434c5e;
+  color: #e5e9f0;
+  border: 1px solid #ebcb8b;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.merchant-panel {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #4c566a;
+}
+.merchant-panel h2 {
+  text-align: center;
+  color: #ebcb8b;
+  margin: 4px 0;
+}
+.merchant-body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.merchant-greeting {
+  font-style: italic;
+  color: #d8dee9;
+  margin: 0 0 8px;
+}
+.merchant-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.merchant-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+.merchant-item:hover:not(:disabled) {
+  border-color: #ebcb8b;
+}
+.merchant-item .price {
+  color: #ebcb8b;
+}
+#merchant-leave,
+.exit-actions button {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid #4c566a;
+  background: #3b4252;
+  color: #e5e9f0;
+  cursor: pointer;
+}
+.exit-panel {
+  width: min(420px, 90vw);
+  padding: 20px;
+  background: #2e3440;
+  border: 1px solid #4c566a;
+  border-radius: 8px;
+}
+.exit-panel h2 {
+  margin-top: 0;
+}
+.exit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+#exit-confirm {
+  background: #bf616a;
+  border-color: #bf616a;
 }

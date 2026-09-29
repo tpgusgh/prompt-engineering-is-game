@@ -13,7 +13,10 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Story themes & chapters** — Adventure / Hunt the Demon King / Bug Sweep. Every 6th floor is a chapter boss; clearing it continues the story, and your progress is saved so the next run picks up where you left off.
 - **Inventory** — the sidebar shows your project's file tree; open any file to view or edit and save it (writes are restricted to the project folder).
 - **Readable AI output** — replies render as markdown; a question followed by a list becomes clickable choices.
-- **Sessions** — every game starts a fresh Claude session. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session.
+- **Sessions** — games start a fresh Claude session by default; when a folder has a saved session you can choose to resume it. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session.
+- **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
+- **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions.
+- **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 
 ## Mac App
 
@@ -36,7 +39,7 @@ npm link
 promptbattle --difficulty normal
 ```
 
-Run it inside the project you want to work on. Type `/quit` or `/flee` to leave, `/new <prompt>` to start a fresh session. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
+Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>` / `/leave` at the merchant. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
 
 ## Setup
 

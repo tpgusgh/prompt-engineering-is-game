@@ -49,6 +49,37 @@ export function formatBattleEvent(event: BattleEvent): string {
           'yellow',
         ) + '\n'
       );
+    case 'sessionSaved':
+      return '';
+    case 'fleeAttempt':
+      return event.success
+        ? colorize('You got away! On to the next floor (no reward).', 'cyan') + '\n'
+        : colorize('You failed to escape! The turn is lost.', 'yellow') + '\n';
+    case 'fleeBlocked':
+      return colorize("You can't run from a boss!", 'red') + '\n';
+    case 'coinsChanged':
+      return colorize(`+${event.gained} coins (${event.coins} total)`, 'yellow') + '\n';
+    case 'merchantOpen':
+      return (
+        colorize(`\nA merchant goblin appears! You have ${event.coins} coins.`, 'bold') +
+        '\n' +
+        event.items.map((item) => `  /buy ${item.id} — ${item.name}: ${item.description} (${item.price})`).join('\n') +
+        '\n  /leave to move on\n'
+      );
+    case 'purchased':
+      return colorize(`Bought ${event.itemId}. ${event.coins} coins left.`, 'green') + '\n';
+    case 'purchaseFailed':
+      return colorize(`Can't buy ${event.itemId}: ${event.reason}`, 'red') + '\n';
+    case 'merchantClosed':
+      return colorize('The merchant waves goodbye.', 'cyan') + '\n';
+    case 'bagChanged':
+      return `Bag: ${Object.entries(event.bag).map(([id, n]) => `${id} x${n}`).join(', ') || '(empty)'}\n`;
+    case 'itemUsed':
+      return colorize(`Used ${event.itemId}.`, 'green') + '\n';
+    case 'itemUseFailed':
+      return colorize(`No usable ${event.itemId} in your bag.`, 'red') + '\n';
+    case 'counterBlocked':
+      return colorize('Your amulet blocks the counterattack!', 'cyan') + '\n';
     case 'runEnded':
       return '';
   }
