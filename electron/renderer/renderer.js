@@ -114,6 +114,9 @@ let items = [];
 let coins = 0;
 let bag = {};
 let inputEnabled = false;
+let planUsage = null;
+let contextUsage = null;
+let usageFetchedAt = 0;
 let profile = null;
 let chosenFolder = null;
 let chosenThemeId = THEMES[0].id;
@@ -146,7 +149,8 @@ async function loadSetup() {
   profile = info.profile;
   weapons = info.weapons;
   items = info.items;
-  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp}`;
+  renderStats(info.stats);
+  renderProfileLine();
 
   themeOptionsEl.textContent = '';
   for (const theme of THEMES) {
@@ -195,6 +199,86 @@ async function loadSetup() {
 }
 loadSetup();
 
+// ---------------------------------------------------------------------------
+// Stat upgrades (setup screen): permanent, bought with saved coins.
+function renderStats(stats) {
+  $('stat-coins').textContent = `🪙 ${profile.coins}`;
+  const list = $('stat-options');
+  list.textContent = '';
+  for (const s of stats) {
+    const row = document.createElement('div');
+    row.className = 'stat-row';
+    const label = document.createElement('span');
+    label.textContent = `${s.name} Lv.${s.level}/${s.maxLevel}`;
+    const effect = document.createElement('span');
+    effect.className = 'option-sub';
+    effect.textContent = s.effect;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const maxed = s.level >= s.maxLevel;
+    btn.textContent = maxed ? '최대' : `강화 🪙 ${s.cost}`;
+    btn.disabled = maxed || profile.coins < s.cost;
+    btn.addEventListener('click', async () => {
+      const result = await window.promptBattle.upgradeStat(s.id);
+      $('stat-error').hidden = result.ok;
+      if (!result.ok) {
+        $('stat-error').textContent = result.reason;
+        return;
+      }
+      profile = result.profile;
+      renderProfileLine();
+      renderStats(result.stats);
+    });
+    row.append(label, effect, btn);
+    list.append(row);
+  }
+}
+
+function renderProfileLine() {
+  const st = profile.stats;
+  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 공격 Lv.${st.attack} 방어 Lv.${st.defense}`;
+}
+
+// ---------------------------------------------------------------------------
+// Usage bar: Claude plan limits (5-hour session + weekly, as % used — the
+// API doesn't expose raw token counts for these) and this Claude session's
+// context size. Small, at the bottom; click to refresh.
+function formatReset(iso, withDate) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const date = `${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})`;
+  return ` · ${withDate ? `${date} ` : ''}${time} 초기화`;
+}
+
+const kTokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+function renderUsage() {
+  const parts = [];
+  const win = (label, w, withDate) =>
+    w ? `${label} ${Math.round(w.usedPercent)}% 사용 · ${Math.max(0, 100 - Math.round(w.usedPercent))}% 남음${formatReset(w.resetsAt, withDate)}` : `${label} —`;
+  if (planUsage === 'loading') parts.push('사용량 불러오는 중...');
+  else if (planUsage) parts.push(win('세션(5시간)', planUsage.session, false), win('주간', planUsage.weekly, true));
+  else parts.push('플랜 사용량 정보 없음');
+  parts.push(
+    contextUsage
+      ? `컨텍스트 ${kTokens(contextUsage.usedTokens)} / ${kTokens(contextUsage.contextWindow)} (${Math.round((contextUsage.usedTokens / contextUsage.contextWindow) * 100)}%)`
+      : '컨텍스트 —',
+  );
+  for (const el of document.querySelectorAll('[data-usage]')) el.textContent = parts.join('  │  ');
+}
+
+async function refreshUsage(force) {
+  if (!force && Date.now() - usageFetchedAt < 20000) return;
+  usageFetchedAt = Date.now();
+  if (!planUsage) planUsage = 'loading';
+  renderUsage();
+  planUsage = (await window.promptBattle.getUsage()) ?? null;
+  renderUsage();
+}
+for (const el of document.querySelectorAll('[data-usage]')) el.addEventListener('click', () => refreshUsage(true));
+refreshUsage(true);
+
 // A turn can take a while (real file/bash work). Without this, a click while
 // one is in flight is silently dropped by main.ts (no pending resolver yet).
 function setInputEnabled(enabled) {
@@ -210,6 +294,7 @@ function setInputEnabled(enabled) {
 // the end), so hpChanged can't mean "turn over" — only these events do.
 function turnConcluded() {
   setInputEnabled(true);
+  refreshUsage(false);
   turnStatusEl.hidden = true;
   refreshTree();
 }
@@ -701,6 +786,10 @@ function renderBattleEvent(event) {
     case 'itemUseFailed':
       appendLog(`${itemName(event.itemId)}을(를) 쓸 수 없다.`, 'error');
       break;
+    case 'contextUsage':
+      contextUsage = event;
+      renderUsage();
+      break;
     case 'counterBlocked':
       appendLog(`${currentMonsterName}의 반격을 수호의 부적이 막아냈다!`, 'victory');
       break;
@@ -735,6 +824,8 @@ startBtn.addEventListener('click', async () => {
   renderBag();
   const saved = await window.promptBattle.getFolderSession(chosenFolder);
   renderHistory(saved.history);
+  contextUsage = null;
+  refreshUsage(true);
   if (resumeSession) appendLog('이전 세션을 이어서 모험을 계속한다.', 'story-line');
   try {
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, resumeSession });

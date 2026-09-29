@@ -119,6 +119,54 @@ export function executableOverrideOptions(): { pathToClaudeCodeExecutable?: stri
   return override ? { pathToClaudeCodeExecutable: override } : {};
 }
 
+export interface UsageWindow {
+  usedPercent: number;
+  resetsAt: string | null;
+}
+
+// Claude plan limits: the 5-hour "session" window and the 7-day weekly one.
+export interface PlanUsage {
+  session: UsageWindow | null;
+  weekly: UsageWindow | null;
+}
+
+function toWindow(w: any): UsageWindow | null {
+  return w && typeof w.utilization === 'number' ? { usedPercent: w.utilization, resetsAt: w.resets_at ?? null } : null;
+}
+
+// Maps the SDK's /usage response (sdk.d.ts SDKControlGetUsageResponse).
+// Null when plan limits don't apply (API key, Bedrock, Vertex...).
+export function toPlanUsage(response: unknown): PlanUsage | null {
+  const r = response as any;
+  if (!r?.rate_limits_available || !r.rate_limits) return null;
+  return { session: toWindow(r.rate_limits.five_hour), weekly: toWindow(r.rate_limits.seven_day) };
+}
+
+// ponytail: uses the SDK's EXPERIMENTAL usage call (name says it may change);
+// any failure just hides the usage bar instead of breaking the game.
+// Spawns an idle `claude` process that never sends a prompt, so it costs no
+// model tokens.
+export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
+  let release = () => {};
+  const idle = (async function* () {
+    await new Promise<void>((r) => (release = r));
+  })() as AsyncIterable<never>;
+  const q = query({ prompt: idle, options: { cwd, ...executableOverrideOptions() } });
+  try {
+    const timeout = new Promise<null>((r) => setTimeout(() => r(null), 15000));
+    const response = await Promise.race([
+      q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+      timeout,
+    ]);
+    return toPlanUsage(response);
+  } catch {
+    return null;
+  } finally {
+    release();
+    q.close();
+  }
+}
+
 export async function runAgentTurn(
   prompt: string,
   cwd: string,

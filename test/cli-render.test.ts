@@ -81,6 +81,7 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'itemUsed', itemId: 'potion' },
     { type: 'itemUseFailed', itemId: 'potion' },
     { type: 'counterBlocked' },
+    { type: 'contextUsage', usedTokens: 1, contextWindow: 2 },
   ];
   for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);
 });

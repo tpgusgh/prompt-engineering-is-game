@@ -5,12 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
-import { runAgentTurn } from '../src/agent.ts';
+import { runAgentTurn, fetchPlanUsage } from '../src/agent.ts';
 import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
 import { ITEMS } from '../src/items.ts';
+import { STATS, upgradeStat, upgradeCost, attackMultiplier, defenseReduction, type StatId } from '../src/stats.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -83,7 +84,26 @@ let currentCwd: string | null = null;
 // The weapon (Claude model) in hand; switchable mid-run via set-model.
 let currentModel = DEFAULT_WEAPON_ID;
 
-ipcMain.handle('get-setup-info', async () => ({ profile: await loadProfile(), weapons: WEAPONS, items: ITEMS }));
+const statInfo = (profile: Awaited<ReturnType<typeof loadProfile>>) =>
+  STATS.map((s) => ({ ...s, level: profile.stats[s.id], cost: upgradeCost(s.id, profile.stats[s.id]) }));
+
+ipcMain.handle('get-setup-info', async () => {
+  const profile = await loadProfile();
+  return { profile, weapons: WEAPONS, items: ITEMS, stats: statInfo(profile) };
+});
+
+// Between runs only (the setup screen): a run holds its own copy of the
+// profile's coins until it ends.
+let runInProgress = false;
+ipcMain.handle('upgrade-stat', async (_event, id: StatId) => {
+  if (runInProgress) return { ok: false, reason: '모험 중에는 강화할 수 없다' };
+  const result = upgradeStat(await loadProfile(), id);
+  if (!result.ok) return result;
+  await saveProfile(result.profile);
+  return { ok: true, profile: result.profile, stats: statInfo(result.profile) };
+});
+
+ipcMain.handle('get-usage', () => fetchPlanUsage(currentCwd ?? app.getPath('home')));
 
 ipcMain.handle('set-model', (_event, model: string) => {
   const weapon = getWeapon(model);
@@ -103,6 +123,7 @@ ipcMain.handle(
     currentCwd = path.resolve(options.cwd);
     currentModel = getWeapon(options.model).model;
     const cwd = currentCwd;
+    runInProgress = true;
 
     // The folder's session id + chat log, saved as the run goes so a crash
     // or closed window loses nothing. Saves are chained to never interleave.
@@ -122,25 +143,31 @@ ipcMain.handle(
       persistFolder();
     };
 
-    const summary = await runDungeon({
-      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
-      cwd,
-      difficulty: options.difficulty,
-      coins: profile.coins,
-      bag: profile.bag,
-      playerMaxHp: profile.maxHp,
-      initialSessionId: options.resumeSession ? folder.sessionId : undefined,
-      startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
-      getDamageMultiplier: () => getWeapon(currentModel).multiplier,
-      onBattleEvent: (event: BattleEvent) => {
-        trackHistory(event);
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
-      },
-      readInput: () =>
-        new Promise<string | null>((resolve) => {
-          pendingInputResolve = resolve;
-        }),
-    });
+    let summary: Awaited<ReturnType<typeof runDungeon>>;
+    try {
+      summary = await runDungeon({
+        runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
+        cwd,
+        difficulty: options.difficulty,
+        coins: profile.coins,
+        bag: profile.bag,
+        playerMaxHp: profile.maxHp,
+        initialSessionId: options.resumeSession ? folder.sessionId : undefined,
+        startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
+        getDamageMultiplier: () => getWeapon(currentModel).multiplier * attackMultiplier(profile.stats),
+        defense: defenseReduction(profile.stats),
+        onBattleEvent: (event: BattleEvent) => {
+          trackHistory(event);
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
+        },
+        readInput: () =>
+          new Promise<string | null>((resolve) => {
+            pendingInputResolve = resolve;
+          }),
+      });
+    } finally {
+      runInProgress = false;
+    }
 
     const updated = applyRun(profile, summary, options.themeId);
     await saveProfile(updated);

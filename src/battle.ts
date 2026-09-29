@@ -44,6 +44,7 @@ export type BattleEvent =
   | { type: 'itemUsed'; itemId: string }
   | { type: 'itemUseFailed'; itemId: string }
   | { type: 'counterBlocked' }
+  | { type: 'contextUsage'; usedTokens: number; contextWindow: number }
   | ({ type: 'runEnded' } & BattleSummary);
 
 export interface BattleDeps {
@@ -63,6 +64,8 @@ export interface BattleDeps {
   bag?: Record<string, number>;
   // Resume a Claude session saved for this project folder.
   initialSessionId?: string;
+  // Fraction (0-0.5) shaved off every monster counterattack (defense stat).
+  defense?: number;
   // Flee and merchant rolls; injectable so tests are deterministic.
   random?: () => number;
 }
@@ -139,6 +142,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'counterBlocked' });
       return;
     }
+    damage = Math.max(1, Math.round(damage * (1 - (deps.defense ?? 0))));
     playerHp = Math.max(0, playerHp - damage);
     deps.onBattleEvent({ type: 'monsterAttack', damage });
     deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
@@ -356,6 +360,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
 
+      if (turn.contextTokens !== undefined && turn.contextWindow !== undefined) {
+        deps.onBattleEvent({ type: 'contextUsage', usedTokens: turn.contextTokens, contextWindow: turn.contextWindow });
+      }
       if (
         !warnedSessionFull &&
         turn.contextTokens !== undefined &&

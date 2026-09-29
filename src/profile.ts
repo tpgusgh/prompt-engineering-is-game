@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { MONSTER_COUNT } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
+import { EMPTY_STATS, type Stats } from './stats.ts';
 
 export interface Profile {
   level: number;
@@ -15,10 +16,11 @@ export interface Profile {
   coins: number;
   bag: Record<string, number>;
   maxHp: number;
+  stats: Stats;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, stats: { ...EMPTY_STATS } };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -57,6 +59,7 @@ function coerceProfile(parsed: unknown): Profile {
     coins: isValidCount(p?.coins, 0) ? p.coins : DEFAULT_PROFILE.coins,
     bag: coerceCounts(p?.bag, 1),
     maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
+    stats: { ...EMPTY_STATS, ...coerceCounts(p?.stats, 0) },
   };
 }
 
@@ -66,7 +69,7 @@ export async function loadProfile(homeDir: string = os.homedir()): Promise<Profi
     const parsed = JSON.parse(raw);
     return coerceProfile(parsed);
   } catch {
-    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {} };
+    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, stats: { ...EMPTY_STATS } };
   }
 }
 

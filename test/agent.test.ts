@@ -133,3 +133,20 @@ test('unknown or malformed messages extract to empty, never throw', () => {
   assert.deepEqual(info.commandsRun, []);
   assert.equal(info.text, '');
 });
+
+test('toPlanUsage maps the 5-hour and weekly windows, or null when limits do not apply', async () => {
+  const { toPlanUsage } = await import('../src/agent.ts');
+  assert.deepEqual(
+    toPlanUsage({
+      rate_limits_available: true,
+      rate_limits: {
+        five_hour: { utilization: 82, resets_at: '2026-09-29T05:39:59Z' },
+        seven_day: { utilization: 73.4, resets_at: '2026-10-03T20:59:59Z' },
+      },
+    }),
+    { session: { usedPercent: 82, resetsAt: '2026-09-29T05:39:59Z' }, weekly: { usedPercent: 73.4, resetsAt: '2026-10-03T20:59:59Z' } },
+  );
+  assert.deepEqual(toPlanUsage({ rate_limits_available: true, rate_limits: { five_hour: null } }), { session: null, weekly: null });
+  assert.equal(toPlanUsage({ rate_limits_available: false, rate_limits: null }), null);
+  assert.equal(toPlanUsage(undefined), null);
+});

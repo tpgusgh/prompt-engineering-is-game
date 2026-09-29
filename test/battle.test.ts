@@ -511,3 +511,18 @@ test('bets must be a whole amount between 1 and your coins; Korean 홀/짝 work 
   assert.ok(events.some((e) => e.type === 'betResult' && e.choice === 'even' && e.won && e.coins === 20));
   assert.equal(summary.coins, 20);
 });
+
+test('defense reduces monster counterattacks', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
+  await runDungeon({ ...deps, defense: 0.5 });
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 3, '6 halved');
+});
+
+test('contextUsage is reported after each turn that knows its context size', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit'], {
+    summary: '', filesChanged: [], commandsRun: [], sessionId: 's', contextTokens: 12000, contextWindow: 200000,
+  });
+  await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'contextUsage' && e.usedTokens === 12000 && e.contextWindow === 200000));
+});

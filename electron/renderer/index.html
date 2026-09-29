@@ -26,6 +26,11 @@
         <div id="weapon-options" class="option-list"></div>
       </fieldset>
       <fieldset>
+        <legend>능력치 강화 <span id="stat-coins" class="coin-label"></span></legend>
+        <div id="stat-options" class="stat-list"></div>
+        <p id="stat-error" class="error-text" hidden></p>
+      </fieldset>
+      <fieldset>
         <legend>난이도</legend>
         <label><input type="radio" name="difficulty" value="easy" /> 쉬움</label>
         <label><input type="radio" name="difficulty" value="normal" checked /> 보통</label>
@@ -33,6 +38,7 @@
       </fieldset>
       <button id="start-btn" disabled>던전 입장</button>
       <p id="setup-error" class="error-text" hidden></p>
+      <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
     </section>
 
     <section id="dungeon-screen" hidden>
@@ -97,6 +103,7 @@
           <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>
           <button type="button" id="exit-btn">나가기</button>
         </form>
+        <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
       </div>
     </section>
 

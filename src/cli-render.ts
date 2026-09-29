@@ -85,6 +85,8 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize(`Used ${event.itemId}.`, 'green') + '\n';
     case 'itemUseFailed':
       return colorize(`No usable ${event.itemId} in your bag.`, 'red') + '\n';
+    case 'contextUsage':
+      return '';
     case 'counterBlocked':
       return colorize('Your amulet blocks the counterattack!', 'cyan') + '\n';
     case 'runEnded':

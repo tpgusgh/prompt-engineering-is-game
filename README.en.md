@@ -16,6 +16,8 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Sessions** — games start a fresh Claude session by default; when a folder has a saved session you can choose to resume it. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session.
 - **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
 - **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions. The merchant also runs an **odd/even dice game**: bet coins on odd or even, win double or lose the stake.
+- **Stat upgrades** — spend saved coins on the setup screen for permanent upgrades: attack (+10% damage per level, max 10), defense (-10% counterattack damage per level, max 5), vitality (+10 max HP per level, max 10). Each level costs more.
+- **Usage bar** — a small line at the bottom shows how much of your Claude plan's 5-hour session limit and weekly limit is used/left and when each resets, plus the current conversation's context tokens (used/max). Refreshes after each turn; click to refresh. (Plan limits come from the SDK as percentages, not token counts; hidden with an API key.)
 - **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 
 ## Tour
@@ -23,7 +25,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 ### 1. Setup
 ![Setup screen](docs/screenshots/setup.png)
 
-Pick a project folder, a story theme, a weapon (Claude model) and a difficulty. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
+Pick a project folder, a story theme, a weapon (Claude model) and a difficulty, and spend coins on stat upgrades. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
 
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)

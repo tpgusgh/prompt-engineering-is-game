@@ -730,3 +730,45 @@ body {
   70% { transform: scale(1.25) rotate(10deg); opacity: 1; }
   100% { transform: scale(1) rotate(0); }
 }
+
+.usage-bar {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #7b88a1;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#setup-screen .usage-bar {
+  white-space: normal;
+}
+.usage-bar:hover {
+  color: #d8dee9;
+}
+.stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: 8em 1fr auto;
+  text-align: left;
+  white-space: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+.stat-row button {
+  padding: 3px 10px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #ebcb8b;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.stat-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
