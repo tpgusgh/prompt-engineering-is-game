@@ -75,6 +75,8 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'purchased', itemId: 'potion', coins: 0 },
     { type: 'purchaseFailed', itemId: 'crystal', reason: 'poor' },
     { type: 'merchantClosed' },
+    { type: 'betResult', choice: 'odd', roll: 3, won: true, amount: 5, coins: 15 },
+    { type: 'betFailed', reason: 'x' },
     { type: 'bagChanged', bag: { potion: 1 } },
     { type: 'itemUsed', itemId: 'potion' },
     { type: 'itemUseFailed', itemId: 'potion' },

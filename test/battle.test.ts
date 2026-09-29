@@ -487,3 +487,27 @@ test('a resumed session that fails before ever succeeding is dropped for a fresh
   assert.deepEqual(seen, ['stale', undefined]);
   assert.ok(events.some((e) => e.type === 'sessionReset'));
 });
+
+test('odd/even bet at the merchant: a win pays the stake back double', async () => {
+  // rolls: merchant appears (0.1), die = floor(0.4*6)+1 = 3 (odd), then no more merchants
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/bet odd 5', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, random: seq(0.1, 0.4, 0.99) });
+  assert.ok(events.some((e) => e.type === 'betResult' && e.choice === 'odd' && e.roll === 3 && e.won && e.amount === 5 && e.coins === 15));
+  assert.equal(summary.coins, 15, '10 from the clear, +5 net win');
+});
+
+test('a losing bet takes the stake', async () => {
+  // die = floor(0.2*6)+1 = 2 (even) vs odd
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/bet odd 4', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, random: seq(0.1, 0.2, 0.99) });
+  assert.ok(events.some((e) => e.type === 'betResult' && e.roll === 2 && !e.won && e.coins === 6));
+  assert.equal(summary.coins, 6);
+});
+
+test('bets must be a whole amount between 1 and your coins; Korean 홀/짝 work too', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/bet odd 11', '/bet odd 0', '/bet red 1', '/bet 짝 10', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, random: seq(0.1, 0.9, 0.99) }); // die 6 = even
+  assert.equal(events.filter((e) => e.type === 'betFailed').length, 3);
+  assert.ok(events.some((e) => e.type === 'betResult' && e.choice === 'even' && e.won && e.coins === 20));
+  assert.equal(summary.coins, 20);
+});

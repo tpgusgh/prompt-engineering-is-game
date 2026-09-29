@@ -38,6 +38,8 @@ export type BattleEvent =
   | { type: 'purchased'; itemId: string; coins: number }
   | { type: 'purchaseFailed'; itemId: string; reason: string }
   | { type: 'merchantClosed' }
+  | { type: 'betResult'; choice: 'odd' | 'even'; roll: number; won: boolean; amount: number; coins: number }
+  | { type: 'betFailed'; reason: string }
   | { type: 'bagChanged'; bag: Record<string, number> }
   | { type: 'itemUsed'; itemId: string }
   | { type: 'itemUseFailed'; itemId: string }
@@ -169,6 +171,26 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     deps.onBattleEvent({ type: 'itemUsed', itemId: id });
   };
 
+  // The merchant's odd/even dice game: `/bet odd|even|홀|짝 <coins>`.
+  // A win pays the stake back double (net +stake); a loss takes it.
+  const placeBet = (input: string) => {
+    const match = /^\/bet\s+(\S+)\s+(\d+)$/.exec(input);
+    const choice = match && ({ odd: 'odd', 홀: 'odd', even: 'even', 짝: 'even' } as const)[match[1] as 'odd'];
+    const amount = match ? Number(match[2]) : 0;
+    if (!choice) {
+      deps.onBattleEvent({ type: 'betFailed', reason: '홀 또는 짝에 걸어야 한다' });
+      return;
+    }
+    if (amount < 1 || amount > coins) {
+      deps.onBattleEvent({ type: 'betFailed', reason: `1~${coins} 코인 사이로 걸어야 한다` });
+      return;
+    }
+    const roll = Math.floor(random() * 6) + 1;
+    const won = (roll % 2 === 1) === (choice === 'odd');
+    coins += won ? amount : -amount;
+    deps.onBattleEvent({ type: 'betResult', choice, roll, won, amount, coins });
+  };
+
   // Returns false if the player left the dungeon from the shop.
   const visitMerchant = async (): Promise<boolean> => {
     deps.onBattleEvent({ type: 'merchantOpen', coins, items: ITEMS });
@@ -177,6 +199,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (raw === null) return false;
       const input = raw.trim();
       if (input === '/quit') return false;
+      if (input.startsWith('/bet ')) {
+        placeBet(input);
+        continue;
+      }
       if (input.startsWith('/buy ')) {
         const id = input.slice('/buy '.length).trim();
         const item = getItem(id);

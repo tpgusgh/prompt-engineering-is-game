@@ -676,3 +676,57 @@ body {
   background: #bf616a;
   border-color: #bf616a;
 }
+
+.gamble {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px dashed #ebcb8b;
+  border-radius: 6px;
+}
+.gamble-title {
+  color: #ebcb8b;
+  font-weight: bold;
+  font-size: 13px;
+}
+.gamble-title small {
+  font-weight: normal;
+  opacity: 0.8;
+}
+#bet-amount {
+  width: 64px;
+  padding: 3px 6px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+}
+.gamble button {
+  padding: 3px 12px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #ebcb8b;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.bet-result {
+  font-weight: bold;
+  font-size: 15px;
+}
+.bet-result.win {
+  color: #a3be8c;
+}
+.bet-result.lose {
+  color: #bf616a;
+}
+.bet-result.rolled {
+  animation: dice-pop 0.4s ease-out;
+}
+@keyframes dice-pop {
+  0% { transform: scale(0.4) rotate(-90deg); opacity: 0; }
+  70% { transform: scale(1.25) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}

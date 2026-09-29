@@ -57,6 +57,8 @@ const merchantArtEl = $('merchant-art');
 const merchantItemsEl = $('merchant-items');
 const merchantLeaveBtn = $('merchant-leave');
 const exitBtn = $('exit-btn');
+const betAmountInput = $('bet-amount');
+const betResultEl = $('bet-result');
 const exitOverlay = $('exit-overlay');
 const exitConfirmBtn = $('exit-confirm');
 const exitCancelBtn = $('exit-cancel');
@@ -271,6 +273,9 @@ function openMerchant(event) {
   fleeBtn.disabled = true; // nothing to flee from in the shop
   merchantPanel.hidden = false;
   merchantArtEl.innerHTML = merchantSvg();
+  betResultEl.textContent = '';
+  betAmountInput.max = String(coins);
+  betAmountInput.value = String(Math.max(1, Math.min(10, coins)));
   merchantItemsEl.textContent = '';
   for (const item of event.items) {
     const btn = document.createElement('button');
@@ -655,6 +660,27 @@ function renderBattleEvent(event) {
     case 'purchaseFailed':
       appendLog(`살 수 없다: ${event.reason}`, 'error');
       break;
+    case 'betResult': {
+      coins = event.coins;
+      renderCoins();
+      betAmountInput.max = String(coins);
+      const face = '⚀⚁⚂⚃⚄⚅'[event.roll - 1];
+      const parity = event.roll % 2 ? '홀' : '짝';
+      betResultEl.textContent = `${face} ${event.roll} (${parity}) ${event.won ? `+${event.amount}` : `-${event.amount}`}`;
+      betResultEl.className = `bet-result ${event.won ? 'win' : 'lose'}`;
+      void betResultEl.offsetWidth; // restart the pop animation
+      betResultEl.classList.add('rolled');
+      appendLog(
+        event.won
+          ? `🎲 ${event.roll}, ${parity}! 맞혔다! +${event.amount} 코인 (보유 ${event.coins})`
+          : `🎲 ${event.roll}, ${parity}... 틀렸다. -${event.amount} 코인 (보유 ${event.coins}) 상인 고블린: "헤헤헤~"`,
+        event.won ? 'victory' : 'error',
+      );
+      break;
+    }
+    case 'betFailed':
+      appendLog(`걸 수 없다: ${event.reason}`, 'error');
+      break;
     case 'merchantClosed':
       appendLog('상인 고블린: "또 와~"', 'story-line');
       closeMerchant();
@@ -752,6 +778,13 @@ attackForm.addEventListener('submit', (e) => {
 
 fleeBtn.addEventListener('click', () => window.promptBattle.submitPrompt('/flee'));
 merchantLeaveBtn.addEventListener('click', () => window.promptBattle.submitPrompt('/leave'));
+
+const bet = (choice) => window.promptBattle.submitPrompt(`/bet ${choice} ${Math.floor(Number(betAmountInput.value) || 0)}`);
+$('bet-odd').addEventListener('click', () => bet('odd'));
+$('bet-even').addEventListener('click', () => bet('even'));
+$('bet-all').addEventListener('click', () => {
+  betAmountInput.value = String(coins);
+});
 
 exitBtn.addEventListener('click', () => {
   exitOverlay.hidden = false;

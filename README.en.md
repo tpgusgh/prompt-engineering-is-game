@@ -15,7 +15,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Readable AI output** — replies render as markdown; a question followed by a list becomes clickable choices.
 - **Sessions** — games start a fresh Claude session by default; when a folder has a saved session you can choose to resume it. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session.
 - **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
-- **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions.
+- **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions. The merchant also runs an **odd/even dice game**: bet coins on odd or even, win double or lose the stake.
 - **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 
 ## Tour
@@ -39,7 +39,7 @@ The capture is a real turn: the prompt asked (in Korean) to fix a bug in `cart.j
 ### 3. Merchant goblin
 ![Merchant goblin](docs/screenshots/merchant.png)
 
-The merchant sometimes shows up after a clear. Click an item to buy it with coins, or `떠나기` (leave) to move on. Typing a prompt here closes the shop and attacks the next monster with it.
+The merchant sometimes shows up after a clear. Click an item to buy it with coins. In the 🎲 odd/even box, set a stake (or `올인`, all-in) and press `홀` (odd) / `짝` (even) to roll. When done, press `떠나기` (leave) to move on. Typing a prompt here closes the shop and attacks the next monster with it.
 
 ### 4. Exit
 ![Exit dialog](docs/screenshots/exit.png)
@@ -67,7 +67,7 @@ npm link
 promptbattle --difficulty normal
 ```
 
-Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>` / `/leave` at the merchant. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
+Run it inside the project you want to work on. Type `/quit` to leave, `/flee` to try escaping (50%), `/new <prompt>` to start a fresh session, `/use <item>` to use an item, and `/buy <item>`, `/bet odd|even <coins>`, `/leave` at the merchant. Requires Node.js >= 22.18.0 (native TypeScript execution, no build step). A published `npm install -g` copy won't work — Node refuses to type-strip `.ts` under `node_modules` — so use `npm link` from a clone.
 
 ## Setup
 

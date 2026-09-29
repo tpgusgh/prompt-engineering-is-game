@@ -64,12 +64,19 @@ export function formatBattleEvent(event: BattleEvent): string {
         colorize(`\nA merchant goblin appears! You have ${event.coins} coins.`, 'bold') +
         '\n' +
         event.items.map((item) => `  /buy ${item.id} — ${item.name}: ${item.description} (${item.price})`).join('\n') +
-        '\n  /leave to move on\n'
+        '\n  /bet odd|even <coins> to gamble, /leave to move on\n'
       );
     case 'purchased':
       return colorize(`Bought ${event.itemId}. ${event.coins} coins left.`, 'green') + '\n';
     case 'purchaseFailed':
       return colorize(`Can't buy ${event.itemId}: ${event.reason}`, 'red') + '\n';
+    case 'betResult':
+      return colorize(
+        `Die shows ${event.roll} (${event.roll % 2 ? 'odd' : 'even'}) — you ${event.won ? `win ${event.amount}` : `lose ${event.amount}`}. ${event.coins} coins.`,
+        event.won ? 'green' : 'red',
+      ) + '\n';
+    case 'betFailed':
+      return colorize(`Bet refused: ${event.reason}`, 'red') + '\n';
     case 'merchantClosed':
       return colorize('The merchant waves goodbye.', 'cyan') + '\n';
     case 'bagChanged':

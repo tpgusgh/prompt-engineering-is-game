@@ -71,6 +71,14 @@
             <div>
               <p class="merchant-greeting">"헤헤, 좋은 물건 있어. 코인만 있다면 말이지."</p>
               <div id="merchant-items" class="merchant-items"></div>
+              <div class="gamble">
+                <span class="gamble-title">🎲 홀짝 도박 <small>(맞히면 2배)</small></span>
+                <input type="number" id="bet-amount" min="1" step="1" value="10" />
+                <button type="button" id="bet-all">올인</button>
+                <button type="button" id="bet-odd">홀</button>
+                <button type="button" id="bet-even">짝</button>
+                <span id="bet-result" class="bet-result"></span>
+              </div>
               <button type="button" id="merchant-leave">떠나기</button>
             </div>
           </div>
