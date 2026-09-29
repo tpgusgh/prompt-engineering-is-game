@@ -67,7 +67,6 @@
         "nsis"
       ],
       "icon": "build/icon.png",
-      "signAndEditExecutable": false,
       "files": [
         "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**",
         "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**"

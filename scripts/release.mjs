@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Publishes the current package.json version as a GitHub release:
-// tests → Mac .dmg / Linux .AppImage / Windows installer builds → push the
-// vX.Y.Z tag → `gh release create` with all three attached and the matching
-// CHANGELOG.md section as the notes.
+// tests → Mac .dmg / Linux .AppImage builds → push the vX.Y.Z tag →
+// `gh release create` with both attached and the matching CHANGELOG.md
+// section as the notes. The Windows installer is built and attached by
+// .github/workflows/windows-release.yml once the release is published.
 // Run `npm version <patch|minor|major>` first (bumps and tags).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -38,11 +39,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // npm only installs this machine's native claude binary; fetch the other
   // targets' packages (not saved) so each build can bundle its own.
   const sdkVersion = JSON.parse(readFileSync('node_modules/@anthropic-ai/claude-agent-sdk/package.json', 'utf-8')).version;
-  run('npm', ['install', '--no-save', '--force', ...['linux-x64', 'win32-x64'].map((t) => `@anthropic-ai/claude-agent-sdk-${t}@${sdkVersion}`)]);
+  run('npm', ['install', '--no-save', '--force', ...['linux-x64'].map((t) => `@anthropic-ai/claude-agent-sdk-${t}@${sdkVersion}`)]);
   run('npx', ['electron-builder', '--mac', '--arm64'], buildEnv);
   run('npx', ['electron-builder', '--linux', '--x64'], buildEnv);
-  run('npx', ['electron-builder', '--win', '--x64'], buildEnv);
-  const artifacts = [`mac-arm64.dmg`, `linux-x86_64.AppImage`, `win-x64.exe`].map((a) => path.join('release', `Prompt Battle-${version}-${a}`));
+  const artifacts = [`mac-arm64.dmg`, `linux-x86_64.AppImage`].map((a) => path.join('release', `Prompt Battle-${version}-${a}`));
   for (const a of artifacts) if (!existsSync(a)) throw new Error(`${a} was not built`);
 
   run('git', ['push', 'origin', 'HEAD', tag]);
