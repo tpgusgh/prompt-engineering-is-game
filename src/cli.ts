@@ -4,7 +4,7 @@ import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { runDungeon, type BattleSummary } from './battle.ts';
 import { runAgentTurn } from './agent.ts';
-import { loadProfile, saveProfile, applyRun } from './profile.ts';
+import { loadProfile, saveProfile, applyRun, startingStatPoints } from './profile.ts';
 import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
 import { formatBattleEvent } from './cli-render.ts';
@@ -32,6 +32,7 @@ async function main(): Promise<void> {
       bag: profile.bag,
       playerMaxHp: profile.maxHp,
       swordLevel: profile.swordLevel,
+      statPoints: startingStatPoints(profile),
       onBattleEvent: (event) => stdout.write(formatBattleEvent(event)),
       readInput: async () => {
         stdout.write('\n> ');

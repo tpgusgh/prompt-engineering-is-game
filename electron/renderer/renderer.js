@@ -216,6 +216,7 @@ async function loadSetup() {
   claudeSettings = profile.claude;
   heroClasses = info.classes;
   xpPerLevel = info.xpPerLevel ?? xpPerLevel;
+  titles = info.titles ?? titles;
   runXp = 0;
   renderXp();
   chosenClass = profile.heroClass ?? chosenClass;
@@ -285,7 +286,7 @@ function renderSetupStats() {
 }
 
 function renderProfileLine() {
-  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}`;
+  profileLineEl.textContent = `🎖 ${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}`;
 }
 
 // Battle stat panel: unspent points + one button per stat (a free action).
@@ -1467,7 +1468,8 @@ function renderBattleEvent(event) {
       const after = levelOf(profile.xp + runXp);
       renderXp();
       if (after > before) {
-        appendLog(`⬆️ 레벨 업! 용사 레벨 ${after}이(가) 되었다!`, 'victory');
+        appendLog(`⬆️ 레벨 업! 용사 레벨 ${after}이(가) 되었다! (다음 판은 능력치 포인트 ${after}개로 시작)`, 'victory');
+        if (titleOf(after) !== titleOf(before)) appendLog(`🎖 새 칭호 획득: 「${titleOf(after)}」`, 'victory');
         sfx('fanfare');
       }
     }
@@ -1808,7 +1810,8 @@ async function startGame({ loadSlot, slot }) {
   renderXp();
   // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
   stats = { attack: 0, defense: 0, vitality: 0, ...slot?.stats };
-  statPoints = slot?.statPoints ?? 0;
+  // Level bonus: a new run starts with one stat point per hero level.
+  statPoints = slot ? slot.statPoints : profile.level;
   swordLevel = from.swordLevel;
   renderCoins();
   renderSwordLevel();
@@ -1824,6 +1827,7 @@ async function startGame({ loadSlot, slot }) {
   } else {
     renderHistory((await window.promptBattle.getFolderSession(chosenFolder)).history);
   }
+  if (!slot) appendLog(`⭐ 레벨 ${profile.level} 보너스: 능력치 포인트 ${profile.level}개로 시작한다! 위쪽 버튼으로 바로 올려보자.`, 'coin-line');
   if (slot) {
     const from = loadSlot ? `슬롯 ${loadSlot}을(를)` : '이 세션의 자동 저장을';
     appendLog(`💾 ${from} 불러왔다. ${slotSummary(slot)}`, 'story-line');
@@ -2357,9 +2361,12 @@ sessionSelect.addEventListener('change', renderSessionHint);
 let xpPerLevel = 100;
 let runXp = 0;
 const levelOf = (xp) => Math.floor(xp / xpPerLevel) + 1;
+let titles = [{ level: 1, title: '견습 용사' }];
+const titleOf = (level) => titles.filter((t) => t.level <= level).pop()?.title ?? titles[0].title;
 function renderXp() {
   if (!profile) return;
   const total = profile.xp + runXp;
+  for (const el of document.querySelectorAll('.player-label')) el.textContent = titleOf(levelOf(total));
   const into = total % xpPerLevel;
   const pct = Math.round((into / xpPerLevel) * 100);
   for (const el of document.querySelectorAll('[data-xp-level]')) el.textContent = `Lv.${levelOf(total)}`;

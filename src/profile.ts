@@ -95,6 +95,28 @@ export function levelForXp(xp: number): number {
   return Math.floor(xp / XP_PER_LEVEL) + 1;
 }
 
+// Titles unlocked by hero level (the highest reached applies).
+export const TITLES: { level: number; title: string }[] = [
+  { level: 1, title: '견습 용사' },
+  { level: 3, title: '초보 모험가' },
+  { level: 5, title: '숙련된 모험가' },
+  { level: 8, title: '베테랑 용사' },
+  { level: 12, title: '버그 사냥꾼' },
+  { level: 16, title: '프롬프트 마스터' },
+  { level: 20, title: '전설의 프롬프터' },
+  { level: 30, title: 'AI 파티의 왕' },
+];
+
+export function titleForLevel(level: number): string {
+  return TITLES.filter((t) => t.level <= level).pop()?.title ?? TITLES[0].title;
+}
+
+// Leveling up pays off in every new run: it starts with one stat point per
+// hero level (a loaded save keeps that run's own points).
+export function startingStatPoints(profile: Profile): number {
+  return profile.level;
+}
+
 export function addXp(profile: Profile, gained: number): Profile {
   const xp = profile.xp + gained;
   return { ...profile, xp, level: levelForXp(xp) };

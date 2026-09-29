@@ -127,3 +127,17 @@ test('XP_PER_LEVEL is the level step the XP bar fills toward', async () => {
   assert.equal(levelForXp(XP_PER_LEVEL * 3 - 1), 3);
   assert.equal(levelForXp(XP_PER_LEVEL * 3), 4);
 });
+
+test('a new run starts with as many stat points as the hero level', async () => {
+  const { startingStatPoints } = await import('../src/profile.ts');
+  assert.equal(startingStatPoints({ ...base, level: 1 }), 1);
+  assert.equal(startingStatPoints({ ...base, level: 5, xp: 450 }), 5);
+});
+
+test('titles by level: the highest unlocked one applies', async () => {
+  const { titleForLevel, TITLES } = await import('../src/profile.ts');
+  assert.equal(titleForLevel(1), TITLES[0].title);
+  assert.equal(titleForLevel(4), TITLES.filter((t) => t.level <= 4).pop()!.title);
+  assert.equal(titleForLevel(999), TITLES[TITLES.length - 1].title);
+  assert.deepEqual(TITLES.map((t) => t.level), [...TITLES.map((t) => t.level)].sort((a, b) => a - b), 'ascending');
+});
