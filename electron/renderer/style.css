@@ -1719,3 +1719,44 @@ body {
 .agent-run-actions li { margin: 2px 0; word-break: break-all; }
 .agent-run-actions li.failed { color: #bf616a; }
 .agent-run-report { margin-top: 6px; padding: 8px 10px; background: #2b303b; border-radius: 6px; font-size: 12.5px; line-height: 1.55; color: #e5e9f0; }
+
+/* Monster speech bubble (left of the monster; my latest message is on the right) */
+.monster-speech {
+  position: absolute;
+  top: 18px;
+  left: 8px;
+  width: min(280px, 30%);
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #2e3440;
+  background: #eceff4;
+  border-radius: 14px 14px 3px 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+.monster-speech::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  bottom: 10px;
+  border-width: 7px 0 7px 10px;
+  border-style: solid;
+  border-color: transparent transparent transparent #eceff4;
+}
+.monster-speech.say-attack,
+.monster-speech.say-crit { background: #f6d2d4; }
+.monster-speech.say-attack::after,
+.monster-speech.say-crit::after { border-left-color: #f6d2d4; }
+.monster-speech.say-lowHp,
+.monster-speech.say-death { background: #d8dee9; color: #4c566a; font-style: italic; }
+.monster-speech.say-lowHp::after,
+.monster-speech.say-death::after { border-left-color: #d8dee9; }
+.monster-speech.pop,
+.merchant-greeting.pop { animation: speech-pop 0.28s ease-out; }
+@keyframes speech-pop {
+  0% { transform: scale(0.7) translateY(6px); opacity: 0; }
+  70% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); }
+}
