@@ -24,7 +24,10 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **AI party (subagents)** — three Claude subagents: 🧙 wizard (explore/research), 🗡 swordsman (implement), 🏹 archer (test/verify). When the AI splits work and sends several **at once**, the screen shows "N processes running" and what each is doing. The wizard's work strikes as spirits, the archer's as companions, the swordsman's as a blade under the archer's cover fire. Can be turned off on the setup screen (it uses more tokens).
 - **Turn timer & coding typing drills while you wait** — the status line and the input show how long the AI has been working. Meanwhile, type a random line of code (80+ drills across 20+ languages/tools: JavaScript, Python, Go, Rust, SQL, Git, Docker…) exactly to deal 1 damage; a 3-second explanation of that code follows (tap for the long one), then the next line. Speed and accuracy are shown.
 - **BGM & sound effects** — synthesized chiptune, no audio files: a battle track per story theme that shifts key and tempo with each chapter, plus boss, merchant, blacksmith and title tracks; effects for hits, crits, damage taken, coins, enhance success/fail/break and typing. 🔊 button and volume slider.
-- **Claude settings** — on the setup screen: ⚡ attack speed (= effort, low x0.85 … max x1.2, also switchable mid-battle), 🧩 skills all/none/pick (searchable), 🔌 MCP servers on/off each. Applies only to the game's sessions; your Claude Code settings are untouched. Background tasks Claude starts are waited for, and its follow-up answer arrives in the same turn.
+- **Claude settings** — on the setup screen: 🔑 connection (Claude Code login or an API key, stored encrypted in the keychain), ⚡ attack speed (= effort, low x0.85 … max x1.2, switchable mid-battle), 🧩 skills all/none/pick (searchable), 🔌 MCP servers on/off each. Game sessions only; your Claude Code settings are untouched.
+- **Long jobs go to the courier** — builds, full test suites, installs, training and other long work are handed to the 🦅 courier subagent in the background; the turn waits, with no time limit, for Claude's follow-up answer.
+- **Quest window** — when the AI needs an answer from you, it asks in a large quest window; pick a choice or type your own to attack with it.
+- **Game bag** — under the file inventory, a 🎒 bag to use bandages (+15 HP), potions (+40 HP), whetstones, amulets and smoke bombs as free actions.
 - **Tool cards** — commands (Bash), file edits and reads the AI runs appear as cards distinct from chat bubbles: IN (the command) and OUT (the result), running/done/failed status, long output collapsible.
 - **Readable AI output** — replies are **typed out live** into a chat bubble as the AI streams them, with clean markdown (headings, lists, code, tables), and **important parts colored**: bold text, success/pass (green), failure/error (red), warnings (yellow), file paths (blue), and syntax-highlighted code blocks. Your messages sit in right-hand bubbles and the log jumps to the bottom when you send. The input grows for long, multi-line prompts (Shift+Enter newline, Enter attack). A question followed by a list becomes clickable choices.
 - **Sessions** — after picking a folder, choose which of its Claude Code sessions to resume (terminal `claude` sessions included) or start a new one. Mid-run, the `세션` (session) button **swaps** to another session and shows its transcript in the log. Each session also **autosaves the game state** (floor, HP, monster HP, stats…), so resuming a session resumes the run. When the context passes 80%, the game shows a ready-made `/new ...` prompt to continue in a new session. Game sessions also **appear in VS Code's Claude Code session list and `claude --resume`**: SDK-started sessions are normally hidden there, so after each turn the game relabels only the `entrypoint` field of the local transcript (`~/.claude/projects/…/<session-id>.jsonl`) to `cli`. Conversation content is untouched, and usage was already reported as SDK.
@@ -41,33 +44,48 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 ### 1. Setup
 ![Setup screen](docs/screenshots/setup.png)
 
-Pick a project folder, a story theme, a weapon (Claude model) and a difficulty. Your current stats and sword level are shown here too. Saved progress shows next to each theme (e.g. `챕터 1 3/6층까지 진행` = chapter 1, floor 3/6); tick "continue" to resume from that floor. If the folder has a saved Claude session, a "resume previous session" checkbox appears too.
+Pick a project folder, a theme, a **class** (🗡 swordsman / 🧙 wizard / 🏹 archer — it renames your weapons), a weapon (Claude model) and a difficulty. After picking a folder, its Claude sessions are listed (with 💾 the autosaved floor/HP), and the 3 save slots can be **loaded**. Under **⚙️ Claude settings**:
+
+- 🔑 **Connection**: the Claude Code login (CLI) or an **API key** (stored encrypted in the keychain, with a "check connection" button)
+- ⚡ **Attack speed = effort**: very fast (low, x0.85 damage) … very slow (max, x1.2)
+- 🧩 **Skills**: all / none / pick (searchable)
+- 🔌 **MCP servers**: on/off per server, with connection status
+
+These apply only to the game's sessions; your Claude Code settings are untouched.
 
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)
 
-- **Left, inventory**: your project's file tree. Files the AI touched are highlighted; click any file to view or edit it.
-- **Top**: chapter/floor banner, the monster and its HP.
-- **Middle bar**: your HP, coins and the weapon (model) switcher, with bag items as buttons below.
-- **Log**: your prompts (blue bubbles), live commands/file edits as they land hits, crit keywords, the AI's reply rendered as markdown, and monster counterattacks. It always stays scrolled to the newest message.
-- **Bottom**: prompt input plus `Attack` / `Flee` (50%) / `Exit`.
+- **Top left, inventory**: the project's file tree — drag to move, drop files from Finder, `+📄` `+📁` to create, click to view/edit.
+- **Bottom left, 🎒 bag**: bandages, potions, whetstones, amulets, smoke bombs — `사용` (use) is a free action.
+- **Middle**: the monster and its HP, your HP, weapon (model) and ⚡ attack speed switchers, ⭐ stat points (+1 per monster defeated).
+- **Log**: your bubbles (right), the AI's replies (left — typed live, markdown, important parts colored), and the commands/edits/reads it runs as separate **tool cards** (IN/OUT, done/failed).
+- **Bottom**: a multi-line input (Enter attacks, Shift+Enter newline), `공격` attack · `도망` flee (50%) · `저장` save · `세션` switch session · `나가기` exit, and a small usage line (5-hour/weekly plan limits, context tokens).
 
-The capture is a real turn: the prompt asked (in Korean) to fix a bug in `cart.js` step by step and add an edge-case test. The AI actually edited `src/cart.js`, created `test/cart.test.js` and ran `npm test`. Three keywords made it a crit.
+### 3. While the AI works: party + typing drills
+![Party and typing drills](docs/screenshots/typing.png)
 
-### 3. Merchant goblin
+A live timer, the **AI party** (🧙 wizard explores · 🗡 swordsman implements · 🏹 archer verifies) with how many processes run at once, and how many background tasks are pending. Long jobs go to the 🦅 **courier** subagent in the background, and Claude follows up with the result when it's done. Meanwhile, **type a line of code** exactly for 1 damage plus an explanation of that code (tap for more).
+
+### 4. Quests (when the AI asks you something)
+![Quest](docs/screenshots/quest.png)
+
+When the AI needs your answer, a large quest window opens. Pick a choice or write your own, and **attack with that answer**.
+
+### 5. Merchant goblin
 ![Merchant goblin](docs/screenshots/merchant.png)
 
-The merchant sometimes shows up after a clear. Click an item to buy it with coins. In the 🎲 odd/even box, set a stake (or `올인`, all-in) and press `홀` (odd) / `짝` (even) to roll. When done, press `떠나기` (leave) to move on. Typing a prompt here closes the shop and attacks the next monster with it.
+Sometimes appears after a clear. Buy items with coins, or gamble on 🎲 odd/even (win double; `올인` = all-in). Typing a prompt here closes the shop and attacks the next monster.
 
-### 4. Blacksmith
+### 6. Blacksmith
 ![Blacksmith](docs/screenshots/blacksmith.png)
 
-Shows the current sword level, the next enhance's cost, success rate and break-on-failure chance. `강화하기` (enhance) rolls immediately: success, fail, or 💥 broken. The ⭐ stat-point buttons at the top spend points earned from defeated monsters.
+Enhance your weapon with coins (up to +10). Success gets less likely as it climbs, and from +3 a failure can break it back to +0 (shabby). Each level changes the weapon's prefix (초라한 shabby → 그냥 plain → … → 신화의 mythic).
 
-### 5. Exit
-![Exit dialog](docs/screenshots/exit.png)
+### 7. Exit
+![Exit](docs/screenshots/exit.png)
 
-`나가기` (Exit) asks whether to end today's adventure or keep playing. Ending saves your floor, coins, bag, and this folder's Claude session and chat history. Next time you open the folder, the earlier chat appears at the top of the log.
+"End today's adventure" or "keep playing". Ending saves your floor, coins, bag, weapon level, and this folder's Claude session and chat history. Each session also autosaves the game state, so resuming a session resumes the run.
 
 ## Mac App
 

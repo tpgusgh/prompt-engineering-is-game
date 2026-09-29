@@ -1372,3 +1372,158 @@ body {
   padding: 4px 8px;
   font-size: 12px;
 }
+
+/* Quest modal: the AI asking the player something */
+.quest-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(20, 16, 8, 0.75), rgba(0, 0, 0, 0.9));
+  animation: pop-in 0.25s ease-out;
+}
+.quest-panel {
+  width: min(900px, 88vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 26px 30px 22px;
+  background: linear-gradient(180deg, #3a2f1f, #2a2216);
+  border: 3px solid #b8904a;
+  border-radius: 14px;
+  box-shadow: 0 0 0 6px rgba(184, 144, 74, 0.18), 0 20px 60px rgba(0, 0, 0, 0.6);
+  color: #f3e6c8;
+}
+.quest-ribbon {
+  align-self: center;
+  margin-top: -44px;
+  padding: 6px 22px;
+  background: #8c5a2b;
+  border: 2px solid #e0b870;
+  border-radius: 20px;
+  font-weight: bold;
+  color: #fff4d6;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+.quest-body {
+  overflow-y: auto;
+  font-size: 17px;
+  line-height: 1.7;
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+}
+.quest-body p { margin: 0 0 0.7em; }
+.quest-body strong { color: #ffd98a; }
+.quest-body code { background: rgba(0, 0, 0, 0.3); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
+.quest-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.quest-choice {
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.45;
+  background: rgba(0, 0, 0, 0.28);
+  color: #f3e6c8;
+  border: 2px solid #b8904a;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.quest-choice:hover {
+  background: #8c5a2b;
+  color: #fff;
+}
+.quest-answer {
+  resize: vertical;
+  min-height: 60px;
+  padding: 10px 12px;
+  font-size: 15px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #f3e6c8;
+  border: 1px solid #8c6a34;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+}
+.quest-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.quest-actions button {
+  padding: 8px 18px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #b8904a;
+  background: transparent;
+  color: #f3e6c8;
+  cursor: pointer;
+}
+#quest-submit {
+  background: #b8904a;
+  color: #2a2216;
+  font-weight: bold;
+}
+#api-key-input {
+  width: 260px;
+  padding: 4px 8px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+}
+#setup-screen #auth-check,
+#setup-screen #api-key-save,
+#setup-screen #api-key-clear {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+/* Game inventory in the sidebar */
+.bag-panel {
+  border-top: 1px solid #3b4252;
+  max-height: 42%;
+  display: flex;
+  flex-direction: column;
+}
+.bag-list {
+  overflow-y: auto;
+  padding: 4px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bag-empty {
+  font-size: 11.5px;
+  color: #616e88;
+  padding: 4px 2px;
+}
+.bag-item {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: #1c2028;
+  border: 1px solid #2e3440;
+  border-radius: 6px;
+}
+.bag-icon { font-size: 16px; text-align: center; }
+.bag-info { display: flex; flex-direction: column; min-width: 0; }
+.bag-info strong { font-size: 12px; color: #e5e9f0; }
+.bag-info span { font-size: 10.5px; color: #7b88a1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bag-item button {
+  padding: 2px 8px;
+  font-size: 11px;
+  background: #3b4252;
+  color: #e5e9f0;
+  border: 1px solid #a3be8c;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.bag-item button:disabled { opacity: 0.45; cursor: default; }

@@ -32,10 +32,23 @@
       <fieldset>
         <legend>용사 능력치</legend>
         <div id="stat-options" class="stat-list"></div>
-        <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 검 강화는 영구 (던전의 대장장이).</p>
+        <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 무기 강화는 영구 (던전의 대장장이).</p>
       </fieldset>
       <fieldset>
         <legend>⚙️ Claude 설정 <span class="option-sub">(이 게임의 세션에만 적용 · 내 Claude Code 설정은 안 바뀜)</span></legend>
+        <div class="setting-row">
+          🔑 연결 방식
+          <label><input type="radio" name="auth-mode" value="cli" /> Claude Code 로그인 (CLI)</label>
+          <label><input type="radio" name="auth-mode" value="api" /> API 키</label>
+          <button type="button" id="auth-check">연결 확인</button>
+          <span id="auth-status" class="option-sub"></span>
+        </div>
+        <div id="api-key-row" class="setting-row" hidden>
+          <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+          <button type="button" id="api-key-save">저장</button>
+          <button type="button" id="api-key-clear">삭제</button>
+          <span id="api-key-info" class="option-sub"></span>
+        </div>
         <label class="setting-row">⚡ 공격 속도 (effort) <select id="effort-select"></select></label>
         <div class="setting-row">
           🧩 스킬
@@ -91,6 +104,10 @@
         </form>
         <div id="tree-status" class="tree-status" hidden></div>
         <div id="file-tree" class="file-tree"></div>
+        <div class="bag-panel">
+          <div class="inventory-header"><span>🎒 가방</span><span id="bag-coins" class="coin-label"></span></div>
+          <div id="bag" class="bag-list"></div>
+        </div>
       </aside>
 
       <div id="battle-column">
@@ -116,7 +133,6 @@
             <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />
           </span>
         </div>
-        <div id="bag" class="bag"></div>
         <div id="stat-panel" class="stat-panel"></div>
 
         <div id="blacksmith-panel" class="merchant-panel" hidden>
@@ -213,6 +229,19 @@
         <p class="option-sub">이 폴더의 Claude Code 세션 (터미널 claude에서 쓴 세션 포함). 고르면 다음 공격부터 그 세션으로 이어간다.</p>
         <div id="session-list" class="slot-list"></div>
         <div class="exit-actions"><button type="button" id="session-close">닫기</button></div>
+      </div>
+    </div>
+
+    <div id="quest-overlay" class="quest-overlay" hidden>
+      <div class="quest-panel">
+        <div class="quest-ribbon">📜 퀘스트 — Claude가 용사의 대답을 기다린다</div>
+        <div id="quest-body" class="quest-body markdown"></div>
+        <div id="quest-choices" class="quest-choices"></div>
+        <textarea id="quest-answer" class="quest-answer" rows="3" placeholder="직접 답하기... (Enter 제출 · Shift+Enter 줄바꿈)"></textarea>
+        <div class="quest-actions">
+          <button type="button" id="quest-later">나중에</button>
+          <button type="button" id="quest-submit">⚔️ 이 답으로 공격</button>
+        </div>
       </div>
     </div>
 

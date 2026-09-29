@@ -698,3 +698,11 @@ test('autosave: a slot-0 snapshot is emitted each time the game waits for input,
     assert.deepEqual(last.state.stats, { attack: 0, defense: 0, vitality: 1 });
   }
 });
+
+test('/use bandage heals a little (a cheaper potion)', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/use bandage', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { bandage: 2 } });
+  const hp = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : -1));
+  assert.deepEqual(hp, [94, 100], '94 + 15, capped at 100');
+  assert.deepEqual(summary.bag, { bandage: 1 });
+});

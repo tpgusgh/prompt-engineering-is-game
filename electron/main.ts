@@ -1,12 +1,13 @@
 // electron/main.ts
 import electron from 'electron';
-const { app, BrowserWindow, ipcMain, dialog } = electron;
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = electron;
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
-import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
-import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, type ClaudeSettings } from '../src/claude-settings.ts';
+import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
+import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
+import os from 'node:os';
 import { loadSlots, writeSlot } from '../src/saves.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
 import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
@@ -111,20 +112,76 @@ ipcMain.handle('get-setup-info', async () => ({
 // on its next turn).
 const capabilityCache = new Map<string, Awaited<ReturnType<typeof fetchClaudeCapabilities>>>();
 ipcMain.handle('claude-capabilities', async (_event, cwd: string | null, refresh = false) => {
+  await authReady;
   const dir = path.resolve(cwd ?? app.getPath('home'));
-  if (refresh || !capabilityCache.get(dir)) capabilityCache.set(dir, await fetchClaudeCapabilities(dir));
+  if (refresh || !capabilityCache.get(dir)) capabilityCache.set(dir, await fetchClaudeCapabilities(dir, claudeEnv()));
   return capabilityCache.get(dir) ?? null;
 });
 let currentClaude: ClaudeSettings | null = null;
 ipcMain.handle('set-claude-settings', async (_event, settings: unknown) => {
   const next = coerceClaudeSettings(settings);
+  if (currentClaude?.auth !== next.auth) capabilityCache.clear();
   currentClaude = next;
   await saveProfile({ ...(await loadProfile()), claude: next });
   return next;
 });
 ipcMain.handle('claude-settings-info', () => ({ levels: EFFORT_LEVELS, attackSpeed: ATTACK_SPEED }));
 
-ipcMain.handle('get-usage', () => fetchPlanUsage(currentCwd ?? app.getPath('home')));
+ipcMain.handle('get-usage', async () => {
+  await authReady;
+  return fetchPlanUsage(currentCwd ?? app.getPath('home'), claudeEnv());
+});
+
+// ---------------------------------------------------------------------------
+// Auth: the Claude Code CLI login (default) or an Anthropic API key. The key
+// is encrypted with the OS keychain (safeStorage) at rest and never sent back
+// to the page — the page only learns whether one is set (and its last 4).
+const SECRETS_FILE = path.join(os.homedir(), '.promptbattle', 'secrets.json');
+let apiKey: string | undefined;
+async function loadApiKey(): Promise<void> {
+  try {
+    const { anthropicApiKey } = JSON.parse(await fs.readFile(SECRETS_FILE, 'utf-8'));
+    if (typeof anthropicApiKey === 'string' && safeStorage.isEncryptionAvailable()) {
+      apiKey = safeStorage.decryptString(Buffer.from(anthropicApiKey, 'base64'));
+    }
+  } catch {
+    apiKey = undefined;
+  }
+}
+// The key and the saved auth mode must be loaded before any claude process spawns.
+const authReady = app.whenReady().then(async () => {
+  await loadApiKey();
+  currentClaude ??= (await loadProfile()).claude;
+});
+function claudeEnv(): Record<string, string | undefined> {
+  return authEnv(process.env, (currentClaude ?? { auth: 'cli' }).auth, apiKey);
+}
+const keyInfo = () => ({ hasKey: Boolean(apiKey), last4: apiKey ? apiKey.slice(-4) : null });
+ipcMain.handle('api-key-info', async () => {
+  await authReady;
+  return { ...keyInfo(), encryption: safeStorage.isEncryptionAvailable() };
+});
+ipcMain.handle('set-api-key', async (_event, key: string | null) => {
+  await fs.mkdir(path.dirname(SECRETS_FILE), { recursive: true });
+  const trimmed = key?.trim();
+  if (!trimmed) {
+    apiKey = undefined;
+    await fs.rm(SECRETS_FILE, { force: true });
+  } else {
+    if (!safeStorage.isEncryptionAvailable()) return { ok: false, message: '이 컴퓨터에서 키체인 암호화를 쓸 수 없어 저장하지 않았다' };
+    apiKey = trimmed;
+    const encrypted = safeStorage.encryptString(trimmed).toString('base64');
+    await fs.writeFile(SECRETS_FILE, JSON.stringify({ anthropicApiKey: encrypted }), { mode: 0o600 });
+  }
+  capabilityCache.clear();
+  return { ok: true, ...keyInfo() };
+});
+// "연결 확인": which account/key the game's sessions would use right now.
+ipcMain.handle('check-auth', async () => {
+  await authReady;
+  const account = await fetchAccount(currentCwd ?? app.getPath('home'), claudeEnv());
+  return account ?? null;
+});
 
 ipcMain.handle('set-model', (_event, model: string) => {
   const weapon = getWeapon(model);
@@ -171,6 +228,7 @@ ipcMain.handle(
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
     const party = requested.party ?? true;
+    await authReady;
     currentClaude = profile.claude;
     const heroClass = getHeroClass(options.heroClass).id;
     currentModel = getWeapon(options.model).model;
@@ -199,7 +257,7 @@ ipcMain.handle(
     };
 
     const summary = await runDungeon({
-      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel, party, currentClaude ?? undefined),
+      runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, { model: currentModel, party, claude: currentClaude ?? undefined, env: claudeEnv() }),
       cwd,
       difficulty: options.difficulty,
       coins: slot ? slot.coins : profile.coins,

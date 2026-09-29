@@ -390,7 +390,7 @@ function setInputEnabled(enabled) {
   exitBtn.disabled = !enabled;
   $('save-btn').disabled = !enabled;
   $('session-btn').disabled = !enabled;
-  for (const btn of document.querySelectorAll('.bag button, .merchant-panel button')) btn.disabled = !enabled;
+  for (const btn of document.querySelectorAll('.bag-list button, .merchant-panel button')) btn.disabled = !enabled;
   if (statDefs.length) renderStatPanel();
 }
 
@@ -404,6 +404,7 @@ function turnConcluded() {
   finalizeLive();
   $('turn-panel').hidden = true;
   refreshTree();
+  if (pendingQuest) showQuest(pendingQuest);
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +440,7 @@ const ROLES = {
   wizard: { icon: '🧙', name: '마법사' },
   swordsman: { icon: '🗡', name: '검사' },
   archer: { icon: '🏹', name: '궁수' },
+  courier: { icon: '🦅', name: '전령' },
 };
 const roleOf = (type) => ROLES[type] ?? { icon: '🤖', name: type };
 const activeAgents = new Map(); // tool-use id -> { agentType, description }
@@ -576,6 +578,7 @@ function newBubble() {
   const el = document.createElement('div');
   el.className = 'markdown ai-bubble typing';
   logEl.appendChild(el);
+  pendingQuest = null; // only the turn's last reply can be a question to answer
   const b = { el, target: '', shown: 0, raf: 0, lastRender: 0, closing: false };
   const render = (force) => {
     const now = performance.now();
@@ -590,6 +593,7 @@ function newBubble() {
     el.innerHTML = marked.parse(b.target);
     decorateReply(el);
     attachChoices(el);
+    noteQuestion(el);
     scrollLogToBottom();
   };
   b.push = (text) => {
@@ -656,21 +660,46 @@ const itemName = (id) => items.find((i) => i.id === id)?.name ?? id;
 
 function renderCoins() {
   coinLabel.textContent = `🪙 ${coins}`;
+  if ($('bag-coins')) $('bag-coins').textContent = `🪙 ${coins}`;
 }
 
 // The bag: each item is a button that uses it (a free action, no turn spent).
+// The game inventory (sidebar, under the file tree): each item with its
+// count, what it does, and a use button (a free action).
+const ITEM_ICONS = { bandage: '🩹', potion: '🧪', whetstone: '🪨', amulet: '🧿', smoke: '💨' };
 function renderBag() {
   bagEl.textContent = '';
+  $('bag-coins').textContent = `🪙 ${coins}`;
   const entries = Object.entries(bag).filter(([, n]) => n > 0);
-  bagEl.hidden = entries.length === 0;
+  if (entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'bag-empty';
+    empty.textContent = '비어 있음 — 상인 고블린에게 붕대·물약 등을 살 수 있다';
+    bagEl.append(empty);
+    return;
+  }
   for (const [id, count] of entries) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = `${itemName(id)} x${count}`;
-    btn.title = items.find((i) => i.id === id)?.description ?? '';
-    btn.disabled = !inputEnabled;
-    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/use ${id}`));
-    bagEl.append(btn);
+    const item = items.find((i) => i.id === id);
+    const row = document.createElement('div');
+    row.className = 'bag-item';
+    const icon = document.createElement('span');
+    icon.className = 'bag-icon';
+    icon.textContent = ITEM_ICONS[id] ?? '📦';
+    const info = document.createElement('div');
+    info.className = 'bag-info';
+    const name = document.createElement('strong');
+    name.textContent = `${itemName(id)} ×${count}`;
+    const desc = document.createElement('span');
+    desc.textContent = item?.description ?? '';
+    info.append(name, desc);
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.textContent = '사용';
+    use.disabled = !inputEnabled;
+    use.title = '턴 소모 없이 사용';
+    use.addEventListener('click', () => window.promptBattle.submitPrompt(`/use ${id}`));
+    row.append(icon, info, use);
+    bagEl.append(row);
   }
 }
 
@@ -1189,6 +1218,7 @@ function renderBattleEvent(event) {
         wizard: `🧙✨ 마법사가 불러낸 정령이 덮쳤다! ${event.damage}의 피해!`,
         archer: `🏹 궁수의 동료들이 일제히 화살을 날렸다! ${event.damage}의 피해!`,
         swordsman: `🏹🗡 궁수의 엄호 사격 속에 검사가 파고들어 베었다! ${event.damage}의 피해!`,
+        courier: `🦅 전령이 불러온 원군이 몰아쳤다! ${event.damage}의 피해!`,
       }[type] ?? `  » ${event.damage}의 피해!`;
       appendLog(line, type ? `partial-hit party-${type}` : 'partial-hit');
       flashMonster();
@@ -1359,6 +1389,7 @@ function renderBattleEvent(event) {
     case 'itemUsed': {
       const lines = {
         potion: '회복 물약을 마셨다! 체력이 회복된다.',
+        bandage: '🩹 붕대를 감았다! 체력이 조금 회복된다.',
         whetstone: '숫돌로 무기를 갈았다! 다음 공격은 2배.',
         amulet: '수호의 부적이 빛난다! 다음 반격을 막아준다.',
       };
@@ -2006,6 +2037,7 @@ function renderMcp() {
 }
 
 function renderClaudeSettings() {
+  renderAuth();
   renderEffortSelects();
   renderSkills();
   renderMcp();
@@ -2025,3 +2057,102 @@ window.promptBattle.claudeSettingsInfo().then((info) => {
   renderClaudeSettings();
 });
 loadCapabilities();
+
+// ---------------------------------------------------------------------------
+// Quest modal: when Claude's final reply asks the player something, it pops
+// up large, like a quest giver, with the choices as buttons and a free answer.
+let pendingQuest = null;
+function isQuestion(el) {
+  const blocks = [...el.children];
+  const last = blocks[blocks.length - 1];
+  const prev = blocks[blocks.length - 2];
+  const endsWithQ = (node) => node && /[?？]\s*$/.test(node.textContent.trim());
+  return endsWithQ(last) || ((last?.tagName === 'UL' || last?.tagName === 'OL') && endsWithQ(prev));
+}
+function noteQuestion(el) {
+  if (!isQuestion(el)) return;
+  pendingQuest = el;
+  if (inputEnabled && $('turn-panel').hidden) showQuest(el);
+}
+function showQuest(el) {
+  pendingQuest = null;
+  const body = $('quest-body');
+  body.innerHTML = el.innerHTML;
+  // Choices: a trailing list becomes big buttons (and leaves the body).
+  const choices = $('quest-choices');
+  choices.textContent = '';
+  const last = body.lastElementChild;
+  if (last && (last.tagName === 'UL' || last.tagName === 'OL')) {
+    for (const li of last.querySelectorAll(':scope > li')) {
+      const text = li.textContent.trim();
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'quest-choice';
+      btn.textContent = text;
+      btn.addEventListener('click', () => answerQuest(text));
+      choices.append(btn);
+    }
+    last.remove();
+  }
+  $('quest-answer').value = '';
+  $('quest-overlay').hidden = false;
+  sfx('party');
+  $('quest-answer').focus();
+}
+function answerQuest(text) {
+  const answer = text.trim();
+  if (!answer || !inputEnabled) return;
+  $('quest-overlay').hidden = true;
+  promptInput.value = answer;
+  attackForm.requestSubmit();
+}
+$('quest-submit').addEventListener('click', () => answerQuest($('quest-answer').value));
+$('quest-later').addEventListener('click', () => {
+  $('quest-overlay').hidden = true;
+  promptInput.focus();
+});
+$('quest-answer').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    answerQuest($('quest-answer').value);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Connection: Claude Code CLI login or an API key (stored encrypted by main).
+async function renderAuth() {
+  for (const r of document.querySelectorAll('input[name="auth-mode"]')) r.checked = r.value === claudeSettings.auth;
+  $('api-key-row').hidden = claudeSettings.auth !== 'api';
+  const info = await window.promptBattle.apiKeyInfo();
+  $('api-key-info').textContent = info.hasKey ? `저장된 키: ••••${info.last4} (키체인 암호화)` : info.encryption ? '저장된 키 없음' : '⚠️ 이 컴퓨터에서 키체인 암호화를 쓸 수 없음';
+  if (claudeSettings.auth === 'api' && !info.hasKey) $('auth-status').textContent = 'API 키를 입력해줘';
+}
+for (const radio of document.querySelectorAll('input[name="auth-mode"]')) {
+  radio.addEventListener('change', async () => {
+    await saveClaude({ auth: radio.value });
+    $('auth-status').textContent = '';
+    renderAuth();
+    loadCapabilities(true);
+    refreshUsage(true);
+  });
+}
+$('api-key-save').addEventListener('click', async () => {
+  const r = await window.promptBattle.setApiKey($('api-key-input').value);
+  $('api-key-input').value = '';
+  $('auth-status').textContent = r.ok ? '키를 저장했다' : r.message;
+  renderAuth();
+});
+$('api-key-clear').addEventListener('click', async () => {
+  await window.promptBattle.setApiKey(null);
+  $('auth-status').textContent = '키를 지웠다';
+  renderAuth();
+});
+$('auth-check').addEventListener('click', async () => {
+  $('auth-status').textContent = '확인 중...';
+  const a = await window.promptBattle.checkAuth();
+  $('auth-status').textContent = !a
+    ? '❌ 연결 실패 (로그인 또는 키를 확인해줘)'
+    : a.apiKeySource && claudeSettings.auth === 'api'
+      ? `✅ API 키로 연결 (${a.apiKeySource})`
+      : `✅ ${a.email ?? '로그인됨'}${a.subscriptionType ? ` · ${a.subscriptionType}` : ''}${a.apiKeySource ? ` · 키: ${a.apiKeySource}` : ''}`;
+});

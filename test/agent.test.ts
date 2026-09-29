@@ -242,3 +242,14 @@ test('tool results carry their output text and error flag, capped', () => {
   assert.deepEqual(info.toolOutputs[1], { id: 'b2', output: 'exit 1', isError: true });
   assert.ok(info.toolOutputs[2].output.length <= 4100);
 });
+
+test('a new main-thread assistant message is flagged so replies split into separate paragraphs', () => {
+  assert.equal(extractToolInfo({ type: 'stream_event', parent_tool_use_id: null, event: { type: 'message_start', message: {} } }).messageStart, true);
+  assert.equal(extractToolInfo({ type: 'stream_event', parent_tool_use_id: 'tu_1', event: { type: 'message_start', message: {} } }).messageStart, false);
+});
+
+test('task notifications report which Agent tool call a background task belonged to', () => {
+  const info = extractToolInfo({ type: 'system', subtype: 'task_notification', task_id: 't1', tool_use_id: 'tu_9', status: 'completed' });
+  assert.deepEqual(info.tasksFinished, ['tu_9']);
+  assert.deepEqual(extractToolInfo({ type: 'system', subtype: 'task_started', task_id: 't1', tool_use_id: 'tu_9' }).tasksStarted, ['tu_9']);
+});

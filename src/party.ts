@@ -3,9 +3,9 @@ import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 // The AI party: three Claude subagents the main agent can send out, several
 // at once. Their in-game attacks: the wizard's spirits, the archer's
 // companions, the swordsman backed by the archer's cover fire.
-export type PartyRole = 'wizard' | 'swordsman' | 'archer';
+export type PartyRole = 'wizard' | 'swordsman' | 'archer' | 'courier';
 
-export const PARTY: Record<PartyRole, AgentDefinition> = {
+export const PARTY: Record<Exclude<PartyRole, 'courier'>, AgentDefinition> = {
   wizard: {
     description: 'Wizard (마법사): explores and researches — reads, searches and explains code to gather context. Never edits files.',
     prompt:
@@ -29,7 +29,28 @@ export const PARTY: Record<PartyRole, AgentDefinition> = {
   },
 };
 
-export const PARTY_SYSTEM_PROMPT =
-  'You lead a party of subagents: wizard (explore/research, read-only), swordsman (implement changes), archer (run tests/verify). ' +
-  'When a task has independent parts, delegate them by calling the Agent tool several times in ONE message with run_in_background: false, so they work in parallel. ' +
-  'For small, simple tasks just do the work yourself. Reply to the user in the language they wrote in.';
+// The courier (전령) carries long-running work off the main thread. Always
+// available, party mode or not, so long jobs never block a turn.
+export const COURIER: AgentDefinition = {
+  description:
+    'Courier (전령): runs long-running or background-worthy work — builds, full test suites, installs, data processing, training, long scripts, anything likely to take more than a few minutes — and reports the outcome.',
+  prompt:
+    'You are the courier: you carry out one long-running job to completion (it may take a long time; that is fine), then report concisely what ran, whether it succeeded, and the decisive output lines or errors.',
+  tools: ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep'],
+  model: 'inherit',
+};
+
+export function agentsFor(party: boolean): Record<string, AgentDefinition> {
+  return party ? { ...PARTY, courier: COURIER } : { courier: COURIER };
+}
+
+const COURIER_RULE =
+  'Delegate long-running or background-worthy work (builds, full test suites, installs, data processing, training, long scripts — anything likely to take more than a few minutes, and certainly anything around 20 minutes or more) to the courier subagent via the Agent tool with run_in_background: true, instead of running it inline or with Bash run_in_background. Keep working or end your turn; when the courier reports back, tell the user the result.';
+
+const PARTY_RULE =
+  'You also lead a party of subagents: wizard (explore/research, read-only), swordsman (implement changes), archer (run tests/verify). ' +
+  'When a task has independent parts, delegate them by calling the Agent tool several times in ONE message so they work in parallel. For small, simple tasks just do the work yourself.';
+
+export function systemPromptFor(party: boolean): string {
+  return [COURIER_RULE, ...(party ? [PARTY_RULE] : []), 'Reply to the user in the language they wrote in.'].join(' ');
+}

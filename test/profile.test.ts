@@ -6,7 +6,7 @@ import path from 'node:path';
 import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [] } };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const } };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -16,9 +16,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'] } }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' } }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'] } });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' } });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {

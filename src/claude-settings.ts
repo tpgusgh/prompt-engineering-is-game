@@ -21,9 +21,12 @@ export interface ClaudeSettings {
   enabledSkills: string[];
   // MCP server names (as mcpServerStatus reports them) to keep out of the game.
   disabledMcp: string[];
+  // cli = the Claude Code login on this machine; api = an Anthropic API key
+  // (stored encrypted by the app, never in this settings object).
+  auth: 'cli' | 'api';
 }
 
-export const DEFAULT_CLAUDE_SETTINGS: ClaudeSettings = { effort: 'high', skillsMode: 'all', enabledSkills: [], disabledMcp: [] };
+export const DEFAULT_CLAUDE_SETTINGS: ClaudeSettings = { effort: 'high', skillsMode: 'all', enabledSkills: [], disabledMcp: [], auth: 'cli' };
 
 // Claude Code names MCP tools mcp__<server>__<tool>, with the server name's
 // characters outside [A-Za-z0-9_-] turned into "_". Disallowing the bare
@@ -49,7 +52,17 @@ export function coerceClaudeSettings(value: unknown): ClaudeSettings {
     skillsMode: v.skillsMode === 'none' || v.skillsMode === 'custom' ? v.skillsMode : 'all',
     enabledSkills: strings(v.enabledSkills),
     disabledMcp: strings(v.disabledMcp),
+    auth: v.auth === 'api' ? 'api' : 'cli',
   };
+}
+
+// Environment for the claude process: in api mode the key is injected; in
+// cli mode any inherited ANTHROPIC_API_KEY is removed so the login is used.
+export function authEnv(base: Record<string, string | undefined>, auth: 'cli' | 'api', apiKey: string | undefined) {
+  const env = { ...base };
+  delete env.ANTHROPIC_API_KEY;
+  if (auth === 'api' && apiKey) env.ANTHROPIC_API_KEY = apiKey;
+  return env;
 }
 
 // When does a turn end? Normally at the result. If Claude left background

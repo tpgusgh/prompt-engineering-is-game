@@ -1,5 +1,5 @@
 import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
-import { PARTY, PARTY_SYSTEM_PROMPT } from './party.ts';
+import { agentsFor, systemPromptFor } from './party.ts';
 import { relabelForListing } from './transcripts.ts';
 import { toQueryOptions, createTurnCloser, type ClaudeSettings } from './claude-settings.ts';
 
@@ -42,6 +42,11 @@ export interface ExtractedInfo {
   toolResultIds: string[];
   // Streamed text from the main agent (stream_event text_delta).
   textDelta?: string;
+  // A new main-thread assistant message began (separate paragraph).
+  messageStart: boolean;
+  // Background task lifecycle, keyed by the tool call that launched it.
+  tasksStarted: string[];
+  tasksFinished: string[];
   // Set on messages produced inside a subagent.
   parentToolUseId?: string;
 }
@@ -84,6 +89,14 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
         toolOutputs.push({ id: block.tool_use_id, output, isError: block.is_error === true });
       }
     }
+  }
+
+  const messageStart = m?.type === 'stream_event' && !parentToolUseId && m.event?.type === 'message_start';
+  const tasksStarted: string[] = [];
+  const tasksFinished: string[] = [];
+  if (m?.type === 'system' && typeof m.tool_use_id === 'string') {
+    if (m.subtype === 'task_started') tasksStarted.push(m.tool_use_id);
+    if (m.subtype === 'task_notification') tasksFinished.push(m.tool_use_id);
   }
 
   let textDelta: string | undefined;
@@ -172,6 +185,7 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   return {
     filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow,
     agentStarts, readsRun, toolCalls, toolOutputs, toolResultIds, textDelta, parentToolUseId,
+    messageStart, tasksStarted, tasksFinished,
   };
 }
 
@@ -217,12 +231,16 @@ export function toPlanUsage(response: unknown): PlanUsage | null {
 // model tokens.
 // Runs `ask` against an idle `claude` process that never receives a prompt
 // (no model tokens), for control-channel queries. Null on failure/timeout.
-async function withIdleQuery<T>(cwd: string, ask: (q: ReturnType<typeof query>) => Promise<T>): Promise<T | null> {
+async function withIdleQuery<T>(
+  cwd: string,
+  ask: (q: ReturnType<typeof query>) => Promise<T>,
+  env?: Record<string, string | undefined>,
+): Promise<T | null> {
   let release = () => {};
   const idle = (async function* () {
     await new Promise<void>((r) => (release = r));
   })() as AsyncIterable<never>;
-  const q = query({ prompt: idle, options: { cwd, ...executableOverrideOptions() } });
+  const q = query({ prompt: idle, options: { cwd, ...(env ? { env } : {}), ...executableOverrideOptions() } });
   try {
     const timeout = new Promise<null>((r) => setTimeout(() => r(null), 15000));
     return await Promise.race([ask(q), timeout]);
@@ -234,8 +252,13 @@ async function withIdleQuery<T>(cwd: string, ask: (q: ReturnType<typeof query>) 
   }
 }
 
-export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
-  return toPlanUsage(await withIdleQuery(cwd, (q) => q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })));
+export async function fetchPlanUsage(cwd: string, env?: Record<string, string | undefined>): Promise<PlanUsage | null> {
+  return toPlanUsage(await withIdleQuery(cwd, (q) => q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), env));
+}
+
+// Who the game's Claude sessions run as (for the settings tab's check).
+export async function fetchAccount(cwd: string, env?: Record<string, string | undefined>) {
+  return withIdleQuery(cwd, async (q) => (await q.initializationResult()).account, env);
 }
 
 export interface ClaudeCapabilities {
@@ -245,7 +268,7 @@ export interface ClaudeCapabilities {
 }
 
 // What the settings tab can toggle for this folder.
-export async function fetchClaudeCapabilities(cwd: string): Promise<ClaudeCapabilities | null> {
+export async function fetchClaudeCapabilities(cwd: string, env?: Record<string, string | undefined>): Promise<ClaudeCapabilities | null> {
   return withIdleQuery(cwd, async (q) => {
     const init = await q.initializationResult();
     const mcp = await q.mcpServerStatus();
@@ -255,7 +278,7 @@ export async function fetchClaudeCapabilities(cwd: string): Promise<ClaudeCapabi
       .map((c) => ({ name: c.name, description: c.description }))
       .sort((a, b) => a.name.localeCompare(b.name));
     return { skills, mcpServers: mcp.map((s) => ({ name: s.name, status: s.status })) };
-  });
+  }, env);
 }
 
 const MAX_TOOL_OUTPUT = 4000;
@@ -317,11 +340,21 @@ export async function runAgentTurn(
   cwd: string,
   sessionId?: string,
   onEvent?: (event: AgentEvent) => void,
-  model?: string,
-  // Let the main agent send out the wizard/swordsman/archer subagents.
-  party = false,
-  // Effort, skills filter and blocked MCP servers from the settings tab.
-  claude?: ClaudeSettings,
+  {
+    model,
+    party = false,
+    claude,
+    env,
+  }: {
+    model?: string;
+    // Let the main agent send out the wizard/swordsman/archer subagents
+    // (the courier for long-running work is always available).
+    party?: boolean;
+    // Effort, skills filter and blocked MCP servers from the settings tab.
+    claude?: ClaudeSettings;
+    // Process environment (auth: CLI login vs API key), see authEnv.
+    env?: Record<string, string | undefined>;
+  } = {},
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
   const commandsRun: string[] = [];
@@ -332,6 +365,8 @@ export async function runAgentTurn(
   let contextTokens: number | undefined;
   let contextWindow: number | undefined;
   const runningAgents = new Set<string>();
+  const backgroundAgents = new Set<string>();
+  let textSent = false;
   // Tool calls shown to the player, awaiting their result (OUT).
   const shownTools = new Set<string>();
   // The prompt goes in as a stream kept open until the turn is really over,
@@ -343,9 +378,8 @@ export async function runAgentTurn(
     yield { type: 'user' as const, message: { role: 'user' as const, content: prompt }, parent_tool_use_id: null };
     await inputClosed;
   })();
+  // No time limit: a turn waits as long as its background work takes.
   const closer = createTurnCloser();
-  // ponytail: hard cap on how long a turn may wait for background work.
-  const safety = setTimeout(() => closeInput(), 30 * 60 * 1000);
   const settings = claude ? toQueryOptions(claude) : undefined;
 
   try {
@@ -361,10 +395,12 @@ export async function runAgentTurn(
         // `tools` restricts the actual available set (sdk.d.ts: "Specify the base
         // set of available built-in tools") — `allowedTools` only auto-approves,
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
-        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', ...(party ? ['Agent'] : [])],
+        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent'],
+        agents: agentsFor(party),
+        systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: systemPromptFor(party) },
+        ...(env ? { env } : {}),
         ...(settings ? { effort: settings.effort, disallowedTools: settings.disallowedTools } : {}),
         ...(settings?.skills ? { skills: settings.skills } : {}),
-        ...(party ? { agents: PARTY, systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: PARTY_SYSTEM_PROMPT } } : {}),
         // Stream text as it's written so the UI can type it out live.
         includePartialMessages: true,
         ...(sessionId ? { resume: sessionId } : {}),
@@ -373,7 +409,18 @@ export async function runAgentTurn(
     })) {
       const info = extractToolInfo(message);
       const agentId = info.parentToolUseId && runningAgents.has(info.parentToolUseId) ? info.parentToolUseId : undefined;
-      if (info.textDelta) onEvent?.({ type: 'text', value: info.textDelta });
+      // A reply that resumes after tools/background work starts a new paragraph.
+      if (info.messageStart && textSent) onEvent?.({ type: 'text', value: '\n\n' });
+      if (info.textDelta) {
+        textSent = true;
+        onEvent?.({ type: 'text', value: info.textDelta });
+      }
+      // A backgrounded subagent's Agent call returns at once; it is still
+      // running until its task notification arrives.
+      for (const id of info.tasksStarted) if (runningAgents.has(id)) backgroundAgents.add(id);
+      for (const id of info.tasksFinished) {
+        if (backgroundAgents.delete(id) && runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
+      }
       for (const a of info.agentStarts) {
         runningAgents.add(a.id);
         onEvent?.({ type: 'agentStart', ...a });
@@ -395,6 +442,7 @@ export async function runAgentTurn(
         if (shownTools.delete(out.id)) onEvent?.({ type: 'toolResult', toolId: out.id, output: out.output, isError: out.isError });
       }
       for (const id of info.toolResultIds) {
+        if (backgroundAgents.has(id)) continue;
         if (runningAgents.delete(id)) onEvent?.({ type: 'agentEnd', id });
       }
       text += info.text;
@@ -410,7 +458,6 @@ export async function runAgentTurn(
       if (info.contextTokens !== undefined) contextTokens = info.contextTokens;
       if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
     }
-    clearTimeout(safety);
     closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     // List the session in VS Code / `claude --resume` (see transcripts.ts).
@@ -425,7 +472,6 @@ export async function runAgentTurn(
       contextWindow,
     };
   } catch (err) {
-    clearTimeout(safety);
     closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
     return {

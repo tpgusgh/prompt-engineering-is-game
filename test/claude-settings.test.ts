@@ -14,7 +14,7 @@ test('settings become query options: effort, skills filter, blocked MCP servers'
   assert.deepEqual(toQueryOptions(DEFAULT_CLAUDE_SETTINGS), { effort: 'high', disallowedTools: [] }, 'all skills = CLI default (skills omitted)');
   assert.deepEqual(toQueryOptions({ ...DEFAULT_CLAUDE_SETTINGS, skillsMode: 'none' }).skills, []);
   assert.deepEqual(
-    toQueryOptions({ effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf', 'ecc:tdd'], disabledMcp: ['plugin:github:github'] }),
+    toQueryOptions({ effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf', 'ecc:tdd'], disabledMcp: ['plugin:github:github'], auth: 'cli' }),
     { effort: 'low', skills: ['pdf', 'ecc:tdd'], disallowedTools: ['mcp__plugin_github_github'] },
   );
 });
@@ -46,4 +46,19 @@ test('a turn closes on a result with no background tasks; otherwise it waits for
   const err = createTurnCloser();
   err.onBackgroundTasks(2);
   assert.equal(err.onResult(true), true, 'an error result always ends the turn');
+});
+
+test('auth env: api mode injects the key; cli mode strips any inherited key so the login is used', async () => {
+  const { authEnv } = await import('../src/claude-settings.ts');
+  assert.equal(authEnv({ PATH: '/bin' }, 'api', 'sk-ant-x').ANTHROPIC_API_KEY, 'sk-ant-x');
+  const cli = authEnv({ PATH: '/bin', ANTHROPIC_API_KEY: 'leaked' }, 'cli', 'sk-ant-x');
+  assert.equal('ANTHROPIC_API_KEY' in cli, false);
+  assert.equal(cli.PATH, '/bin');
+  assert.equal('ANTHROPIC_API_KEY' in authEnv({}, 'api', undefined), false, 'api mode without a key adds nothing');
+});
+
+test('auth mode defaults to cli and survives coercion', () => {
+  assert.equal(coerceClaudeSettings({}).auth, 'cli');
+  assert.equal(coerceClaudeSettings({ auth: 'api' }).auth, 'api');
+  assert.equal(coerceClaudeSettings({ auth: 'nope' }).auth, 'cli');
 });

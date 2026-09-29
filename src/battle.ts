@@ -1,7 +1,7 @@
 import { calculateDamage } from './damage.ts';
 import { spawnMonster, MONSTER_COUNT, type Difficulty } from './monsters.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
-import { ITEMS, getItem, POTION_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
+import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
 
@@ -215,12 +215,12 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
   // Free action: never costs a turn or draws a counterattack.
   const useItem = (id: string) => {
-    if ((id !== 'potion' && id !== 'whetstone' && id !== 'amulet') || !takeItem(id)) {
+    if (!['bandage', 'potion', 'whetstone', 'amulet'].includes(id) || !takeItem(id)) {
       deps.onBattleEvent({ type: 'itemUseFailed', itemId: id });
       return;
     }
-    if (id === 'potion') {
-      playerHp = Math.min(playerMaxHp, playerHp + POTION_HEAL);
+    if (id === 'potion' || id === 'bandage') {
+      playerHp = Math.min(playerMaxHp, playerHp + (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL));
       emitPlayerHp();
     } else if (id === 'whetstone') {
       sharpened = true;
