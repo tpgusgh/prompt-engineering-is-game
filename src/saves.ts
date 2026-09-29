@@ -12,6 +12,7 @@ export interface SaveSlot extends RunState {
   themeId: string;
   difficulty: 'easy' | 'normal' | 'hard';
   model: string;
+  heroClass?: string;
 }
 
 function storePath(homeDir: string): string {

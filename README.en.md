@@ -9,7 +9,16 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Prompts are attacks** — longer prompts and keywords ("step by step", "test", "edge case", "refactor", "why", "example") deal more damage; 2+ different keywords is a critical hit. Korean equivalents count too (단계별, 테스트, 엣지 케이스, 리팩토링, 왜, 예시, ...).
 - **Real-time hits** — every command the AI runs or file it edits lands a hit as it happens; touched files fly at the monster as their real OS icon.
 - **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors). 0 HP = defeat. Clearing a floor heals you.
-- **Weapons = Claude models** — Haiku dagger (x0.8), Sonnet longsword (x1), Opus demon blade (x1.25), Fable holy sword (x1.5). Switch any time mid-run.
+- **Classes & weapons = Claude models** — pick a class on the setup screen (🗡 swordsman / 🧙 wizard / 🏹 archer); each names the model-weapons differently and attacks with its own lines. Stronger models hit harder (x0.8 – x1.5); switch any time mid-run.
+
+  | Model | 🗡 Swordsman | 🧙 Wizard | 🏹 Archer |
+  |---|---|---|---|
+  | Haiku (x0.8) | 단검 dagger | 나무 완드 wooden wand | 단궁 short bow |
+  | Sonnet (x1) | 장검 longsword | 마법지팡이 magic staff | 장궁 longbow |
+  | Opus (x1.25) | 마검 demon blade | 현자의 지팡이 sage's staff | 마궁 demon bow |
+  | Fable (x1.5) | 성검 holy sword | 대마도사의 오브 archmage's orb | 천궁 heavenly bow |
+
+  Each enhance level changes the weapon's prefix: 초라한 (shabby) → 그냥 (plain) → 쓸만한 (decent) → … → 전설의 (legendary) → 신화의 (mythic), e.g. `초라한 마법지팡이 +0` → `그냥 마법지팡이 +1`.
 - **Story themes & chapters** — Adventure / Hunt the Demon King / Bug Sweep. Every 6th floor is a chapter boss; clearing it continues the story, and your progress is saved so the next run picks up where you left off.
 - **Inventory** — the sidebar shows your project's file tree; open any file to view or edit and save it. **Drag** files/folders onto another folder to move them, and **drop files from Finder** to copy them in (a name clash becomes `name (1)`). `+📄` / `+📁` create a new file/folder inside the selected folder. Everything stays inside the project folder and nothing is overwritten. ↻ refresh re-reads the tree with an animation.
 - **AI party (subagents)** — three Claude subagents: 🧙 wizard (explore/research), 🗡 swordsman (implement), 🏹 archer (test/verify). When the AI splits work and sends several **at once**, the screen shows "N processes running" and what each is doing. The wizard's work strikes as spirits, the archer's as companions, the swordsman's as a blade under the archer's cover fire. Can be turned off on the setup screen (it uses more tokens).
@@ -20,7 +29,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Chat history** — your prompts and the AI's replies are saved per folder and shown when you open that folder again.
 - **Coins & merchant goblin** — clearing a floor earns coins (bosses pay 3x). After a clear, a merchant goblin sometimes (30%) appears selling a potion (+40 HP), whetstone (next attack x2), amulet (blocks one counterattack), smoke bomb (guaranteed escape) and life crystal (+10 max HP, permanent). Bag items are free actions. The merchant also runs an **odd/even dice game**: bet coins on odd or even, win double or lose the stake.
 - **Stat growth (per run)** — stats start at Lv.0 every run. Every monster defeated grants a stat point; spend it in battle on attack (+10% damage per level), defense (-5% counterattack damage per level) or vitality (+10 max HP per level), each capped at Lv.10. They reset when the run ends; loading a save slot brings that run's stats back. (Sword level and life-crystal max HP are permanent.)
-- **Sword enhancement (blacksmith)** — after a clear you sometimes (20%) meet a blacksmith. Pay coins to enhance your sword (+10% damage per level, max +10). The higher it goes the lower the success rate (+0→+1: 95% … +9→+10: 14%), and from +3 a failure can **break the sword back to +0** (10%–40%).
+- **Sword enhancement (blacksmith)** — after a clear you sometimes (20%) meet a blacksmith. Pay coins to enhance your weapon (+10% damage per level, max +10). The higher it goes the lower the success rate (+0→+1: 95% … +9→+10: 14%), and from +3 a failure can **break the weapon back to +0 (shabby)** (10%–40%).
 - **Usage bar** — a small line at the bottom shows how much of your Claude plan's 5-hour session limit and weekly limit is used/left and when each resets, plus the current conversation's context tokens (used/max). Refreshes after each turn; click to refresh. (Plan limits come from the SDK as percentages, not token counts; hidden with an API key.)
 - **Flee vs. Exit** — fleeing has a 50% chance: success skips to the next floor with no reward, failure wastes the turn and draws a counterattack. You can't flee a boss. The Exit button offers "end today's adventure" (saves floor, coins, bag and session so you resume from that floor) or "keep playing".
 

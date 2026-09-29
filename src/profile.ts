@@ -4,6 +4,7 @@ import os from 'node:os';
 import { MONSTER_COUNT } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
 import { VITALITY_HP } from './stats.ts';
+import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 
 export interface Profile {
   level: number;
@@ -18,10 +19,12 @@ export interface Profile {
   maxHp: number;
   // Permanent: the blacksmith's +N. (Hero stats are per-run, not saved here.)
   swordLevel: number;
+  // Last class picked on the setup screen (names the weapons).
+  heroClass: HeroClassId;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0 };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -61,6 +64,7 @@ function coerceProfile(parsed: unknown): Profile {
     bag: coerceCounts(p?.bag, 1),
     maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
+    heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
   };
 }
 

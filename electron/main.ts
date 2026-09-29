@@ -15,6 +15,7 @@ import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
 import { ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
+import { HERO_CLASSES, getHeroClass } from '../src/classes.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +99,7 @@ ipcMain.handle('get-setup-info', async () => ({
   stats: STATS,
   statMaxLevel: STAT_MAX_LEVEL,
   swordMaxLevel: SWORD_MAX_LEVEL,
+  classes: HERO_CLASSES,
 }));
 
 ipcMain.handle('get-usage', () => fetchPlanUsage(currentCwd ?? app.getPath('home')));
@@ -129,17 +131,19 @@ ipcMain.handle(
       loadSlot?: number;
       // Let the AI send out the wizard/swordsman/archer subagents.
       party?: boolean;
+      heroClass?: string;
     },
   ) => {
     const profile = await loadProfile();
     const slot = requested.loadSlot ? (await loadSlots())[requested.loadSlot - 1] : null;
     if (requested.loadSlot && !slot) throw new Error(`슬롯 ${requested.loadSlot}이(가) 비어 있습니다.`);
     const options = slot
-      ? { ...requested, cwd: slot.cwd, difficulty: slot.difficulty, model: slot.model, themeId: slot.themeId, startFloor: slot.floor, sessionId: slot.sessionId }
+      ? { ...requested, cwd: slot.cwd, difficulty: slot.difficulty, model: slot.model, themeId: slot.themeId, startFloor: slot.floor, sessionId: slot.sessionId, heroClass: slot.heroClass ?? requested.heroClass }
       : requested;
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
     const party = requested.party ?? true;
+    const heroClass = getHeroClass(options.heroClass).id;
     currentModel = getWeapon(options.model).model;
     const cwd = currentCwd;
     const send = (event: unknown) => {
@@ -186,7 +190,7 @@ ipcMain.handle(
         send(event);
         if (event.type === 'snapshot') {
           const savedAt = Date.now();
-          const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel };
+          const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel, heroClass };
           writeSlot(event.slot, data)
             .then(() => send({ type: 'slotSaved', slot: event.slot, data }))
             .catch((err) => send({ type: 'saveFailed', reason: err instanceof Error ? err.message : String(err) }));
@@ -200,7 +204,7 @@ ipcMain.handle(
             }),
     });
 
-    const updated = applyRun(profile, summary, options.themeId);
+    const updated = { ...applyRun(profile, summary, options.themeId), heroClass };
     await saveProfile(updated);
     await saving;
 

@@ -128,13 +128,69 @@ let profile = null;
 let chosenFolder = null;
 let chosenThemeId = THEMES[0].id;
 let chosenWeapon = 'claude-sonnet-5';
+let heroClasses = [];
+let chosenClass = 'swordsman';
 let activeTheme = THEMES[0];
 let currentMonsterName = '';
 let lastSummary = '';
 const touchedFiles = new Set();
 
+// Weapon names depend on the hero's class; the enhance level (+N) adds the
+// class's prefix: e.g. wizard + Sonnet at +1 = "그냥 마법지팡이".
+const heroClass = () => heroClasses.find((c) => c.id === chosenClass) ?? heroClasses[0];
+const classWeapon = (model) => heroClass()?.weapons[model] ?? { name: '무기', flavor: '' };
+const enhancedName = (model, level) =>
+  `${heroClass()?.modifiers[Math.max(0, Math.min(level, swordMax))] ?? ''} ${classWeapon(model).name}`.trim();
+
 function weaponLabel(w) {
-  return `${w.name} — ${w.flavor} (x${w.multiplier})`;
+  return `${classWeapon(w.model).name} — ${classWeapon(w.model).flavor} (x${w.multiplier})`;
+}
+
+function renderWeaponOptions() {
+  weaponOptionsEl.textContent = '';
+  weaponSelect.textContent = '';
+  for (const w of weapons) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'weapon';
+    input.value = w.model;
+    input.checked = w.model === chosenWeapon;
+    input.addEventListener('change', () => {
+      chosenWeapon = w.model;
+    });
+    label.append(input, ` ${weaponLabel(w)}`);
+    weaponOptionsEl.append(label);
+
+    const option = document.createElement('option');
+    option.value = w.model;
+    option.textContent = `${classWeapon(w.model).name} (x${w.multiplier})`;
+    weaponSelect.append(option);
+  }
+  weaponSelect.value = chosenWeapon;
+}
+
+function renderClassOptions() {
+  const el = $('class-options');
+  el.textContent = '';
+  for (const c of heroClasses) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'hero-class';
+    input.value = c.id;
+    input.checked = c.id === chosenClass;
+    input.addEventListener('change', () => {
+      chosenClass = c.id;
+      renderWeaponOptions();
+      renderSetupStats();
+    });
+    const sub = document.createElement('span');
+    sub.className = 'option-sub';
+    sub.textContent = `(${Object.values(c.weapons).map((w) => w.name).join(' · ')})`;
+    label.append(input, ` ${c.icon} ${c.name} `, sub);
+    el.append(label);
+  }
 }
 
 const savedFloor = (themeId) => profile?.storyFloors?.[themeId] ?? 0;
@@ -154,6 +210,8 @@ function refreshContinueOption() {
 async function loadSetup() {
   const info = await window.promptBattle.getSetupInfo();
   profile = info.profile;
+  heroClasses = info.classes;
+  chosenClass = profile.heroClass ?? chosenClass;
   weapons = info.weapons;
   items = info.items;
   statDefs = info.stats;
@@ -185,26 +243,8 @@ async function loadSetup() {
     themeOptionsEl.append(label);
   }
 
-  weaponOptionsEl.textContent = '';
-  weaponSelect.textContent = '';
-  for (const w of weapons) {
-    const label = document.createElement('label');
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'weapon';
-    input.value = w.model;
-    input.checked = w.model === chosenWeapon;
-    input.addEventListener('change', () => {
-      chosenWeapon = w.model;
-    });
-    label.append(input, ` ${weaponLabel(w)}`);
-    weaponOptionsEl.append(label);
-
-    const option = document.createElement('option');
-    option.value = w.model;
-    option.textContent = `${w.name} (x${w.multiplier})`;
-    weaponSelect.append(option);
-  }
+  renderClassOptions();
+  renderWeaponOptions();
   refreshContinueOption();
 }
 loadSetup();
@@ -228,16 +268,16 @@ function renderSetupStats() {
   }
   const sword = document.createElement('div');
   sword.className = 'stat-row';
-  sword.append(`검 강화 +${profile.swordLevel}/${swordMax}`);
+  sword.append(`무기 강화 +${profile.swordLevel}/${swordMax}`);
   const swordFx = document.createElement('span');
   swordFx.className = 'option-sub';
-  swordFx.textContent = `피해 +${profile.swordLevel * 10}% (영구)`;
+  swordFx.textContent = `"${enhancedName(chosenWeapon, profile.swordLevel)}" · 피해 +${profile.swordLevel * 10}% (영구)`;
   sword.append(swordFx);
   list.append(sword);
 }
 
 function renderProfileLine() {
-  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 검 +${profile.swordLevel}`;
+  profileLineEl.textContent = `레벨 ${profile.level} 용사 · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}`;
 }
 
 // Battle stat panel: unspent points + one button per stat (a free action).
@@ -261,15 +301,15 @@ function renderStatPanel() {
 }
 
 function renderSwordLevel() {
-  $('sword-level').textContent = swordLevel > 0 ? `+${swordLevel}강` : '';
+  $('sword-level').textContent = `${enhancedName(weaponSelect.value, swordLevel)} +${swordLevel}`;
 }
 
 const pct = (x) => `${Math.round(x * 100)}%`;
 function renderForgeInfo(odds) {
   $('forge-info').textContent =
     swordLevel >= swordMax
-      ? `검 +${swordLevel} — 최대 강화에 도달했다!`
-      : `검 +${swordLevel} → +${swordLevel + 1}  ·  비용 🪙 ${odds.cost}  ·  성공 ${pct(odds.successChance)}  ·  실패 시 파괴 ${pct(odds.breakChance)}`;
+      ? `${enhancedName(weaponSelect.value, swordLevel)} +${swordLevel} — 최대 강화에 도달했다!`
+      : `${enhancedName(weaponSelect.value, swordLevel)} +${swordLevel} → ${enhancedName(weaponSelect.value, swordLevel + 1)} +${swordLevel + 1}  ·  비용 🪙 ${odds.cost}  ·  성공 ${pct(odds.successChance)}  ·  실패 시 파괴 ${pct(odds.breakChance)}`;
   $('forge-enhance').disabled = !inputEnabled || swordLevel >= swordMax;
 }
 
@@ -624,17 +664,30 @@ function shakeScreen() {
   setTimeout(() => dungeonScreen.classList.remove('player-hit'), 300);
 }
 
-const ATTACK_TEMPLATES = [
-  (dmg, w) => `${w}을(를) 휘둘러 ${dmg}의 피해를 입혔다!`,
-  (dmg) => `마법을 시전해 ${dmg}의 피해를 입혔다!`,
-  (dmg) => `강력한 일격으로 ${dmg}의 피해를 입혔다!`,
-  (dmg, w) => `${w}(으)로 ${dmg}만큼 베어버렸다!`,
-  (dmg) => `빈틈을 파고들어 ${dmg}의 피해를 입혔다!`,
-];
+const ATTACK_LINES = {
+  swordsman: [
+    (dmg, w) => `${w}을(를) 휘둘러 ${dmg}의 피해를 입혔다!`,
+    (dmg) => `강력한 일격으로 ${dmg}의 피해를 입혔다!`,
+    (dmg, w) => `${w}(으)로 ${dmg}만큼 베어버렸다!`,
+    (dmg) => `빈틈을 파고들어 ${dmg}의 피해를 입혔다!`,
+  ],
+  wizard: [
+    (dmg, w) => `${w}에서 화염구가 터져 나와 ${dmg}의 피해를 입혔다!`,
+    (dmg) => `번개를 내리꽂아 ${dmg}의 피해를 입혔다!`,
+    (dmg) => `얼음 창을 소환해 ${dmg}의 피해를 입혔다!`,
+    (dmg, w) => `${w}을(를) 치켜들자 마법진이 빛나며 ${dmg}의 피해!`,
+  ],
+  archer: [
+    (dmg, w) => `${w}(으)로 화살을 날려 ${dmg}의 피해를 입혔다!`,
+    (dmg) => `연속 사격! ${dmg}의 피해를 입혔다!`,
+    (dmg) => `급소를 정확히 꿰뚫어 ${dmg}의 피해!`,
+    (dmg, w) => `${w}의 시위를 당겨 불화살로 ${dmg}의 피해!`,
+  ],
+};
 const DODGE_LINES = ['몬스터가 마지막 일격을 회피했다!', '몬스터가 몸을 비틀어 공격을 피했다!', '아슬아슬하게 빗나갔다... 몬스터가 회피했다!'];
 const COUNTER_LINES = ['의 반격!', '이(가) 달려든다!', '의 날카로운 공격!'];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const weaponName = () => weapons.find((w) => w.model === weaponSelect.value)?.name ?? '검';
+const weaponName = () => enhancedName(weaponSelect.value, swordLevel);
 
 // Renders the AI's markdown reply properly (headers/bold/lists). If it ends
 // with a question followed by a list, the list items become clickable
@@ -919,7 +972,8 @@ fileViewerOverlay.addEventListener('click', (e) => {
 // Weapon switch mid-run: applies to the very next attack.
 weaponSelect.addEventListener('change', async () => {
   const w = await window.promptBattle.setModel(weaponSelect.value);
-  appendLog(`무기를 바꿨다: ${w.name} — ${w.flavor} (x${w.multiplier})`, 'story-line');
+  appendLog(`무기를 바꿨다: ${weaponName()} — ${classWeapon(w.model).flavor} (x${w.multiplier})`, 'story-line');
+  renderSwordLevel();
 });
 
 sessionBannerUse.addEventListener('click', () => {
@@ -1026,7 +1080,7 @@ function renderBattleEvent(event) {
         appendLog(pick(DODGE_LINES), 'dodge');
       } else {
         const label = event.crit ? ' 크리티컬 히트!' : '';
-        appendLog(`${pick(ATTACK_TEMPLATES)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
+        appendLog(`${pick(ATTACK_LINES[chosenClass] ?? ATTACK_LINES.swordsman)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
         flashMonster();
       }
       if (event.matchedKeywords.length > 0) appendLog(`(키워드: ${event.matchedKeywords.join(', ')})`);
@@ -1176,16 +1230,16 @@ function renderBattleEvent(event) {
       renderSwordLevel();
       renderForgeInfo(event.odds);
       const result = $('forge-result');
-      const text = { success: `성공! +${event.swordLevel}강`, fail: `실패... +${event.swordLevel}강 유지`, broken: '💥 검이 부러졌다! +0강' }[event.outcome];
+      const text = { success: `성공! +${event.swordLevel}강`, fail: `실패... +${event.swordLevel}강 유지`, broken: `💥 ${classWeapon(weaponSelect.value).name}이(가) 부러졌다! +0` }[event.outcome];
       result.textContent = text;
       result.className = `bet-result ${event.outcome === 'success' ? 'win' : 'lose'}`;
       void result.offsetWidth;
       result.classList.add('rolled');
       appendLog(
         event.outcome === 'success'
-          ? `🔨 깡! 깡! 강화 성공! 검이 +${event.swordLevel}강이 되었다! (피해 +${event.swordLevel * 10}%)`
+          ? `🔨 깡! 깡! 강화 성공! "${weaponName()}" +${event.swordLevel}(으)로 거듭났다! (피해 +${event.swordLevel * 10}%)`
           : event.outcome === 'broken'
-            ? '🔨 쩌저적... 검이 부러졌다! 처음부터 다시 강화해야 한다. 대장장이: "...미안하게 됐군."'
+            ? `🔨 쩌저적... ${classWeapon(weaponSelect.value).name}이(가) 부러졌다! "${weaponName()}"부터 다시 강화해야 한다. 대장장이: "...미안하게 됐군."`
             : `🔨 강화 실패... 검은 +${event.swordLevel}강 그대로다.`,
         event.outcome === 'success' ? 'victory' : 'error',
       );
@@ -1303,7 +1357,7 @@ $('session-close').addEventListener('click', () => ($('session-overlay').hidden 
 function slotSummary(slot) {
   const theme = THEMES.find((t) => t.id === slot.themeId);
   const folderName = slot.cwd.split('/').filter(Boolean).pop();
-  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 검 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
+  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 무기 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
 }
 
 function renderSlotRows(container, onPick, allowEmpty) {
@@ -1345,6 +1399,8 @@ async function startGame({ loadSlot, slot }) {
     chosenFolder = slot.cwd;
     chosenThemeId = slot.themeId;
     chosenWeapon = slot.model;
+    if (slot.heroClass) chosenClass = slot.heroClass;
+    renderWeaponOptions();
   }
   if (!chosenFolder) return;
   const difficulty = slot ? slot.difficulty : document.querySelector('input[name="difficulty"]:checked').value;
@@ -1387,7 +1443,8 @@ async function startGame({ loadSlot, slot }) {
   refreshUsage(true);
   try {
     const party = $('party-mode').checked;
-    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party });
+    const heroClassId = chosenClass;
+    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated } = await runPromise;
     profile = updated;
