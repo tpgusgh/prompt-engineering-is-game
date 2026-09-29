@@ -582,3 +582,44 @@ test('a failed enhance without breaking keeps the level; no coins means no enhan
   await runDungeon({ ...poor.deps, coins: 0, random: seq(0.35, 0.99) });
   assert.ok(poor.events.some((e) => e.type === 'enhanceFailed'));
 });
+
+test('/save N snapshots the run as a free action (no turn, no counter)', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/save 2', '/quit']);
+  deps.runTurn = async () => ({ summary: '', filesChanged: [], commandsRun: [], sessionId: 'sess-1' });
+  await runDungeon({ ...deps, coins: 7, swordLevel: 3, statPoints: 1, bag: { potion: 1 } });
+  const snap = events.find((e) => e.type === 'snapshot');
+  assert.ok(snap && snap.type === 'snapshot');
+  if (snap && snap.type === 'snapshot') {
+    assert.equal(snap.slot, 2);
+    assert.deepEqual(snap.state, {
+      floor: 0, playerHp: 94, playerMaxHp: 100, coins: 7, bag: { potion: 1 },
+      stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 1, swordLevel: 3, sessionId: 'sess-1',
+    });
+  }
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1);
+});
+
+test('/save with a bad slot is refused', async () => {
+  const { deps, events } = makeFakeDeps(['/save 9', '/quit']);
+  await runDungeon(deps);
+  assert.ok(events.some((e) => e.type === 'saveFailed'));
+  assert.equal(events.filter((e) => e.type === 'snapshot').length, 0);
+});
+
+test('playerHp starts a loaded run at the saved HP', async () => {
+  const { deps, events } = makeFakeDeps(['/quit']);
+  await runDungeon({ ...deps, playerHp: 40, playerMaxHp: 120 });
+  assert.ok(events.some((e) => e.type === 'runStart' && e.playerHp === 40 && e.playerMaxHp === 120));
+});
+
+test('/session <id> swaps the Claude session mid-run; the next turn resumes it', async () => {
+  const seen: (string | undefined)[] = [];
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/session other-id', WEAK_PROMPT_2, '/quit']);
+  deps.runTurn = async (_p: string, _c: string, sessionId?: string) => {
+    seen.push(sessionId);
+    return { summary: '', filesChanged: [], commandsRun: [], sessionId: sessionId ?? 'first' };
+  };
+  await runDungeon(deps);
+  assert.deepEqual(seen, [undefined, 'other-id']);
+  assert.ok(events.some((e) => e.type === 'sessionSwitched' && e.sessionId === 'other-id'));
+});

@@ -89,6 +89,8 @@ test('every event type formats to a string (never undefined, which would crash s
     { type: 'enhanceResult', outcome: 'broken', swordLevel: 0, coins: 0, odds: { cost: 20, successChance: 0.95, breakChance: 0 } },
     { type: 'enhanceFailed', reason: 'x' },
     { type: 'blacksmithClosed' },
+    { type: 'saveFailed', reason: 'x' },
+    { type: 'sessionSwitched', sessionId: 's' },
   ];
   for (const event of events) assert.equal(typeof formatBattleEvent(event), 'string', event.type);
 });

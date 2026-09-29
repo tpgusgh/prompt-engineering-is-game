@@ -54,7 +54,26 @@ export type BattleEvent =
   | { type: 'enhanceResult'; outcome: 'success' | 'fail' | 'broken'; swordLevel: number; coins: number; odds: EnhanceOdds }
   | { type: 'enhanceFailed'; reason: string }
   | { type: 'blacksmithClosed' }
+  | { type: 'snapshot'; slot: number; state: RunState }
+  | { type: 'saveFailed'; reason: string }
+  | { type: 'sessionSwitched'; sessionId: string }
   | ({ type: 'runEnded' } & BattleSummary);
+
+// Everything a save slot needs to resume a run (monster HP excluded: a
+// loaded run restarts the saved floor with a fresh monster).
+export interface RunState {
+  floor: number;
+  playerHp: number;
+  playerMaxHp: number;
+  coins: number;
+  bag: Record<string, number>;
+  stats: Stats;
+  statPoints: number;
+  swordLevel: number;
+  sessionId?: string;
+}
+
+export const SAVE_SLOTS = 3;
 
 export interface BattleDeps {
   runTurn: (prompt: string, cwd: string, sessionId?: string, onEvent?: (event: AgentEvent) => void) => Promise<TurnResult>;
@@ -68,6 +87,8 @@ export interface BattleDeps {
   // Resume a story mid-way: chapter N starts at floor (N-1) * MONSTER_COUNT.
   startFloor?: number;
   playerMaxHp?: number;
+  // Current HP to start at (a loaded save); defaults to full.
+  playerHp?: number;
   // Carried over between runs via the profile.
   coins?: number;
   bag?: Record<string, number>;
@@ -122,7 +143,7 @@ function counterDamage(monsterMaxHp: number, punished: boolean): number {
 export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const random = deps.random ?? Math.random;
   let playerMaxHp = deps.playerMaxHp ?? 100;
-  let playerHp = playerMaxHp;
+  let playerHp = Math.min(playerMaxHp, deps.playerHp ?? playerMaxHp);
   let coins = deps.coins ?? 0;
   const bag: Record<string, number> = {};
   for (const [id, count] of Object.entries(deps.bag ?? {})) if (count > 0) bag[id] = count;
@@ -231,6 +252,37 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     deps.onBattleEvent({ type: 'statRaised', stat: id, stats: { ...stats }, points: statPoints });
   };
 
+  // `/save N` and `/session <id>` — free actions allowed anywhere, like /stat.
+  const freeCommand = (input: string): boolean => {
+    if (input.startsWith('/stat ')) {
+      spendStatPoint(input);
+      return true;
+    }
+    if (input === '/save' || input.startsWith('/save ')) {
+      const slot = Number(input.slice('/save'.length).trim() || '1');
+      if (!Number.isInteger(slot) || slot < 1 || slot > SAVE_SLOTS) {
+        deps.onBattleEvent({ type: 'saveFailed', reason: `슬롯은 1~${SAVE_SLOTS}번이다` });
+        return true;
+      }
+      const state: RunState = {
+        floor, playerHp, playerMaxHp, coins, bag: { ...bag }, stats: { ...stats }, statPoints, swordLevel,
+        ...(sessionId ? { sessionId } : {}),
+      };
+      deps.onBattleEvent({ type: 'snapshot', slot, state });
+      return true;
+    }
+    if (input.startsWith('/session ')) {
+      const id = input.slice('/session '.length).trim();
+      if (!id) return true;
+      sessionId = id;
+      sessionConfirmed = false;
+      warnedSessionFull = false;
+      deps.onBattleEvent({ type: 'sessionSwitched', sessionId: id });
+      return true;
+    }
+    return false;
+  };
+
   // Shared shop loop (merchant, blacksmith). `handle` returns true when it
   // consumed the input; anything else closes the shop, and a prompt typed
   // there is replayed as the next floor's first input. Returns false if the
@@ -241,11 +293,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (raw === null) return false;
       const input = raw.trim();
       if (input === '/quit') return false;
-      if (input.startsWith('/stat ')) {
-        spendStatPoint(input);
-        continue;
-      }
-      if (handle(input)) continue;
+      if (freeCommand(input) || handle(input)) continue;
       onClose();
       if (input !== '/leave' && input !== '') carried = raw;
       return true;
@@ -371,10 +419,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (playerHp <= 0) break;
         continue;
       }
-      if (prompt.startsWith('/stat ')) {
-        spendStatPoint(prompt);
-        continue;
-      }
+      if (freeCommand(prompt)) continue;
       if (prompt.startsWith('/use ')) {
         useItem(prompt.slice('/use '.length).trim());
         continue;

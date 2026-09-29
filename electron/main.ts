@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, type BattleEvent } from '../src/battle.ts';
-import { runAgentTurn, fetchPlanUsage } from '../src/agent.ts';
+import { runAgentTurn, fetchPlanUsage, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
+import { loadSlots, writeSlot } from '../src/saves.ts';
 import { loadProfile, saveProfile, applyRun } from '../src/profile.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
@@ -103,17 +104,38 @@ ipcMain.handle('set-model', (_event, model: string) => {
 });
 
 ipcMain.handle('get-folder-session', (_event, cwd: string) => loadFolderSession(path.resolve(cwd)));
+ipcMain.handle('list-sessions', (_event, cwd: string) => listFolderSessions(path.resolve(cwd)));
+ipcMain.handle('session-history', (_event, cwd: string, sessionId: string) => loadSessionHistory(sessionId, path.resolve(cwd)));
+ipcMain.handle('list-slots', () => loadSlots());
 
 ipcMain.handle(
   'start-run',
   async (
     _event,
-    options: { cwd: string; difficulty: Difficulty; model: string; themeId: string; startFloor: number; resumeSession: boolean },
+    requested: {
+      cwd: string;
+      difficulty: Difficulty;
+      model: string;
+      themeId: string;
+      startFloor: number;
+      // Claude session to resume (from the session picker); omit for a new one.
+      sessionId?: string;
+      // Load a save slot instead: its folder, theme, model and run state win.
+      loadSlot?: number;
+    },
   ) => {
     const profile = await loadProfile();
+    const slot = requested.loadSlot ? (await loadSlots())[requested.loadSlot - 1] : null;
+    if (requested.loadSlot && !slot) throw new Error(`슬롯 ${requested.loadSlot}이(가) 비어 있습니다.`);
+    const options = slot
+      ? { ...requested, cwd: slot.cwd, difficulty: slot.difficulty, model: slot.model, themeId: slot.themeId, startFloor: slot.floor, sessionId: slot.sessionId }
+      : requested;
     currentCwd = path.resolve(options.cwd);
     currentModel = getWeapon(options.model).model;
     const cwd = currentCwd;
+    const send = (event: unknown) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
+    };
 
     // The folder's session id + chat log, saved as the run goes so a crash
     // or closed window loses nothing. Saves are chained to never interleave.
@@ -129,6 +151,7 @@ ipcMain.handle(
       else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
       else if (event.type === 'sessionSaved') folder.sessionId = event.sessionId;
       else if (event.type === 'sessionReset') delete folder.sessionId;
+      else if (event.type === 'sessionSwitched') folder.sessionId = event.sessionId;
       else return;
       persistFolder();
     };
@@ -137,18 +160,26 @@ ipcMain.handle(
       runTurn: (prompt, cwd, sessionId, onEvent) => runAgentTurn(prompt, cwd, sessionId, onEvent, currentModel),
       cwd,
       difficulty: options.difficulty,
-      coins: profile.coins,
-      bag: profile.bag,
-      playerMaxHp: profile.maxHp,
-      initialSessionId: options.resumeSession ? folder.sessionId : undefined,
+      coins: slot ? slot.coins : profile.coins,
+      bag: slot ? slot.bag : profile.bag,
+      playerMaxHp: slot ? slot.playerMaxHp : profile.maxHp,
+      playerHp: slot?.playerHp,
+      initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier,
-      stats: profile.stats,
-      statPoints: profile.statPoints,
-      swordLevel: profile.swordLevel,
+      stats: slot ? slot.stats : profile.stats,
+      statPoints: slot ? slot.statPoints : profile.statPoints,
+      swordLevel: slot ? slot.swordLevel : profile.swordLevel,
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
+        send(event);
+        if (event.type === 'snapshot') {
+          const savedAt = Date.now();
+          const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel };
+          writeSlot(event.slot, data)
+            .then(() => send({ type: 'slotSaved', slot: event.slot, data }))
+            .catch((err) => send({ type: 'saveFailed', reason: err instanceof Error ? err.message : String(err) }));
+        }
       },
       readInput: () =>
         new Promise<string | null>((resolve) => {

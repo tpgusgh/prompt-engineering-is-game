@@ -1,4 +1,4 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 
 export interface TurnResult {
   summary: string;
@@ -164,6 +164,58 @@ export async function fetchPlanUsage(cwd: string): Promise<PlanUsage | null> {
   } finally {
     release();
     q.close();
+  }
+}
+
+export interface SessionSummary {
+  sessionId: string;
+  title: string;
+  lastModified: number;
+}
+
+// Claude Code sessions for a project folder — the game's own and any started
+// in the terminal `claude` CLI there — newest first.
+export async function listFolderSessions(cwd: string): Promise<SessionSummary[]> {
+  try {
+    const sessions = await listSessions({ dir: cwd, limit: 30 });
+    return sessions
+      .map((s) => ({ sessionId: s.sessionId, title: (s.customTitle || s.summary || s.firstPrompt || '(제목 없음)').slice(0, 80), lastModified: s.lastModified }))
+      .sort((a, b) => b.lastModified - a.lastModified);
+  } catch {
+    return [];
+  }
+}
+
+function textOf(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+    .map((b: any) => b.text)
+    .join('\n');
+}
+
+// A transcript as chat entries: real user prompts and assistant text only
+// (tool calls and tool results are skipped); consecutive assistant chunks
+// of one reply are merged.
+export function toChatEntries(messages: { type: string; message: unknown }[]): { role: 'user' | 'assistant'; text: string }[] {
+  const out: { role: 'user' | 'assistant'; text: string }[] = [];
+  for (const m of messages) {
+    if (m.type !== 'user' && m.type !== 'assistant') continue;
+    const text = textOf((m.message as any)?.content).trim();
+    if (!text) continue;
+    const last = out[out.length - 1];
+    if (m.type === 'assistant' && last?.role === 'assistant') last.text += `\n\n${text}`;
+    else out.push({ role: m.type, text });
+  }
+  return out;
+}
+
+export async function loadSessionHistory(sessionId: string, cwd: string) {
+  try {
+    return toChatEntries(await getSessionMessages(sessionId, { dir: cwd }));
+  } catch {
+    return [];
   }
 }
 

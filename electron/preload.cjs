@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('promptBattle', {
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
   getUsage: () => ipcRenderer.invoke('get-usage'),
+  listSessions: (cwd) => ipcRenderer.invoke('list-sessions', cwd),
+  sessionHistory: (cwd, sessionId) => ipcRenderer.invoke('session-history', cwd, sessionId),
+  listSlots: () => ipcRenderer.invoke('list-slots'),
   getFolderSession: (cwd) => ipcRenderer.invoke('get-folder-session', cwd),
   onBattleEvent: (callback) => {
     ipcRenderer.on('battle-event', (_event, data) => callback(data));

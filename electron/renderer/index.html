@@ -11,8 +11,8 @@
       <p id="profile-line" class="profile-line"></p>
       <button id="pick-folder-btn">프로젝트 폴더 선택</button>
       <p id="folder-path"></p>
-      <label id="resume-label" class="continue-label" hidden>
-        <input type="checkbox" id="resume-session" checked /> <span id="resume-text"></span>
+      <label id="session-picker" class="continue-label" hidden>
+        Claude 세션 <select id="session-select"></select>
       </label>
       <fieldset>
         <legend>테마</legend>
@@ -37,6 +37,10 @@
         <label><input type="radio" name="difficulty" value="hard" /> 어려움</label>
       </fieldset>
       <button id="start-btn" disabled>던전 입장</button>
+      <fieldset>
+        <legend>불러오기</legend>
+        <div id="slot-list" class="slot-list"></div>
+      </fieldset>
       <p id="setup-error" class="error-text" hidden></p>
       <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
     </section>
@@ -118,6 +122,8 @@
           <input id="prompt-input" type="text" placeholder="공격 프롬프트를 입력하세요... (/new 로 새 세션)" autocomplete="off" />
           <button type="submit">공격</button>
           <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>
+          <button type="button" id="save-btn">저장</button>
+          <button type="button" id="session-btn">세션</button>
           <button type="button" id="exit-btn">나가기</button>
         </form>
         <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
@@ -130,6 +136,24 @@
       <p id="summary-story" class="summary-story"></p>
       <button id="play-again-btn">다시 하기</button>
     </section>
+
+    <div id="save-overlay" class="file-viewer-overlay" hidden>
+      <div class="exit-panel">
+        <h2>💾 저장하기</h2>
+        <p class="option-sub">층·HP·코인·가방·능력치·검 강화·Claude 세션을 슬롯에 저장한다. (싸우던 몬스터는 불러오면 다시 등장)</p>
+        <div id="save-slots" class="slot-list"></div>
+        <div class="exit-actions"><button type="button" id="save-close">닫기</button></div>
+      </div>
+    </div>
+
+    <div id="session-overlay" class="file-viewer-overlay" hidden>
+      <div class="exit-panel">
+        <h2>🔀 Claude 세션 바꾸기</h2>
+        <p class="option-sub">이 폴더의 Claude Code 세션 (터미널 claude에서 쓴 세션 포함). 고르면 다음 공격부터 그 세션으로 이어간다.</p>
+        <div id="session-list" class="slot-list"></div>
+        <div class="exit-actions"><button type="button" id="session-close">닫기</button></div>
+      </div>
+    </div>
 
     <div id="exit-overlay" class="file-viewer-overlay" hidden>
       <div class="exit-panel">

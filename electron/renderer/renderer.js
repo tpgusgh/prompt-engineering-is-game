@@ -47,9 +47,8 @@ const fileViewerBodyEl = $('file-viewer-body');
 const fileViewerCloseBtn = $('file-viewer-close');
 const fileViewerSaveBtn = $('file-viewer-save');
 const fileViewerStatus = $('file-viewer-status');
-const resumeLabel = $('resume-label');
-const resumeCheckbox = $('resume-session');
-const resumeText = $('resume-text');
+const sessionPicker = $('session-picker');
+const sessionSelect = $('session-select');
 const coinLabel = $('coin-label');
 const bagEl = $('bag');
 const merchantPanel = $('merchant-panel');
@@ -120,6 +119,8 @@ let swordMax = 10;
 let stats = { attack: 0, defense: 0, vitality: 0 };
 let statPoints = 0;
 let swordLevel = 0;
+let currentSessionId = null;
+let slots = [];
 let planUsage = null;
 let contextUsage = null;
 let usageFetchedAt = 0;
@@ -337,6 +338,8 @@ function setInputEnabled(enabled) {
   attackSubmitBtn.disabled = !enabled;
   fleeBtn.disabled = !enabled;
   exitBtn.disabled = !enabled;
+  $('save-btn').disabled = !enabled;
+  $('session-btn').disabled = !enabled;
   for (const btn of document.querySelectorAll('.bag button, .merchant-panel button')) btn.disabled = !enabled;
   if (statDefs.length) renderStatPanel();
 }
@@ -356,10 +359,7 @@ pickFolderBtn.addEventListener('click', async () => {
     chosenFolder = folder;
     folderPathEl.textContent = folder;
     startBtn.disabled = false;
-    const saved = await window.promptBattle.getFolderSession(folder);
-    resumeLabel.hidden = !saved.sessionId;
-    resumeCheckbox.checked = true;
-    resumeText.textContent = `이 폴더의 이전 Claude 세션 이어가기 (대화 기록 ${saved.history.length}개)`;
+    await refreshSessionPicker(folder);
   }
 });
 
@@ -574,7 +574,13 @@ function renderTreeNodes(nodes) {
 }
 
 async function refreshTree() {
+  refreshTreeBtn.classList.remove('spinning');
+  void refreshTreeBtn.offsetWidth; // restart the spin
+  refreshTreeBtn.classList.add('spinning');
   const tree = await window.promptBattle.listTree();
+  fileTreeEl.classList.remove('tree-refreshed');
+  void fileTreeEl.offsetWidth;
+  fileTreeEl.classList.add('tree-refreshed');
   fileTreeEl.textContent = '';
   if (!tree) return;
   fileTreeEl.append(renderTreeNodes(tree.children));
@@ -761,6 +767,9 @@ function renderBattleEvent(event) {
       break;
     }
     case 'sessionReset':
+      currentSessionId = null;
+      contextUsage = null;
+      renderUsage();
       sessionBanner.hidden = true;
       appendLog('새로운 세션이 시작되었다.', 'story-line');
       break;
@@ -770,6 +779,7 @@ function renderBattleEvent(event) {
       sessionBanner.hidden = false;
       break;
     case 'sessionSaved':
+      currentSessionId = event.sessionId;
       break;
     case 'fleeAttempt':
       appendLog(event.success ? '도망쳤다! 보상 없이 다음 층으로 향한다.' : '도망치지 못했다! 한 턴을 날렸다.', event.success ? 'story-line' : 'error');
@@ -889,6 +899,20 @@ function renderBattleEvent(event) {
       appendLog('대장장이: "또 들르라고."', 'story-line');
       closeBlacksmith();
       break;
+    case 'slotSaved':
+      slots[event.slot - 1] = event.data;
+      appendLog(`💾 슬롯 ${event.slot}에 저장했다.`, 'victory');
+      break;
+    case 'saveFailed':
+      appendLog(`저장 실패: ${event.reason}`, 'error');
+      break;
+    case 'sessionSwitched':
+      currentSessionId = event.sessionId;
+      contextUsage = null;
+      renderUsage();
+      sessionBanner.hidden = true;
+      appendLog('🔀 Claude 세션을 바꿨다. 다음 공격부터 이 세션으로 이어간다.', 'story-line');
+      break;
     case 'contextUsage':
       contextUsage = event;
       renderUsage();
@@ -903,13 +927,133 @@ function renderBattleEvent(event) {
 
 window.promptBattle.onBattleEvent(renderBattleEvent);
 
-startBtn.addEventListener('click', async () => {
+// ---------------------------------------------------------------------------
+// Claude sessions: the setup picker and the in-battle switcher both list this
+// folder's Claude Code sessions (including terminal `claude` ones).
+const shortTime = (ms) => {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+};
+
+async function refreshSessionPicker(folder) {
+  const [sessions, saved] = await Promise.all([window.promptBattle.listSessions(folder), window.promptBattle.getFolderSession(folder)]);
+  sessionSelect.textContent = '';
+  const fresh = document.createElement('option');
+  fresh.value = '';
+  fresh.textContent = '✨ 새 세션으로 시작';
+  sessionSelect.append(fresh);
+  for (const s of sessions) {
+    const option = document.createElement('option');
+    option.value = s.sessionId;
+    option.textContent = `${s.title} · ${shortTime(s.lastModified)}${s.sessionId === saved.sessionId ? ' (마지막)' : ''}`;
+    sessionSelect.append(option);
+  }
+  sessionSelect.value = sessions.some((s) => s.sessionId === saved.sessionId) ? saved.sessionId : '';
+  sessionPicker.hidden = sessions.length === 0;
+}
+
+async function renderSessionHistory(sessionId, title) {
+  const history = await window.promptBattle.sessionHistory(chosenFolder, sessionId);
+  if (history.length === 0) return;
+  const shown = history.slice(-50);
+  appendLog(`— 세션 "${title}" 대화 기록 (${shown.length}/${history.length}) —`, 'history-header');
+  for (const entry of shown) {
+    if (entry.role === 'user') appendUserChat(entry.text, 'history');
+    else renderMarkdownLog(entry.text, 'history');
+  }
+  appendLog('— 여기서부터 이어서 —', 'history-header');
+}
+
+async function openSessionOverlay() {
+  const list = $('session-list');
+  list.textContent = '불러오는 중...';
+  $('session-overlay').hidden = false;
+  const sessions = await window.promptBattle.listSessions(chosenFolder);
+  list.textContent = '';
+  const addRow = (label, sub, isCurrent, onPick) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `slot-row${isCurrent ? ' current' : ''}`;
+    const strong = document.createElement('strong');
+    strong.textContent = label;
+    const span = document.createElement('span');
+    span.textContent = sub;
+    btn.append(strong, span);
+    btn.disabled = isCurrent;
+    btn.addEventListener('click', () => {
+      $('session-overlay').hidden = true;
+      onPick();
+    });
+    list.append(btn);
+  };
+  addRow('✨ 새 세션', '깨끗한 컨텍스트로 새로 시작', !currentSessionId, () => window.promptBattle.submitPrompt('/new'));
+  for (const s of sessions) {
+    const isCurrent = s.sessionId === currentSessionId;
+    addRow(s.title, `${shortTime(s.lastModified)}${isCurrent ? ' · 현재 세션' : ''}`, isCurrent, async () => {
+      window.promptBattle.submitPrompt(`/session ${s.sessionId}`);
+      await renderSessionHistory(s.sessionId, s.title);
+    });
+  }
+}
+$('session-btn').addEventListener('click', openSessionOverlay);
+$('session-close').addEventListener('click', () => ($('session-overlay').hidden = true));
+
+// ---------------------------------------------------------------------------
+// Save slots: saving is a free action in battle; loading starts a run from
+// the setup screen with the slot's folder, theme, weapon and state.
+function slotSummary(slot) {
+  const theme = THEMES.find((t) => t.id === slot.themeId);
+  const folderName = slot.cwd.split('/').filter(Boolean).pop();
+  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 검 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
+}
+
+function renderSlotRows(container, onPick, allowEmpty) {
+  container.textContent = '';
+  slots.forEach((slot, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'slot-row';
+    const strong = document.createElement('strong');
+    strong.textContent = `슬롯 ${i + 1}`;
+    const span = document.createElement('span');
+    span.textContent = slot ? slotSummary(slot) : '비어 있음';
+    btn.append(strong, span);
+    btn.disabled = !slot && !allowEmpty;
+    btn.addEventListener('click', () => onPick(i + 1, slot));
+    container.append(btn);
+  });
+}
+
+async function refreshSlots() {
+  slots = await window.promptBattle.listSlots();
+  renderSlotRows($('slot-list'), (n, slot) => slot && startGame({ loadSlot: n, slot }), false);
+}
+refreshSlots();
+
+$('save-btn').addEventListener('click', () => {
+  renderSlotRows($('save-slots'), (n) => {
+    window.promptBattle.submitPrompt(`/save ${n}`);
+    $('save-overlay').hidden = true;
+  }, true);
+  $('save-overlay').hidden = false;
+});
+$('save-close').addEventListener('click', () => ($('save-overlay').hidden = true));
+
+startBtn.addEventListener('click', () => startGame({}));
+
+async function startGame({ loadSlot, slot }) {
+  if (slot) {
+    chosenFolder = slot.cwd;
+    chosenThemeId = slot.themeId;
+    chosenWeapon = slot.model;
+  }
   if (!chosenFolder) return;
-  const difficulty = document.querySelector('input[name="difficulty"]:checked').value;
+  const difficulty = slot ? slot.difficulty : document.querySelector('input[name="difficulty"]:checked').value;
   activeTheme = THEMES.find((t) => t.id === chosenThemeId) || THEMES[0];
   const floor = savedFloor(activeTheme.id);
   const startFloor = floor > 0 && continueCheckbox.checked ? floor : 0;
-  const resumeSession = !resumeLabel.hidden && resumeCheckbox.checked;
+  const sessionId = slot ? slot.sessionId : sessionPicker.hidden ? undefined : sessionSelect.value || undefined;
+  currentSessionId = sessionId ?? null;
   weaponSelect.value = chosenWeapon;
   touchedFiles.clear();
   lastSummary = '';
@@ -918,11 +1062,12 @@ startBtn.addEventListener('click', async () => {
   setupScreen.hidden = true;
   dungeonScreen.hidden = false;
   logEl.textContent = '';
-  coins = profile.coins;
-  bag = { ...profile.bag };
-  stats = { ...profile.stats };
-  statPoints = profile.statPoints;
-  swordLevel = profile.swordLevel;
+  const from = slot ?? profile;
+  coins = from.coins;
+  bag = { ...from.bag };
+  stats = { ...from.stats };
+  statPoints = from.statPoints;
+  swordLevel = from.swordLevel;
   renderCoins();
   renderSwordLevel();
   closeMerchant();
@@ -930,13 +1075,18 @@ startBtn.addEventListener('click', async () => {
   exitOverlay.hidden = true;
   setInputEnabled(true);
   renderBag();
-  const saved = await window.promptBattle.getFolderSession(chosenFolder);
-  renderHistory(saved.history);
+  if (sessionId) {
+    const title = sessionSelect.selectedOptions[0]?.textContent ?? '';
+    await renderSessionHistory(sessionId, slot ? '저장된 세션' : title.replace(/ · .*$/, ''));
+    appendLog('이전 세션을 이어서 모험을 계속한다.', 'story-line');
+  } else {
+    renderHistory((await window.promptBattle.getFolderSession(chosenFolder)).history);
+  }
+  if (slot) appendLog(`💾 슬롯 ${loadSlot}을(를) 불러왔다. ${slotSummary(slot)}`, 'story-line');
   contextUsage = null;
   refreshUsage(true);
-  if (resumeSession) appendLog('이전 세션을 이어서 모험을 계속한다.', 'story-line');
   try {
-    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, resumeSession });
+    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated } = await runPromise;
     profile = updated;
@@ -957,7 +1107,7 @@ startBtn.addEventListener('click', async () => {
     setupErrorEl.textContent = `문제가 발생했습니다: ${err && err.message ? err.message : String(err)}`;
     setupErrorEl.hidden = false;
   }
-});
+}
 
 attackForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1002,4 +1152,6 @@ playAgainBtn.addEventListener('click', async () => {
   summaryScreen.hidden = true;
   setupScreen.hidden = false;
   await loadSetup();
+  await refreshSlots();
+  if (chosenFolder) await refreshSessionPicker(chosenFolder);
 });

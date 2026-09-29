@@ -87,6 +87,12 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize(`No usable ${event.itemId} in your bag.`, 'red') + '\n';
     case 'contextUsage':
       return '';
+    case 'snapshot':
+      return colorize('Save slots are available in the desktop app.', 'yellow') + '\n';
+    case 'saveFailed':
+      return colorize(`Save failed: ${event.reason}`, 'red') + '\n';
+    case 'sessionSwitched':
+      return colorize(`Switched to session ${event.sessionId}.`, 'cyan') + '\n';
     case 'statPointsChanged':
       return colorize(`+1 stat point (${event.points} unspent) — /stat attack|defense|vitality`, 'cyan') + '\n';
     case 'statRaised':

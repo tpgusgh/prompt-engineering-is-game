@@ -150,3 +150,20 @@ test('toPlanUsage maps the 5-hour and weekly windows, or null when limits do not
   assert.equal(toPlanUsage({ rate_limits_available: false, rate_limits: null }), null);
   assert.equal(toPlanUsage(undefined), null);
 });
+
+test('toChatEntries keeps user prompts and assistant text, skips tool traffic, merges assistant chunks', async () => {
+  const { toChatEntries } = await import('../src/agent.ts');
+  const entries = toChatEntries([
+    { type: 'user', message: { role: 'user', content: 'fix the bug' } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'Looking.' }, { type: 'tool_use', name: 'Read', input: {} }] } },
+    { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'file body' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'Fixed it.' }] } },
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'thanks' }] } },
+    { type: 'system', message: {} },
+  ]);
+  assert.deepEqual(entries, [
+    { role: 'user', text: 'fix the bug' },
+    { role: 'assistant', text: 'Looking.\n\nFixed it.' },
+    { role: 'user', text: 'thanks' },
+  ]);
+});
