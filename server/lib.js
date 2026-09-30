@@ -111,6 +111,12 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   if (fresh !== 'OK') return { status: 409, body: { error: 'run already submitted' } };
   if (allowed !== 'OK') return { status: 429, body: { error: 'too many submissions, wait a moment' } };
 
+  // Only a top-100 score is stored: anything lower is compared, then dropped.
+  const [count, lowest] = await run([['ZCARD', BOARD], ['ZRANGE', BOARD, '0', '0', 'WITHSCORES']]);
+  if (count >= TOP_N && lowest?.length && score <= Number(lowest[1])) {
+    return { status: 200, body: { rank: null, score, kept: false } };
+  }
+
   const id = run0.rid;
   const entry = {
     name,
@@ -136,11 +142,21 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   return { status: 200, body: { rank: rank === null ? null : rank + 1, score, kept: rank !== null } };
 }
 
-// Upstash Redis REST pipeline (Vercel Marketplace integration env names).
+// Upstash Redis REST pipeline. The Vercel Marketplace integration names its
+// variables KV_REST_API_URL/TOKEN (or with a custom prefix, e.g.
+// STORAGE_KV_REST_API_URL); a direct Upstash setup uses UPSTASH_REDIS_REST_*.
+const findEnv = (env, suffixes) => {
+  for (const suffix of suffixes) {
+    const key = Object.keys(env).find((k) => k === suffix || k.endsWith(`_${suffix}`));
+    if (key && env[key]) return env[key];
+  }
+  return undefined;
+};
 export function upstash(env) {
-  const url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
-  const token = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
+  const url = findEnv(env, ['KV_REST_API_URL', 'UPSTASH_REDIS_REST_URL']);
+  const token = findEnv(env, ['KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_TOKEN']);
   return async (commands) => {
+    if (!url || !token) throw new Error('redis not configured (connect Upstash for Redis to the project, then redeploy)');
     const res = await fetch(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

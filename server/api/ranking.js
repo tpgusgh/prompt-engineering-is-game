@@ -12,6 +12,8 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', req.method === 'GET' ? 's-maxage=10, stale-while-revalidate=30' : 'no-store');
     res.status(result.status).json(result.body);
   } catch (err) {
-    res.status(500).json({ error: 'server error' });
+    console.error('ranking:', err);
+    const message = err instanceof Error && err.message.startsWith('redis not configured') ? err.message : 'server error';
+    res.status(500).json({ error: message });
   }
 }

@@ -19,7 +19,7 @@ function fakeRedis() {
       case 'ZADD': z(key).set(a[1], Number(a[0])); return 1;
       case 'ZCARD': return z(key).size;
       case 'ZREVRANGE': return sorted(key).reverse().slice(Number(a[0]), Number(a[1]) + 1).flatMap(([m, s]) => [m, String(s)]);
-      case 'ZRANGE': return sorted(key).slice(Number(a[0]), Number(a[1]) + 1).map(([m]) => m);
+      case 'ZRANGE': { const r = sorted(key).slice(Number(a[0]), Number(a[1]) + 1); return a[2] === 'WITHSCORES' ? r.flatMap(([m, sc]) => [m, String(sc)]) : r.map(([m]) => m); }
       case 'ZREMRANGEBYRANK': for (const [m] of sorted(key).slice(Number(a[0]), Number(a[1]) + 1)) z(key).delete(m); return 1;
       case 'ZREVRANK': { const i = sorted(key).reverse().findIndex(([m]) => m === a[0]); return i === -1 ? null : i; }
       case 'HSET': h(key).set(a[0], a[1]); return 1;
@@ -104,4 +104,32 @@ test('only the top 100 are kept', async () => {
   assert.equal(list.body.entries.length, TOP_N);
   const scores = list.body.entries.map((e: { score: number }) => e.score);
   assert.deepEqual(scores, [...scores].sort((a, b) => b - a));
+});
+
+test('a score below the full top 100 is compared, then dropped without being stored', async () => {
+  const run = fakeRedis();
+  const written: string[][] = [];
+  const spy = async (cmds: string[][]) => {
+    written.push(...cmds.filter((c) => c[0] === 'ZADD' || c[0] === 'HSET'));
+    return run(cmds);
+  };
+  const t0 = 1_800_000_000_000;
+  const now = t0 + 60 * 60_000;
+  for (let i = 0; i < TOP_N; i++) {
+    const token = await startRun(run, t0);
+    const stats = { floors: 10, bosses: 0, xp: i, difficulty: 'normal' };
+    await handle({ method: 'POST', ip: `10.0.1.${i}`, ...signed({ ts: now, runToken: token, name: `p${i}`, ...stats, score: scoreFor(stats) }) }, { run, env, now });
+  }
+  const token = await startRun(run, t0);
+  const low = { floors: 1, bosses: 0, xp: 0, difficulty: 'easy' };
+  const res = await handle({ method: 'POST', ip: '10.0.2.1', ...signed({ ts: now, runToken: token, name: 'low', ...low, score: scoreFor(low) }) }, { run: spy, env, now });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.rank, null);
+  assert.equal(res.body.kept, false);
+  assert.deepEqual(written, [], 'nothing about the low run is stored');
+});
+
+test('missing Redis settings are reported plainly', async () => {
+  const { upstash } = await import('../server/lib.js');
+  await assert.rejects(upstash({})([['ZCARD', 'x']]), /redis not configured/);
 });
