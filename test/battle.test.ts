@@ -1049,3 +1049,10 @@ test('using a bag item at the merchant keeps the shop open', async () => {
   assert.equal(events.filter((e) => e.type === 'merchantClosed').length, 1);
   assert.equal(summary.bag.bandage, 1);
 });
+
+test('a bare /new at the merchant resets the session without leaving the shop', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/new', '/buy bandage', '/leave', '/quit']);
+  await runDungeon({ ...deps, coins: 50, random: seq(0.1, 0.99) });
+  assert.ok(events.some((e) => e.type === 'sessionReset' && e.reason === 'new'));
+  assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'bandage'), 'still shopping');
+});

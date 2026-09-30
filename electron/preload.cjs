@@ -9,6 +9,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('promptBattle', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
+  changeFolder: () => ipcRenderer.invoke('change-folder'),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
   onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),

@@ -2628,3 +2628,34 @@ body {
 .ranking-table tr.top1 td { background: rgba(235, 203, 139, 0.14); }
 .ranking-table tr.top2 td { background: rgba(216, 222, 233, 0.08); }
 .ranking-table tr.top3 td { background: rgba(208, 135, 112, 0.1); }
+
+.inventory-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid #2e3440;
+  font-size: 12px;
+}
+.inventory-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #88c0d0;
+}
+#change-folder {
+  padding: 2px 8px;
+  font-size: 11.5px;
+  background: #2e3440;
+  color: #d8dee9;
+  border: 1px solid #4c566a;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#change-folder:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -350,6 +350,7 @@ function setInputEnabled(enabled) {
   exitBtn.disabled = !enabled;
   $('save-btn').disabled = !enabled;
   $('session-btn').disabled = !enabled;
+  $('change-folder').disabled = !enabled;
   for (const btn of document.querySelectorAll('.bag-list button, .merchant-panel button')) btn.disabled = !enabled;
   if (statDefs.length) renderStatPanel();
 }
@@ -1731,6 +1732,7 @@ async function startGame({ loadSlot, slot }) {
   currentSessionId = sessionId ?? null;
   weaponSelect.value = chosenWeapon;
   touchedFiles.clear();
+  renderFolderLabel();
   lastSummary = '';
   sessionBanner.hidden = true;
   setupErrorEl.hidden = true;
@@ -2846,4 +2848,28 @@ $('ranking-btn').addEventListener('click', openRanking);
 $('ranking-close').addEventListener('click', () => ($('ranking-overlay').hidden = true));
 $('ranking-overlay').addEventListener('click', (e) => {
   if (e.target === $('ranking-overlay')) $('ranking-overlay').hidden = true;
+});
+
+// ---------------------------------------------------------------------------
+// Switch the project folder mid-run (not while the AI works): the file tree
+// follows, and Claude continues in a fresh session for the new folder.
+function renderFolderLabel() {
+  const el = $('inventory-folder-name');
+  el.textContent = chosenFolder ? `📁 ${baseName(chosenFolder)}` : '';
+  el.title = chosenFolder ?? '';
+}
+$('change-folder').addEventListener('click', async () => {
+  const res = await window.promptBattle.changeFolder();
+  if (!res) return;
+  if (res.error) {
+    appendLog(`📁 ${res.error}`, 'error');
+    return;
+  }
+  chosenFolder = res.folder;
+  folderPathEl.textContent = res.folder;
+  touchedFiles.clear();
+  renderFolderLabel();
+  refreshTree();
+  appendLog(`📁 작업 폴더를 바꿨다: ${res.folder} — 여기서부터 새 Claude 세션으로 이어간다.`, 'story-line');
+  window.promptBattle.submitPrompt('/new');
 });

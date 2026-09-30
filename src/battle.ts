@@ -468,6 +468,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
   // `/save N` and `/session <id>` — free actions allowed anywhere, like /stat.
   const freeCommand = (input: string): boolean => {
+    // A fresh Claude session (also sent when the project folder changes).
+    if (input === '/new') {
+      sessionId = undefined;
+      warnedSessionFull = false;
+      deps.onBattleEvent({ type: 'sessionReset', reason: 'new' });
+      return true;
+    }
     if (input.startsWith('/stat ')) {
       spendStatPoint(input);
       return true;

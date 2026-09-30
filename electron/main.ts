@@ -244,6 +244,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Switching the project folder mid-run: set by start-run while a run is on.
+let switchRunFolder: ((dir: string) => Promise<void>) | null = null;
+ipcMain.handle('change-folder', async () => {
+  if (!mainWindow || !switchRunFolder) return { error: '진행 중인 모험이 없다' };
+  if (currentTurnStop) return { error: 'AI가 작업하는 중에는 폴더를 바꿀 수 없다' };
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], defaultPath: currentCwd ?? undefined });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const next = path.resolve(result.filePaths[0]);
+  if (next === currentCwd) return null;
+  await switchRunFolder(next);
+  return { folder: next };
+});
+
 ipcMain.handle('pick-folder', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
@@ -414,15 +427,22 @@ ipcMain.handle(
     currentClaude = profile.claude;
     const heroClass = getHeroClass(options.heroClass).id;
     currentModel = getWeapon(options.model).model;
-    const cwd = currentCwd;
+    // The run's project folder can change mid-run (📁 in battle).
+    let cwd = currentCwd;
     const send = (event: unknown) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('battle-event', event);
     };
 
     // The folder's session id + chat log, saved as the run goes so a crash
     // or closed window loses nothing. Saves are chained to never interleave.
-    const folder: FolderSession = await loadFolderSession(cwd);
+    let folder: FolderSession = await loadFolderSession(cwd);
     let saving = Promise.resolve();
+    switchRunFolder = async (next: string) => {
+      await saving; // finish writing the old folder's history first
+      cwd = next;
+      currentCwd = next;
+      folder = await loadFolderSession(next);
+    };
     const persistFolder = () => {
       const snapshot = { ...folder, history: [...folder.history], runStates: { ...folder.runStates } };
       saving = saving.then(() => saveFolderSession(cwd, snapshot)).catch(() => {});
@@ -439,10 +459,11 @@ ipcMain.handle(
     };
 
     const summary = await runDungeon({
-      runTurn: async (prompt, cwd, sessionId, onEvent) => {
+      runTurn: async (prompt, _cwd, sessionId, onEvent) => {
         const stop = new AbortController();
         currentTurnStop = stop;
         try {
+          // The folder picked now (it may have changed since the run began).
           return await runAgentTurn(prompt, cwd, sessionId, onEvent, {
             model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal,
           });
@@ -510,6 +531,7 @@ ipcMain.handle(
     const updated = { ...finished.profile, heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
     await saving;
+    switchRunFolder = null;
 
     const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
     // A defeat can go on the ranking (if the server issued this run a token).
