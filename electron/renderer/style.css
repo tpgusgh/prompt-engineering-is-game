@@ -18,9 +18,9 @@ body {
   padding: 0 16px;
 }
 #summary-screen {
-  max-width: 420px;
-  margin: 80px auto;
-  text-align: center;
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 0 16px;
 }
 #setup-screen h1 {
   font-size: 28px;
@@ -2358,4 +2358,101 @@ body {
 .choice small,
 .choice-info-intro {
   letter-spacing: 0.02em;
+}
+
+/* Run summary */
+.summary-card {
+  background: #151922;
+  border: 1px solid #2e3440;
+  border-radius: 12px;
+  padding: 22px 24px;
+}
+.summary-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.summary-badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: #22303c;
+  border: 1px solid #ebcb8b;
+  font-size: 30px;
+  color: #ebcb8b;
+}
+.summary-badge .ic {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+}
+.summary-badge.lost {
+  border-color: #bf616a;
+  background: #2e1f24;
+  color: #bf616a;
+}
+.summary-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.summary-sub {
+  margin: 4px 0 0;
+  color: #7b88a1;
+  font-size: 13px;
+}
+.summary-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 560px) {
+  .summary-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+.summary-tiles div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: #1d222d;
+  border: 1px solid #2e3440;
+  border-radius: 8px;
+}
+.summary-tiles strong {
+  font-size: 17px;
+  color: #eceff4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.summary-tiles small {
+  font-size: 11.5px;
+  color: #7b88a1;
+}
+.summary-level {
+  margin: 16px 0 4px;
+}
+.summary-level .hp-bar-track.xp {
+  flex: 1;
+}
+.summary-card .summary-story {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  font-style: normal;
+  color: #7b88a1;
+}
+.summary-actions {
+  margin-top: 16px;
+}
+#summary-screen .summary-actions .start-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #5e81ac;
+  border-color: #81a1c1;
 }

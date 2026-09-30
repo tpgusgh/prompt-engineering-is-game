@@ -1650,10 +1650,7 @@ async function startGame({ loadSlot, slot }) {
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;
-    summaryTitleEl.textContent = summary.defeated ? '패배...' : '런 종료';
-    summaryTextEl.textContent = `${summary.floorsCleared}층 클리어, +${summary.xpGained} XP 획득, 보유 코인 ${summary.coins}. 현재 레벨 ${updated.level} (총 ${updated.xp} XP).`;
-    summaryStoryEl.textContent = '💾 시작 화면의 이어하기에서 층마다 자동 저장으로 이어갈 수 있다.';
-    renderRunRewards(progress);
+    renderSummary(summary, updated, progress, { difficulty, startCoins: from.coins });
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
     // call). Without this, the player would be stuck on the dungeon screen.
@@ -1662,6 +1659,46 @@ async function startGame({ loadSlot, slot }) {
     setupErrorEl.textContent = `문제가 발생했습니다: ${err && err.message ? err.message : String(err)}`;
     setupErrorEl.hidden = false;
   }
+}
+
+// Summary screen after a run: outcome, this run's numbers as tiles, the
+// level bar, rewards and how to continue.
+const DIFFICULTY_LABEL = { easy: '쉬움', normal: '보통', hard: '어려움' };
+function renderSummary(summary, updated, progress, { difficulty, startCoins }) {
+  const reached = summary.nextFloor;
+  $('summary-badge').textContent = summary.defeated ? '💀' : summary.floorsCleared > 0 ? '🏆' : '🎒';
+  $('summary-badge').className = `summary-badge${summary.defeated ? ' lost' : ''}`;
+  summaryTitleEl.textContent = summary.defeated ? '쓰러졌다...' : summary.floorsCleared > 0 ? '모험 완료!' : '오늘은 여기까지';
+  summaryTextEl.textContent = `${activeTheme.title} · 챕터 ${Math.floor(reached / 6) + 1} ${(reached % 6) + 1}층까지 · ${DIFFICULTY_LABEL[difficulty] ?? difficulty}`;
+  const r = summary.runStats ?? {};
+  const coinDelta = summary.coins - (startCoins ?? summary.coins);
+  const tiles = [
+    ['⚔️', '처치', `${summary.floorsCleared}마리`],
+    ['✨', '경험치', `+${summary.xpGained}`],
+    ['🪙', '코인', `${coinDelta >= 0 ? '+' : ''}${coinDelta} (보유 ${summary.coins})`],
+    ['💥', '최고 한 방', fmtNum(r.bestHit)],
+    ['🗨', '공격 명령', `${fmtNum(r.turns)}번`],
+    ['🧪', '테스트 통과', `${fmtNum(r.testsPassed)}번`],
+    ['📝', '파일 수정', `${fmtNum(r.filesEdited)}번`],
+    ['⏱', '가장 긴 턴', fmtDuration(r.longestTurnMs)],
+  ];
+  const grid = $('summary-tiles');
+  grid.textContent = '';
+  for (const [icon, label, value] of tiles) {
+    const cell = document.createElement('div');
+    const v = document.createElement('strong');
+    v.textContent = value;
+    const l = document.createElement('small');
+    l.textContent = `${icon} ${label}`;
+    cell.append(v, l);
+    grid.append(cell);
+  }
+  runXp = 0; // the profile already holds this run's XP
+  renderXp();
+  renderRunRewards(progress);
+  summaryStoryEl.textContent = summary.defeated
+    ? '💾 층마다 자동 저장된다. 시작 화면의 이어하기에서 다시 도전하자.'
+    : '💾 시작 화면의 이어하기(층마다 자동 저장)에서 이어갈 수 있다.';
 }
 
 // Summary screen: achievements unlocked and the daily quest, if done this run.

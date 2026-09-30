@@ -208,11 +208,24 @@
     </section>
 
     <section id="summary-screen" hidden>
-      <h2 id="summary-title">런 종료</h2>
-      <p id="summary-text"></p>
-      <p id="summary-story" class="summary-story"></p>
-      <div id="summary-rewards" class="summary-rewards"></div>
-      <button id="play-again-btn">다시 하기</button>
+      <div class="summary-card">
+        <div class="summary-head">
+          <div id="summary-badge" class="summary-badge"></div>
+          <div>
+            <h2 id="summary-title">모험 종료</h2>
+            <p id="summary-text" class="summary-sub"></p>
+          </div>
+        </div>
+        <div id="summary-tiles" class="summary-tiles"></div>
+        <div class="summary-level">
+          <div class="xp-row"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
+        </div>
+        <div id="summary-rewards" class="summary-rewards"></div>
+        <p id="summary-story" class="summary-story"></p>
+        <div class="summary-actions">
+          <button id="play-again-btn" class="start-btn">▶ 시작 화면으로</button>
+        </div>
+      </div>
     </section>
 
     <div id="save-overlay" class="file-viewer-overlay" hidden>
