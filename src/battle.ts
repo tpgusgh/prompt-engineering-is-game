@@ -1,5 +1,6 @@
 import { calculateDamage } from './damage.ts';
-import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, type Difficulty, type TraitId } from './monsters.ts';
+import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, type Difficulty, type TraitId } from './monsters.ts';
+import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
@@ -141,6 +142,8 @@ export interface BattleDeps {
   random?: () => number;
   // The model the next attack uses (for per-model win records).
   getModel?: () => string;
+  // Story theme: picks the monster rosters and the theme's rules.
+  themeId?: string;
 }
 
 export interface BattleSummary {
@@ -208,18 +211,38 @@ function counterDamage(monsterMaxHp: number, punished: boolean): number {
 
 // Bestiary entries: each monster as first met (normal difficulty) — its HP,
 // the counterattack it deals, and a boss's rule.
+// Stats are for its earliest appearance in any theme (theme bonuses aside);
+// appearances list every theme and chapter it shows up in.
 export function bestiary() {
   return listMonsters().map((m) => {
-    const spawned = spawnMonster(m.firstFloor, 'normal');
+    const slot = m.index % MONSTER_COUNT;
+    const appearances = THEME_RULES.flatMap((t) => {
+      const i = t.rosters.indexOf(m.roster);
+      return i === -1 ? [] : [{ themeId: t.id, chapter: i + 1 }];
+    });
+    const first = appearances.reduce((a, b) => (b.chapter < a.chapter ? b : a), appearances[0] ?? { themeId: THEME_RULES[0].id, chapter: 1 });
+    const floor = (first.chapter - 1) * MONSTER_COUNT + slot;
+    const spawned = spawnMonster(floor, 'normal', first.themeId);
     const maxHp = m.isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
-    const chapter = Math.floor(m.firstFloor / MONSTER_COUNT) + 1;
     const counter = Math.round(counterDamage(maxHp, false) * (m.trait === 'fierce' ? FIERCE : 1));
-    return { ...m, chapter, maxHp, counter, trait: { id: m.trait, ...TRAITS[m.trait] }, gimmick: m.isBoss ? gimmickFor(chapter) : undefined };
+    return {
+      ...m,
+      rosterName: ROSTER_NAMES[m.roster],
+      appearances,
+      exclusiveTo: appearances.length === 1 ? appearances[0].themeId : undefined,
+      chapter: first.chapter,
+      firstFloor: floor,
+      maxHp,
+      counter,
+      trait: { id: m.trait, ...TRAITS[m.trait] },
+      gimmick: m.isBoss ? gimmickFor(first.chapter) : undefined,
+    };
   });
 }
 
 export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const random = deps.random ?? Math.random;
+  const theme = themeRules(deps.themeId);
   let playerMaxHp = deps.playerMaxHp ?? 100;
   let playerHp = Math.min(playerMaxHp, deps.playerHp ?? playerMaxHp);
   let coins = deps.coins ?? 0;
@@ -469,15 +492,17 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   });
 
   while (true) {
-    const spawned = spawnMonster(floor, deps.difficulty);
+    const spawned = spawnMonster(floor, deps.difficulty, deps.themeId);
     const monsterIndex = spawned.index;
     const isBoss = floor % MONSTER_COUNT === MONSTER_COUNT - 1;
     const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
-    const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
+    const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER * theme.bossHp) : spawned.maxHp;
     const gimmick = isBoss ? gimmickFor(chapter) : undefined;
     if (!runStats.seen.includes(monsterIndex)) runStats.seen.push(monsterIndex);
     const trait = spawned.trait;
-    const counter = (punished: boolean) => Math.round(counterDamage(maxHp, punished) * (trait === 'fierce' ? FIERCE : 1));
+    let turnFailedTool = false; // debug-quest: a failed tool call hardens the counter
+    const counter = (punished: boolean) =>
+      Math.round(counterDamage(maxHp, punished) * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1));
     currentMaxHp = maxHp;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
@@ -569,6 +594,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       let turnEdits = 0;
       let turnFailures = 0;
       let turnActionDamage = 0;
+      turnFailedTool = false;
 
       // Work is damage: every tool action that succeeds (a command, an edit,
       // a subagent's read) lands its own hit as its result comes in — failed
@@ -586,6 +612,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           if (!call) return;
           if (event.isError) {
             turnFailures += 1;
+            turnFailedTool = true;
             if (trait === 'thorns' && playerHp > 0) {
               playerHp = Math.max(0, playerHp - THORNS_DAMAGE);
               deps.onBattleEvent({ type: 'traitThorns', damage: THORNS_DAMAGE });
@@ -654,6 +681,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (trait === 'frail') damage = Math.round(damage * 1.25);
         if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
         if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
+        if (turnTests > 0) damage = Math.round(damage * theme.testBonus);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
         if (crit) runStats.crits += 1;
@@ -708,7 +736,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       continue;
     }
 
-    const gained = xpForFloor(floor);
+    const gained = Math.round(xpForFloor(floor) * theme.rewards);
     xpGained += gained;
     floorsCleared += 1;
     runStats.floorsCleared += 1;
@@ -719,7 +747,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
     playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL);
     emitPlayerHp();
-    const coinsGained = coinsForFloor(floor, isBoss);
+    const coinsGained = Math.round(coinsForFloor(floor, isBoss) * theme.rewards);
     coins += coinsGained;
     deps.onBattleEvent({ type: 'coinsChanged', coins, gained: coinsGained });
     if (!allMaxed(stats)) {
@@ -728,9 +756,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }
     floor += 1;
     const encounter = random();
-    if (encounter < MERCHANT_CHANCE) {
+    if (encounter < MERCHANT_CHANCE * theme.shopChance) {
       if (!(await visitMerchant())) break;
-    } else if (encounter < MERCHANT_CHANCE + BLACKSMITH_CHANCE) {
+    } else if (encounter < (MERCHANT_CHANCE + BLACKSMITH_CHANCE) * theme.shopChance) {
       if (!(await visitBlacksmith())) break;
     }
   }

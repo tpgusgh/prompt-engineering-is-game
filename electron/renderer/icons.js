@@ -116,7 +116,6 @@ export const EMOJI_ICONS = {
  "🎖": "medal",
  "🎖️": "medal",
  "⭐": "star",
- "★": "star",
  "⏱": "timer",
  "⏱️": "timer",
  "⚠️": "triangle-alert",

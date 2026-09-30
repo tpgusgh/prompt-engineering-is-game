@@ -10,7 +10,7 @@ export const EMOJI = {
   '🧙': 'wand-sparkles', '✅': 'circle-check', '✓': 'check', '✔️': 'check', '🗡': 'sword', '🗡️': 'sword', '⏳': 'hourglass', '🔄': 'refresh-cw',
   '📁': 'folder', '⚔️': 'swords', '⚔': 'swords', '👥': 'users', '🎲': 'dices', '⏹': 'circle-stop', '⏹️': 'circle-stop', '🤖': 'bot',
   '🏹': 'bow-arrow', '🩹': 'bandage', '🧪': 'flask-conical', '📖': 'book-open', '⚡': 'zap', '📅': 'calendar', '🔊': 'volume-2',
-  '🔇': 'volume-x', '🎖': 'medal', '🎖️': 'medal', '⭐': 'star', '★': 'star', '⏱': 'timer', '⏱️': 'timer', '⚠️': 'triangle-alert', '⚠': 'triangle-alert',
+  '🔇': 'volume-x', '🎖': 'medal', '🎖️': 'medal', '⭐': 'star', '⏱': 'timer', '⏱️': 'timer', '⚠️': 'triangle-alert', '⚠': 'triangle-alert',
   '💥': 'flame', '🔨': 'hammer', '⚒': 'hammer', '⚒️': 'hammer', '👑': 'crown', '📝': 'file-pen', '✏️': 'pencil', '📊': 'chart-column',
   '📈': 'trending-up', '▶': 'play', '▶️': 'play', '🗨': 'message-circle', '🗨️': 'message-circle', '🔀': 'shuffle', '🏆': 'trophy',
   '🦅': 'bird', '✨': 'sparkles', '▾': 'chevron-down', '▴': 'chevron-up', '🟢': 'circle', '📄': 'file', '🎒': 'backpack', '📜': 'scroll',

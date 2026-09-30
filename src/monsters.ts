@@ -1,3 +1,5 @@
+import { rosterFor } from './themes.ts';
+
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 // Each monster fights with one trait (revealed in the bestiary once defeated).
@@ -19,8 +21,9 @@ interface MonsterTemplate {
   trait: TraitId;
 }
 
-// Rosters of one chapter each (5 monsters + the boss last); chapters cycle
-// through them in order. Art/lines in the renderer follow this order.
+// Rosters of one chapter each (5 monsters + the boss last). Which roster a
+// chapter uses depends on the theme (src/themes.ts). Art/lines/lore in the
+// renderer follow this order (monster index = roster * 6 + slot).
 const ROSTERS: MonsterTemplate[][] = [[
   { name: '버그 고블린', art: '  (o_o)\n  <)  )╯\n  /   \\', baseHp: 60, trait: 'thorns' },
   { name: '타입 에러 슬라임', art: '  .-\'\'-.\n (  ~~  )\n  `-..-`', baseHp: 80, trait: 'armor' },
@@ -56,14 +59,41 @@ const ROSTERS: MonsterTemplate[][] = [[
   { name: '플래키 테스트 카멜레온', art: '  (o.o)~\n PASS/FAIL', baseHp: 150, trait: 'testWeak' },
   { name: '핫픽스 폭탄병', art: '   *\n  (O)~  push -f', baseHp: 180, trait: 'fierce' },
   { name: 'AI 환각 키메라', art: ' <(@@)>\n  /||\\  "trust me"', baseHp: 260, trait: 'keywordWeak' },
+], [
+  // 5: adventure only — 고대 신전
+  { name: '주석 처리된 미이라', art: '  [////]\n  (x_x) /* */', baseHp: 85, trait: 'armor' },
+  { name: '폐기된 API 석상', art: '  [@deprecated]\n    ( - - )', baseHp: 105, trait: 'regen' },
+  { name: '낡은 문서의 사서 유령', art: '  .---.\n ( o o ) v0.1 docs', baseHp: 125, trait: 'frail' },
+  { name: 'YAML 미궁 골렘', art: '  key:\n    - value:\n      - ???', baseHp: 150, trait: 'fierce' },
+  { name: '잊힌 크론잡 박쥐', art: ' /\\(* * * * *)/\\', baseHp: 170, trait: 'thorns' },
+  { name: 'final_final_v2의 고대신', art: '  <[final_v2.zip]>\n   /|||||\\', baseHp: 250, trait: 'regen' },
+], [
+  // 6: demon-king only — 마왕군
+  { name: '디도스 해골병사', art: '  (x_x)(x_x)(x_x)\n   ||   ||   ||', baseHp: 95, trait: 'fierce' },
+  { name: '랜섬웨어 기사', art: '  [#LOCKED#]\n   /|  |\\', baseHp: 120, trait: 'armor' },
+  { name: '제로데이 암살자', art: '   _.--._\n  (  0day )\n   `----`', baseHp: 135, trait: 'frail' },
+  { name: '백도어 마법사', art: '  /\\ [door]\n (o.o)', baseHp: 160, trait: 'thorns' },
+  { name: '봇넷 드래곤', art: '  <<o o o>>\n  1000 bots', baseHp: 190, trait: 'regen' },
+  { name: '마왕 루트킷', art: '  \\[ROOT]/\n  <(#  #)>\n   /|##|\\', baseHp: 280, trait: 'fierce' },
+], [
+  // 7: debug-quest only — 벌레 굴
+  { name: '하이젠버그 나방', art: '  \\(o.o)/\n   }  {  (보면 사라짐)', baseHp: 80, trait: 'frail' },
+  { name: '메모리 오염 거머리', art: '  ~~(@)~~\n  0xDEADBEEF', baseHp: 100, trait: 'regen' },
+  { name: '세그폴트 딱정벌레', art: '  (|##|)\n  SIGSEGV', baseHp: 125, trait: 'armor' },
+  { name: '레이스 컨디션 개미 떼', art: ' .:.:.:.:.\n  ant ant ant', baseHp: 145, trait: 'thorns' },
+  { name: '무한 재귀 지네', art: '  ((((((( )))))))\n   f(f(f(f(', baseHp: 170, trait: 'fierce' },
+  { name: '릴리스 전날의 버그 여왕', art: '  <\\(QUEEN)/>\n   /|||||\\  x999', baseHp: 260, trait: 'testWeak' },
 ]];
+
+// What each roster (chapter set) is called in the bestiary.
+export const ROSTER_NAMES = ['버그 소굴', '런타임 늪', '문법 숲', '논리의 미궁', '네트워크 황야', '고대 신전', '마왕군', '벌레 굴'];
 export const ROSTER_COUNT = ROSTERS.length;
 
 // One chapter = one full cycle through the roster; its last floor (the
 // dragon) is the chapter boss.
 export const MONSTER_COUNT = ROSTERS[0].length;
 
-const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
+export const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
   easy: 0.7,
   normal: 1,
   hard: 1.4,
@@ -71,8 +101,8 @@ const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
 
 const HP_GROWTH_PER_FLOOR = 0.25;
 
-export function spawnMonster(floor: number, difficulty: Difficulty): { name: string; art: string; maxHp: number; index: number; trait: TraitId } {
-  const roster = Math.floor(floor / MONSTER_COUNT) % ROSTERS.length;
+export function spawnMonster(floor: number, difficulty: Difficulty, themeId?: string): { name: string; art: string; maxHp: number; index: number; trait: TraitId } {
+  const roster = rosterFor(themeId, Math.floor(floor / MONSTER_COUNT) + 1);
   const slot = floor % MONSTER_COUNT;
   const template = ROSTERS[roster][slot];
   const floorScaling = 1 + floor * HP_GROWTH_PER_FLOOR;

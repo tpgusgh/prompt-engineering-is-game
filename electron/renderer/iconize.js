@@ -6,7 +6,7 @@
 // stripped or left alone.
 import { ICONS, EMOJI_ICONS } from './icons.js';
 
-const EMOJI = /(?:\p{Extended_Pictographic}|[✕✓✗★▾▴⚀-⚅])(?:️|‍\p{Extended_Pictographic}️?)*/gu;
+const EMOJI = /(?:\p{Extended_Pictographic}|[✕✓✗▾▴⚀-⚅])(?:️|‍\p{Extended_Pictographic}️?)*/gu;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'PRE', 'CODE']);
 
 export function iconSvg(name, extraClass = '') {

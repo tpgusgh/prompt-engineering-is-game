@@ -890,3 +890,31 @@ test('traits: thorns that bring the hero to 0 HP end the run as a defeat', async
   const summary = await runDungeon({ ...deps, playerHp: 2 });
   assert.equal(summary.defeated, true);
 });
+
+test('themes: demon-king bosses have 30% more HP and every floor pays 1.5x', async () => {
+  const plain = makeFakeDeps(['/quit']);
+  await runDungeon({ ...plain.deps, startFloor: 5 });
+  const demon = makeFakeDeps(['/quit']);
+  await runDungeon({ ...demon.deps, startFloor: 5, themeId: 'demon-king' });
+  const hp = (evs: BattleEvent[]) => { const e = evs.find((x) => x.type === 'floorStart'); return e && e.type === 'floorStart' ? e.maxHp : -1; };
+  assert.equal(hp(plain.events), Math.round(495 * 1.5), 'no theme: the plain boss multiplier');
+  assert.equal(hp(demon.events), Math.round(630 * 1.5 * 1.3), '마왕 루트킷 (280 base, floor 5 = 630) with the demon-king boss bonus');
+  const xp = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const s = await runDungeon({ ...xp.deps, themeId: 'demon-king', getDamageMultiplier: () => 10 });
+  assert.equal(s.xpGained, Math.round(20 * 1.5));
+});
+
+test('themes: debug-quest adds 25% to the closing blow of a turn whose tests passed', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...deps, themeId: 'debug-quest' });
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === Math.round(10 * 1.25));
+});
+
+test('themes: each theme spawns its own roster', async () => {
+  const { deps, events } = makeFakeDeps(['/quit']);
+  await runDungeon({ ...deps, themeId: 'demon-king' });
+  const start = events.find((e) => e.type === 'floorStart');
+  assert.ok(start && start.type === 'floorStart' && start.monsterIndex === 36);
+});

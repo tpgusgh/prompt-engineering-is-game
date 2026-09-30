@@ -36,7 +36,10 @@
         <h2 class="card-title">⚔️ 새 모험</h2>
         <div class="choice-row">
           <span class="choice-label">테마</span>
-          <div id="theme-options" class="choice-grid"></div>
+          <div>
+            <div id="theme-options" class="choice-grid"></div>
+            <div id="theme-info" class="choice-info"></div>
+          </div>
         </div>
         <div class="choice-row">
           <span class="choice-label">직업</span>
@@ -51,10 +54,13 @@
         </div>
         <div class="choice-row">
           <span class="choice-label">난이도</span>
-          <div class="choice-grid difficulty-grid">
-            <label class="choice"><input type="radio" name="difficulty" value="easy" /><strong>쉬움</strong></label>
-            <label class="choice"><input type="radio" name="difficulty" value="normal" checked /><strong>보통</strong></label>
-            <label class="choice"><input type="radio" name="difficulty" value="hard" /><strong>어려움</strong></label>
+          <div>
+            <div class="choice-grid difficulty-grid">
+              <label class="choice"><input type="radio" name="difficulty" value="easy" /><strong>쉬움</strong></label>
+              <label class="choice"><input type="radio" name="difficulty" value="normal" checked /><strong>보통</strong></label>
+              <label class="choice"><input type="radio" name="difficulty" value="hard" /><strong>어려움</strong></label>
+            </div>
+            <p id="difficulty-info" class="choice-hint"></p>
           </div>
         </div>
         <button id="start-btn" class="start-btn" disabled>▶ 던전 입장</button>
@@ -293,6 +299,7 @@
           <button type="button" id="bestiary-close" aria-label="닫기">✕</button>
         </div>
         <p class="option-sub">처음 만났을 때 기준 (보통 난이도). 층이 올라갈수록 HP와 반격이 더 세진다. 만나지 못한 몬스터는 ??? 로 보인다.</p>
+        <div id="bestiary-filter" class="settings-tabs bestiary-filter"></div>
         <div id="bestiary-list" class="bestiary-list"></div>
         <div id="bestiary-detail" class="bestiary-detail" hidden></div>
       </div>

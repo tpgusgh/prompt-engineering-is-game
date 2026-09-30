@@ -174,6 +174,8 @@ async function loadSetup() {
   achievementDefs = info.achievements ?? [];
   dailyQuestDefs = info.dailyQuests ?? [];
   bestiaryDefs = info.bestiary ?? [];
+  themeRuleDefs = info.themeRules ?? [];
+  difficultyMult = info.difficulty ?? difficultyMult;
   renderDailyLine();
   runXp = 0;
   renderXp();
@@ -188,14 +190,17 @@ async function loadSetup() {
   themeOptionsEl.textContent = '';
   for (const theme of THEMES) {
     themeOptionsEl.append(
-      choiceCard('theme', theme.id, theme.id === chosenThemeId, theme.title, '', () => {
+      choiceCard('theme', theme.id, theme.id === chosenThemeId, theme.title, `난이도 ${stars(ruleOf(theme.id)?.stars ?? 1)}`, () => {
         chosenThemeId = theme.id;
+        renderThemeInfo();
       }),
     );
   }
 
   renderClassOptions();
   renderWeaponOptions();
+  renderThemeInfo();
+  renderDifficultyInfo();
   renderClaudeSettings();
 }
 loadSetup();
@@ -2333,57 +2338,84 @@ $('records-overlay').addEventListener('click', (e) => {
 // Bestiary: every monster as first met — art, name, HP, counterattack, boss
 // rule — and how many you've defeated. Unmet ones are silhouettes.
 let bestiaryDefs = [];
+let bestiaryFilter = 'all'; // 'all' or a theme id
 function openBestiary() {
+  const tabs = $('bestiary-filter');
+  tabs.textContent = '';
+  for (const [id, label] of [['all', '전체'], ...THEMES.map((t) => [t.id, t.title])]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.classList.toggle('active', id === bestiaryFilter);
+    b.addEventListener('click', () => {
+      bestiaryFilter = id;
+      openBestiary();
+    });
+    tabs.append(b);
+  }
   const seen = new Set(profile?.records?.seen ?? []);
   const kills = profile?.records?.kills ?? {};
   $('bestiary-count').textContent = `발견 ${seen.size}/${bestiaryDefs.length} · 처치 ${Object.keys(kills).length}/${bestiaryDefs.length}`;
   const list = $('bestiary-list');
   list.textContent = '';
-  let chapter = 0;
-  for (const m of bestiaryDefs) {
-    if (m.chapter !== chapter) {
-      chapter = m.chapter;
-      const h = document.createElement('h3');
-      h.textContent = `챕터 ${chapter}`;
-      h.className = 'bestiary-chapter';
-      list.append(h);
-    }
-    const known = seen.has(m.index);
-    const card = document.createElement('div');
-    card.className = `bestiary-card${known ? '' : ' unknown'}${m.isBoss ? ' boss' : ''}`;
-    const art = document.createElement('div');
-    art.className = 'bestiary-art';
-    art.innerHTML = monsterSvg(m.index, m.isBoss && known); // static, trusted markup
-    const info = document.createElement('div');
-    info.className = 'bestiary-info';
-    const name = document.createElement('strong');
-    name.textContent = known ? `${m.isBoss ? '👑 ' : ''}${m.name}` : '???';
-    const stats = document.createElement('small');
-    stats.textContent = known ? `❤️ HP ${m.maxHp} · 🗡 반격 ${m.counter} · ${m.firstFloor + 1}층부터` : `${m.firstFloor + 1}층 근처에 산다는데...`;
-    info.append(name, stats);
-    if (known && m.gimmick) {
-      const rule = document.createElement('small');
-      rule.className = 'bestiary-rule';
-      rule.textContent = m.gimmick.text;
-      info.append(rule);
-    }
-    const count = document.createElement('small');
-    count.className = 'bestiary-kills';
-    count.textContent = kills[m.index] ? `처치 ${kills[m.index]}회 · 눌러서 상세보기` : known ? '쓰러뜨리면 특성이 밝혀진다' : '';
-    info.append(count);
-    card.append(art, info);
-    if (kills[m.index]) {
-      card.classList.add('defeated');
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.addEventListener('click', () => showMonsterDetail(m, kills[m.index]));
-      card.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && showMonsterDetail(m, kills[m.index]));
-    }
-    list.append(card);
+  // 전체: grouped by roster (area). A theme: its chapters in order.
+  const theme = THEMES.find((t) => t.id === bestiaryFilter);
+  const themeTitle = (id) => THEMES.find((t) => t.id === id)?.title ?? id;
+  const groups = theme
+    ? (ruleOf(theme.id)?.rosters ?? []).map((roster, i) => ({
+        title: `챕터 ${i + 1} · ${chapterInfo(theme, i + 1).title}`,
+        monsters: bestiaryDefs.filter((m) => m.roster === roster),
+      }))
+    : [...new Set(bestiaryDefs.map((m) => m.roster))].map((roster) => {
+        const monsters = bestiaryDefs.filter((m) => m.roster === roster);
+        const only = monsters[0]?.exclusiveTo;
+        return { title: `${monsters[0]?.rosterName ?? ''}${only ? ` · ${themeTitle(only)} 전용` : ''}`, monsters };
+      });
+  for (const group of groups) {
+    const h = document.createElement('h3');
+    h.textContent = group.title;
+    h.className = 'bestiary-chapter';
+    list.append(h);
+    for (const m of group.monsters) renderBestiaryCard(list, m, seen, kills, themeTitle);
   }
   list.hidden = false;
   $('bestiary-detail').hidden = true;
   $('bestiary-overlay').hidden = false;
+}
+
+function renderBestiaryCard(list, m, seen, kills, themeTitle) {
+  const known = seen.has(m.index);
+  const card = document.createElement('div');
+  card.className = `bestiary-card${known ? '' : ' unknown'}${m.isBoss ? ' boss' : ''}`;
+  const art = document.createElement('div');
+  art.className = 'bestiary-art';
+  art.innerHTML = monsterSvg(m.index, m.isBoss && known); // static, trusted markup
+  const info = document.createElement('div');
+  info.className = 'bestiary-info';
+  const name = document.createElement('strong');
+  name.textContent = known ? `${m.isBoss ? '👑 ' : ''}${m.name}` : '???';
+  const stats = document.createElement('small');
+  stats.textContent = known ? `❤️ HP ${m.maxHp} · 🗡 반격 ${m.counter}` : m.exclusiveTo ? `${themeTitle(m.exclusiveTo)}에서만 만날 수 있다는데...` : '어딘가에 산다는데...';
+  info.append(name, stats);
+  if (known && m.gimmick) {
+    const rule = document.createElement('small');
+    rule.className = 'bestiary-rule';
+    rule.textContent = m.gimmick.text;
+    info.append(rule);
+  }
+  const count = document.createElement('small');
+  count.className = 'bestiary-kills';
+  count.textContent = kills[m.index] ? `처치 ${kills[m.index]}회 · 눌러서 상세보기` : known ? '쓰러뜨리면 특성이 밝혀진다' : '';
+  info.append(count);
+  card.append(art, info);
+  if (kills[m.index]) {
+    card.classList.add('defeated');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.addEventListener('click', () => showMonsterDetail(m, kills[m.index]));
+    card.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && showMonsterDetail(m, kills[m.index]));
+  }
+  list.append(card);
 }
 
 // Detail page of a defeated monster: its trait, personality and lines.
@@ -2407,7 +2439,8 @@ function showMonsterDetail(m, killCount) {
   name.textContent = `${m.isBoss ? '👑 ' : ''}${m.name}`;
   const where = document.createElement('p');
   where.className = 'option-sub';
-  where.textContent = `챕터 ${m.chapter} · ${m.firstFloor + 1}층부터${m.isBoss ? ' · 챕터 보스' : ''} · 처치 ${killCount}회`;
+  const places = m.appearances.map((a) => `${THEMES.find((t) => t.id === a.themeId)?.title ?? a.themeId} 챕터 ${a.chapter}`).join(' · ');
+  where.textContent = `${m.rosterName}${m.exclusiveTo ? ' (전용)' : ''} · ${places}${m.isBoss ? ' · 보스' : ''} · 처치 ${killCount}회`;
   const stats = document.createElement('p');
   stats.textContent = `❤️ HP ${m.maxHp}   🗡 반격 ${m.counter}`;
   head.append(name, where, stats);
@@ -2435,3 +2468,37 @@ $('bestiary-close').addEventListener('click', () => ($('bestiary-overlay').hidde
 $('bestiary-overlay').addEventListener('click', (e) => {
   if (e.target === $('bestiary-overlay')) $('bestiary-overlay').hidden = true;
 });
+
+// ---------------------------------------------------------------------------
+// Theme and difficulty details on the start screen (shown for the pick).
+let themeRuleDefs = [];
+let difficultyMult = { easy: 0.7, normal: 1, hard: 1.4 };
+const ruleOf = (id) => themeRuleDefs.find((t) => t.id === id);
+const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));
+function renderThemeInfo() {
+  const el = $('theme-info');
+  const theme = THEMES.find((t) => t.id === chosenThemeId);
+  const rules = ruleOf(chosenThemeId);
+  el.textContent = '';
+  if (!theme || !rules) return;
+  const intro = document.createElement('p');
+  intro.className = 'choice-info-intro';
+  intro.textContent = `${theme.chapters[0]?.intro ?? ''} (챕터 ${theme.chapters.length}개 · 난이도 ${stars(rules.stars)})`;
+  const list = document.createElement('ul');
+  for (const perk of rules.perks) {
+    const li = document.createElement('li');
+    li.textContent = perk;
+    list.append(li);
+  }
+  el.append(intro, list);
+}
+const DIFFICULTY_TEXT = {
+  easy: '처음이라면. 반격도 HP에 비례해 약해진다.',
+  normal: '기본 밸런스.',
+  hard: '반격도 HP에 비례해 세진다. 보상은 같다.',
+};
+function renderDifficultyInfo() {
+  const d = document.querySelector('input[name="difficulty"]:checked')?.value ?? 'normal';
+  $('difficulty-info').textContent = `몬스터 HP x${difficultyMult[d]} · ${DIFFICULTY_TEXT[d]}`;
+}
+for (const r of document.querySelectorAll('input[name="difficulty"]')) r.addEventListener('change', renderDifficultyInfo);
