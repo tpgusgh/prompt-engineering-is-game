@@ -40,9 +40,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // targets' packages (not saved) so each build can bundle its own.
   const sdkVersion = JSON.parse(readFileSync('node_modules/@anthropic-ai/claude-agent-sdk/package.json', 'utf-8')).version;
   run('npm', ['install', '--no-save', '--force', ...['linux-x64'].map((t) => `@anthropic-ai/claude-agent-sdk-${t}@${sdkVersion}`)]);
-  run('npx', ['electron-builder', '--mac', '--arm64'], buildEnv);
-  run('npx', ['electron-builder', '--linux', '--x64'], buildEnv);
-  const artifacts = [`mac-arm64.dmg`, `linux-x86_64.AppImage`].map((a) => path.join('release', `Prompt Battle-${version}-${a}`));
+  run('npx', ['electron-builder', '--mac', '--arm64', '--publish', 'never'], buildEnv);
+  run('npx', ['electron-builder', '--linux', '--x64', '--publish', 'never'], buildEnv);
+  const artifacts = [`mac-arm64.dmg`, `linux-x86_64.AppImage`].map((a) => path.join('release', `PromptBattle-${version}-${a}`));
+  // electron-updater's manifest for the AppImage (Windows' comes from CI).
+  artifacts.push(path.join('release', 'latest-linux.yml'));
   for (const a of artifacts) if (!existsSync(a)) throw new Error(`${a} was not built`);
 
   run('git', ['push', 'origin', 'HEAD', tag]);

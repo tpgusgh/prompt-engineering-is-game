@@ -22,10 +22,10 @@ jobs:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 26
       - run: npm ci
@@ -33,4 +33,5 @@ jobs:
       - run: npx electron-builder --win --x64 --publish never
       - name: Upload installer to the release
         shell: bash
-        run: gh release upload "$TAG" release/*-win-x64.exe --clobber
+        # latest.yml + blockmap let installed copies update themselves.
+        run: gh release upload "$TAG" release/*-win-x64.exe release/*-win-x64.exe.blockmap release/latest.yml --clobber

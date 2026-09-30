@@ -40,4 +40,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   setModel: (model) => ipcRenderer.invoke('set-model', model),
   listTree: () => ipcRenderer.invoke('list-tree'),
   writeFile: (path, content) => ipcRenderer.invoke('write-file', path, content),
+  checkUpdate: () => ipcRenderer.invoke('check-update'),
+  onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_event, status) => callback(status)),
+  openReleasePage: () => ipcRenderer.invoke('open-release-page'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
 });

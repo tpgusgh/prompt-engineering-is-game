@@ -1,6 +1,7 @@
 // electron/main.ts
 import electron from 'electron';
-const { app, BrowserWindow, ipcMain, dialog, safeStorage } = electron;
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = electron;
+import electronUpdater from 'electron-updater';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
@@ -17,6 +18,7 @@ import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
 import { ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
+import { isNewerVersion, updateMode, RELEASES_URL, LATEST_RELEASE_API, type UpdateStatus } from '../src/updates.ts';
 import { HERO_CLASSES, getHeroClass } from '../src/classes.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -123,6 +125,37 @@ ipcMain.on('save-and-close-done', (_event, ok: boolean) => {
   if (quitting) app.quit();
   else mainWindow?.close();
 });
+
+// Updates (packaged app only): Windows/AppImage download and install on
+// restart; the Mac build points at the release page. Failures (offline,
+// rate limit) are silent — it's only a convenience.
+let updateCheck: Promise<UpdateStatus | null> | null = null;
+function checkForUpdate(): Promise<UpdateStatus | null> {
+  if (!app.isPackaged) return Promise.resolve(null);
+  updateCheck ??= (async () => {
+    try {
+      if (updateMode(process.platform, process.env) === 'install') {
+        const { autoUpdater } = electronUpdater;
+        autoUpdater.on('update-downloaded', (info) => {
+          mainWindow?.webContents.send('update-status', { state: 'ready', version: info.version } satisfies UpdateStatus);
+        });
+        const result = await autoUpdater.checkForUpdates();
+        const version = result?.updateInfo.version;
+        return version && isNewerVersion(version, app.getVersion()) ? { state: 'downloading', version } : null;
+      }
+      const res = await fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } });
+      if (!res.ok) return null;
+      const { tag_name: tag } = (await res.json()) as { tag_name?: string };
+      return tag && isNewerVersion(tag, app.getVersion()) ? { state: 'available', version: tag.replace(/^v/, ''), url: RELEASES_URL } : null;
+    } catch {
+      return null;
+    }
+  })();
+  return updateCheck;
+}
+ipcMain.handle('check-update', () => checkForUpdate());
+ipcMain.handle('open-release-page', () => shell.openExternal(RELEASES_URL));
+ipcMain.handle('install-update', () => electronUpdater.autoUpdater.quitAndInstall());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
