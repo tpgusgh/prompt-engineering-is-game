@@ -302,6 +302,77 @@ MONSTERS.push(
   build('m45', { shape: 'orb', light: '#b35a3a', dark: '#4a1e10', line: '#1e0a04', eyes: 'round', mouth: 'grin', eyeY: 100, mouthY: 128, back: '<g fill="#4a1e10"><circle cx="30" cy="160" r="12"/><circle cx="170" cy="160" r="12"/><circle cx="24" cy="120" r="9"/><circle cx="176" cy="120" r="9"/></g>', front: tag(100, 40, 110, 'thread 1 ⇄ thread 2', '#1e0a04', '#ffb38a', 8) }),
   build('m46', { shape: 'blob', light: '#9bc46a', dark: '#3a5a1a', line: '#16240a', eyes: 'x', eyeColor: '#16240a', mouth: 'o', eyeY: 108, mouthY: 136, back: '<g fill="none" stroke="#3a5a1a" stroke-width="6"><circle cx="30" cy="150" r="12"/><circle cx="170" cy="150" r="12"/><circle cx="20" cy="112" r="10"/><circle cx="180" cy="112" r="10"/></g>', front: tag(100, 60, 80, 'f(f(f(f(', '#16240a', '#d7f0b8', 10) }),
   build('m47', { shape: 'titan', light: '#d97aa8', dark: '#5a1a3c', line: '#240818', eyes: 'many', eyeColor: '#fff36b', eyeY: 94, mouth: 'fangs', mouthY: 120, back: '<path d="M60 66 L70 30 L84 58 L100 22 L116 58 L130 30 L140 66 Z" fill="#ebcb8b" stroke="#6b4a1a" stroke-width="3"/>', front: tag(100, 142, 110, 'bugs x999 · D-1', '#240818', '#fff36b', 8) }),
+  // 48-53: 클라우드 상공
+  build('m48', { shape: 'orb', light: '#dff3ff', dark: '#6aa7d8', line: '#244a6b', eyes: 'sleepy', eyeColor: '#244a6b', mouth: 'o', eyeY: 102, mouthY: 132, front: tag(100, 186, 121, '3.2s cold start', '#244a6b', '#dff3ff', 8) }),
+  build('m49', { shape: 'blob', light: '#c8f7c5', dark: '#3f9a5a', line: '#174a26', eyes: 'round', eyeColor: '#174a26', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 60, 107, 'replicas: 1→∞', '#174a26', '#c8f7c5', 8) }),
+  build('m50', { shape: 'ghost', light: '#fff4d6', dark: '#c9a24a', line: '#5a4410', eyes: 'angry', eyeColor: '#5a4410', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 40, 86, '$48,210.00', '#5a4410', '#fff4d6', 8) }),
+  build('m51', { shape: 'beast', light: '#8fb8e8', dark: '#2a4f80', line: '#10223a', eyes: 'many', eyeColor: '#10223a', mouth: 'fangs', eyeY: 92, mouthY: 118, front: tag(100, 172, 128, 'CrashLoopBackOff', '#10223a', '#8fb8e8', 8) }),
+  build('m52', { shape: 'orb', light: '#c7d2ff', dark: '#4b4fa8', line: '#1a1c4a', eyes: 'glow', eyeColor: '#1a1c4a', mouth: 'flat', eyeY: 102, mouthY: 132, front: tag(100, 186, 114, 'us-east-1 DOWN', '#1a1c4a', '#c7d2ff', 8) }),
+  build('m53', { shape: 'titan', light: '#b8c8ff', dark: '#2c2f7a', line: '#0c0e30', eyes: 'glow', eyeColor: '#0c0e30', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 135, 'AWS · GCP · Azure', '#0c0e30', '#b8c8ff', 8) }),
+
+  // 54-59: 데이터 심해
+  build('m54', { shape: 'ghost', light: '#e0f7ff', dark: '#5ab0d0', line: '#1a4a5a', eyes: 'round', eyeColor: '#1a4a5a', mouth: 'o', eyeY: 102, mouthY: 132, front: tag(100, 40, 93, 'id,,name,,,', '#1a4a5a', '#e0f7ff', 8) }),
+  build('m55', { shape: 'beast', light: '#e8a0c8', dark: '#8a2a5a', line: '#3a0a24', eyes: 'angry', eyeColor: '#3a0a24', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 114, 'SELECT … ×1001', '#3a0a24', '#e8a0c8', 8) }),
+  build('m56', { shape: 'golem', light: '#b8c8a0', dark: '#5a6a3a', line: '#232a14', eyes: 'sleepy', eyeColor: '#232a14', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 121, 'FULL TABLE SCAN', '#232a14', '#b8c8a0', 8) }),
+  build('m57', { shape: 'beast', light: '#c8a078', dark: '#6a4222', line: '#2a1608', eyes: 'angry', eyeColor: '#2a1608', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 121, 'cache miss ×10k', '#2a1608', '#c8a078', 8) }),
+  build('m58', { shape: 'beast', light: '#d8c0a0', dark: '#7a5a3a', line: '#30200e', eyes: 'round', eyeColor: '#30200e', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 114, '{ \"any\": ??? }', '#30200e', '#d8c0a0', 8) }),
+  build('m59', { shape: 'titan', light: '#6ab0c8', dark: '#0e3a4a', line: '#04161c', eyes: 'many', eyeColor: '#04161c', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 107, '3PB · 아무도 안 봄', '#04161c', '#6ab0c8', 8) }),
+
+  // 60-65: 프론트엔드 도시
+  build('m60', { shape: 'ghost', light: '#f0e6ff', dark: '#9a7ad0', line: '#3a2a5a', eyes: 'round', eyeColor: '#3a2a5a', mouth: 'frown', eyeY: 102, mouthY: 132, front: tag(100, 40, 142, 'margin: 0 auto ???', '#3a2a5a', '#f0e6ff', 8) }),
+  build('m61', { shape: 'golem', light: '#e0e0e8', dark: '#6a6a7a', line: '#2a2a34', eyes: 'glow', eyeColor: '#2a2a34', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 107, 'z-index: 9999', '#2a2a34', '#e0e0e8', 8) }),
+  build('m62', { shape: 'orb', light: '#ffd8a8', dark: '#c8823a', line: '#5a3410', eyes: 'round', eyeColor: '#5a3410', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 186, 79, 'render ×∞', '#5a3410', '#ffd8a8', 8) }),
+  build('m63', { shape: 'blob', light: '#b8d08a', dark: '#5a7a2a', line: '#243410', eyes: 'angry', eyeColor: '#243410', mouth: 'fangs', eyeY: 102, mouthY: 132, front: tag(100, 60, 114, 'bundle.js 14MB', '#243410', '#b8d08a', 8) }),
+  build('m64', { shape: 'ghost', light: '#e8e8f0', dark: '#7a7a9a', line: '#2a2a40', eyes: 'x', eyeColor: '#2a2a40', mouth: 'flat', eyeY: 102, mouthY: 132, front: tag(100, 40, 121, 'server ≠ client', '#2a2a40', '#e8e8f0', 8) }),
+  build('m65', { shape: 'orb', light: '#3a3050', dark: '#0a0612', line: '#000', eyes: 'glow', eyeColor: '#000', mouth: 'flat', eyeY: 102, mouthY: 132, front: tag(100, 186, 170, '1.2GB · 1,284 packages', '#000', '#3a3050', 8) }),
+
+  // 66-71: 잊힌 해적섬
+  build('m66', { shape: 'beast', light: '#d8a070', dark: '#6a3a1a', line: '#2a1406', eyes: 'angry', eyeColor: '#2a1406', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 107, 'git rebase -i', '#2a1406', '#d8a070', 8) }),
+  build('m67', { shape: 'bat', light: '#ff9a8a', dark: '#c83a2a', line: '#5a1208', eyes: 'round', eyeColor: '#5a1208', mouth: 'o', eyeY: 104, mouthY: 118, front: tag(100, 60, 142, 'cherry-pick a1b2c3', '#5a1208', '#ff9a8a', 8) }),
+  build('m68', { shape: 'golem', light: '#c8a050', dark: '#6a4a10', line: '#2a1c04', eyes: 'glow', eyeColor: '#2a1c04', mouth: 'fangs', eyeY: 66, mouthY: 80, front: tag(100, 126, 79, 'stash@{7}', '#2a1c04', '#c8a050', 8) }),
+  build('m69', { shape: 'ghost', light: '#c8e0e8', dark: '#4a7a8a', line: '#1a303a', eyes: 'x', eyeColor: '#1a303a', mouth: 'flat', eyeY: 102, mouthY: 132, front: tag(100, 40, 177, 'HEAD detached at 3f2a1c', '#1a303a', '#c8e0e8', 8) }),
+  build('m70', { shape: 'beast', light: '#8ac8b0', dark: '#2a6a5a', line: '#0a2a22', eyes: 'many', eyeColor: '#0a2a22', mouth: 'fangs', eyeY: 92, mouthY: 118, front: tag(100, 172, 177, 'submodule update --init', '#0a2a22', '#8ac8b0', 8) }),
+  build('m71', { shape: 'titan', light: '#c86a4a', dark: '#5a1a0a', line: '#200604', eyes: 'angry', eyeColor: '#200604', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 128, 'git push --force', '#200604', '#c86a4a', 8) }),
+
+  // 72-77: 하늘섬 도서관
+  build('m72', { shape: 'bat', light: '#4a4a5a', dark: '#16161e', line: '#000', eyes: 'glow', eyeColor: '#000', mouth: 'o', eyeY: 104, mouthY: 118, front: tag(100, 60, 121, 'Ctrl+C · Ctrl+V', '#000', '#4a4a5a', 8) }),
+  build('m73', { shape: 'blob', light: '#f0d8a0', dark: '#a07a2a', line: '#3a2a08', eyes: 'sleepy', eyeColor: '#3a2a08', mouth: 'frown', eyeY: 102, mouthY: 132, front: tag(100, 60, 86, 'Todo 앱 #47', '#3a2a08', '#f0d8a0', 8) }),
+  build('m74', { shape: 'golem', light: '#c0c8d8', dark: '#5a6278', line: '#232838', eyes: 'x', eyeColor: '#232838', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 163, 'example: v2 · lib: v5', '#232838', '#c0c8d8', 8) }),
+  build('m75', { shape: 'orb', light: '#fff0a0', dark: '#c8a01a', line: '#4a3a04', eyes: 'many', eyeColor: '#4a3a04', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 186, 114, '1,842 warnings', '#4a3a04', '#fff0a0', 8) }),
+  build('m76', { shape: 'beast', light: '#e8d0a0', dark: '#8a6a3a', line: '#34240c', eyes: 'glow', eyeColor: '#34240c', mouth: 'flat', eyeY: 92, mouthY: 118, front: tag(100, 172, 114, 'PR #812: \"fix\"', '#34240c', '#e8d0a0', 8) }),
+  build('m77', { shape: 'titan', light: '#e0e8ff', dark: '#5a6aa8', line: '#1a2248', eyes: 'many', eyeColor: '#1a2248', mouth: 'flat', eyeY: 94, mouthY: 120, front: tag(100, 142, 79, 'nit: ×248', '#1a2248', '#e0e8ff', 8) }),
+
+  // 78-83: 마왕군 정예
+  build('m78', { shape: 'bat', light: '#ff9ab0', dark: '#c8325a', line: '#50081e', eyes: 'angry', eyeColor: '#50081e', mouth: 'grin', eyeY: 104, mouthY: 118, front: tag(100, 60, 100, '[광고] 축하합니다!!', '#50081e', '#ff9ab0', 8) }),
+  build('m79', { shape: 'ghost', light: '#a8e0f0', dark: '#3a8aa8', line: '#10303a', eyes: 'glow', eyeColor: '#10303a', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 40, 128, 'paypa1.com/login', '#10303a', '#a8e0f0', 8) }),
+  build('m80', { shape: 'beast', light: '#b0a0d0', dark: '#4a3a78', line: '#1a1230', eyes: 'angry', eyeColor: '#1a1230', mouth: 'fangs', eyeY: 92, mouthY: 118, front: tag(100, 172, 135, 'CPU 100% · mining', '#1a1230', '#b0a0d0', 8) }),
+  build('m81', { shape: 'ghost', light: '#4a4a58', dark: '#12121a', line: '#000', eyes: 'glow', eyeColor: '#000', mouth: 'flat', eyeY: 102, mouthY: 132, front: tag(100, 40, 142, 'keystrokes: 48,221', '#000', '#4a4a58', 8) }),
+  build('m82', { shape: 'blob', light: '#d0c0e8', dark: '#6a4aa8', line: '#261844', eyes: 'round', eyeColor: '#261844', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 60, 142, '\"I am not a robot\"', '#261844', '#d0c0e8', 8) }),
+  build('m83', { shape: 'titan', light: '#6a3a5a', dark: '#1a0612', line: '#000', eyes: 'glow', eyeColor: '#000', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 121, '.onion · 뭐든 팝니다', '#000', '#6a3a5a', 8) }),
+
+  // 84-89: 마계 서버실
+  build('m84', { shape: 'orb', light: '#ffc070', dark: '#c83a0a', line: '#4a0e00', eyes: 'angry', eyeColor: '#4a0e00', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 186, 72, 'CPU 98°C', '#4a0e00', '#ffc070', 8) }),
+  build('m85', { shape: 'golem', light: '#a8b0a0', dark: '#4a5040', line: '#1c2016', eyes: 'sleepy', eyeColor: '#1c2016', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 86, 'battery 3%', '#1c2016', '#a8b0a0', 8) }),
+  build('m86', { shape: 'beast', light: '#8a8aa8', dark: '#2a2a48', line: '#0c0c1c', eyes: 'many', eyeColor: '#0c0c1c', mouth: 'fangs', eyeY: 92, mouthY: 118, front: tag(100, 172, 100, '(어느 게 어느 선?)', '#0c0c1c', '#8a8aa8', 8) }),
+  build('m87', { shape: 'bat', light: '#9a9aa8', dark: '#3a3a48', line: '#14141c', eyes: 'angry', eyeColor: '#14141c', mouth: 'fangs', eyeY: 104, mouthY: 118, front: tag(100, 60, 65, 'sudo !!', '#14141c', '#9a9aa8', 8) }),
+  build('m88', { shape: 'ghost', light: '#d0d0e0', dark: '#6a6a88', line: '#24243a', eyes: 'sleepy', eyeColor: '#24243a', mouth: 'o', eyeY: 102, mouthY: 132, front: tag(100, 40, 93, '&gt; /dev/null', '#24243a', '#d0d0e0', 8) }),
+  build('m89', { shape: 'titan', light: '#8a2a3a', dark: '#200008', line: '#000', eyes: 'glow', eyeColor: '#000', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 177, 'uid=0(root) gid=0(root)', '#000', '#8a2a3a', 8) }),
+
+  // 90-95: 컴파일 화산
+  build('m90', { shape: 'beast', light: '#e88a5a', dark: '#8a2a0a', line: '#300a00', eyes: 'x', eyeColor: '#300a00', mouth: 'frown', eyeY: 92, mouthY: 118, front: tag(100, 172, 170, 'undefined reference to', '#300a00', '#e88a5a', 8) }),
+  build('m91', { shape: 'blob', light: '#c8a0e8', dark: '#5a2a8a', line: '#200a34', eyes: 'angry', eyeColor: '#200a34', mouth: 'fangs', eyeY: 102, mouthY: 132, front: tag(100, 60, 170, 'error: … (3,000 lines)', '#200a34', '#c8a0e8', 8) }),
+  build('m92', { shape: 'beast', light: '#a0d890', dark: '#3a7a2a', line: '#10300a', eyes: 'round', eyeColor: '#10300a', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 107, 'a → b → c → a', '#10300a', '#a0d890', 8) }),
+  build('m93', { shape: 'beast', light: '#ffb04a', dark: '#b8520a', line: '#401a00', eyes: 'glow', eyeColor: '#401a00', mouth: 'grin', eyeY: 92, mouthY: 118, front: tag(100, 172, 142, '-w  # warnings off', '#401a00', '#ffb04a', 8) }),
+  build('m94', { shape: 'golem', light: '#b0a090', dark: '#5a4a3a', line: '#221a12', eyes: 'x', eyeColor: '#221a12', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 135, 'stale build cache', '#221a12', '#b0a090', 8) }),
+  build('m95', { shape: 'titan', light: '#ff7a3a', dark: '#6a1400', line: '#200400', eyes: 'glow', eyeColor: '#200400', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 114, 'build: 40m 12s', '#200400', '#ff7a3a', 8) }),
+
+  // 96-101: 테스트 늪
+  build('m96', { shape: 'golem', light: '#f0d8c0', dark: '#a07a5a', line: '#3a2818', eyes: 'round', eyeColor: '#3a2818', mouth: 'o', eyeY: 66, mouthY: 80, front: tag(100, 126, 79, 'jest.fn()', '#3a2818', '#f0d8c0', 8) }),
+  build('m97', { shape: 'ghost', light: '#e8e0f8', dark: '#7a6aa8', line: '#2a2440', eyes: 'sleepy', eyeColor: '#2a2440', mouth: 'frown', eyeY: 102, mouthY: 132, front: tag(100, 40, 149, '› 1 snapshot failed', '#2a2440', '#e8e0f8', 8) }),
+  build('m98', { shape: 'golem', light: '#e8d890', dark: '#8a7a2a', line: '#343008', eyes: 'glow', eyeColor: '#343008', mouth: 'flat', eyeY: 66, mouthY: 80, front: tag(100, 126, 114, 'coverage: 100%', '#343008', '#e8d890', 8) }),
+  build('m99', { shape: 'golem', light: '#90b890', dark: '#3a6a3a', line: '#123012', eyes: 'sleepy', eyeColor: '#123012', mouth: 'frown', eyeY: 66, mouthY: 80, front: tag(100, 126, 180, 'Exceeded timeout of 5000 ms', '#123012', '#90b890', 8) }),
+  build('m100', { shape: 'orb', light: '#a0c8e8', dark: '#2a5a8a', line: '#0a2034', eyes: 'round', eyeColor: '#0a2034', mouth: 'grin', eyeY: 102, mouthY: 132, front: tag(100, 186, 156, 'passes only in order', '#0a2034', '#a0c8e8', 8) }),
+  build('m101', { shape: 'titan', light: '#ff8a8a', dark: '#5a0a1a', line: '#1a0006', eyes: 'many', eyeColor: '#1a0006', mouth: 'fangs', eyeY: 94, mouthY: 120, front: tag(100, 142, 149, 'works on my machine', '#1a0006', '#ff8a8a', 8) }),
 );
 
 const BOSS_AURA = `<defs><radialGradient id="boss-aura"><stop offset="55%" stop-color="#b48ead" stop-opacity="0"/><stop offset="80%" stop-color="#b48ead" stop-opacity=".45"/><stop offset="100%" stop-color="#b48ead" stop-opacity="0"/></radialGradient></defs>

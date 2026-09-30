@@ -2456,3 +2456,28 @@ body {
   background: #5e81ac;
   border-color: #81a1c1;
 }
+
+.fatigue {
+  margin: 4px 0 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  display: inline-block;
+}
+.fatigue.tired {
+  color: #ebcb8b;
+  background: rgba(235, 203, 139, 0.1);
+  border: 1px solid rgba(235, 203, 139, 0.4);
+}
+.fatigue.danger {
+  color: #ffb3b8;
+  background: rgba(191, 97, 106, 0.18);
+  border: 1px solid #bf616a;
+  animation: fatigue-pulse 1.6s ease-in-out infinite;
+}
+@keyframes fatigue-pulse {
+  50% { box-shadow: 0 0 0 3px rgba(191, 97, 106, 0.25); }
+}
+.usage-bar.usage-danger {
+  color: #ff8a93;
+}

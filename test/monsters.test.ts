@@ -35,10 +35,13 @@ test('each theme walks its own roster order, then starts over', async () => {
   assert.ok(wrap.maxHp > first.maxHp, 'a later floor still scales HP up even with the same monster');
 });
 
-test('every theme uses every shared roster and exactly one roster of its own', async () => {
+test('every roster is used; themes have three rosters of their own each', async () => {
   const { THEME_RULES } = await import('../src/themes.ts');
+  const { ROSTER_COUNT } = await import('../src/monsters.ts');
   const owned = THEME_RULES.map((t) => t.rosters.filter((r) => THEME_RULES.every((o) => o === t || !o.rosters.includes(r))));
-  assert.deepEqual(owned.map((o) => o.length), THEME_RULES.map(() => 1));
+  assert.deepEqual(owned.map((o) => o.length), THEME_RULES.map(() => 3));
+  const used = new Set(THEME_RULES.flatMap((t) => t.rosters));
+  assert.equal(used.size, ROSTER_COUNT, 'no roster is left out');
 });
 
 test('listMonsters covers every monster once, with bosses last in each roster', async () => {

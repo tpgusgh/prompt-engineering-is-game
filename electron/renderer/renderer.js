@@ -12,6 +12,7 @@ import { openSettings } from './settings-window.js';
 import './updates.js';
 import { MONSTER_LORE } from './monster-lore.js';
 import { MONSTER_LINES } from './monster-lines.js';
+import { fatigueOf } from './fatigue.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -287,6 +288,32 @@ function renderUsage() {
       : '컨텍스트 —',
   );
   for (const el of document.querySelectorAll('[data-usage]')) el.textContent = parts.join('  │  ');
+  renderFatigue();
+}
+
+// Hero fatigue from the plan usage: a badge at 75%+, a red one and a battle
+// warning (once per level) at 90%+ — the AI may stop answering soon.
+let warnedFatigue = null;
+function renderFatigue() {
+  const f = fatigueOf(planUsage);
+  const show = f && f.level !== 'ok';
+  for (const el of document.querySelectorAll('[data-usage]')) el.classList.toggle('usage-danger', f?.level === 'danger');
+  for (const el of document.querySelectorAll('[data-fatigue]')) {
+    el.hidden = !show;
+    if (!show) continue;
+    el.className = `fatigue ${f.level}`;
+    el.textContent = f.level === 'danger' ? `⚠️ 피로도 위험 · ${f.window} 토큰 ${f.percent}%` : `⏳ 피로도 높음 · ${f.window} 토큰 ${f.percent}%`;
+    el.title = f.level === 'danger' ? 'Claude 사용량 한도에 거의 닿았다. 곧 AI가 응답하지 않을 수 있다 — 가벼운 무기나 느린 공격 속도를 줄이자.' : 'Claude 사용량 한도의 75%를 넘었다.';
+  }
+  if (show && !dungeonScreen.hidden && warnedFatigue !== f.level) {
+    warnedFatigue = f.level;
+    appendLog(
+      f.level === 'danger'
+        ? `⚠️ 피로도 위험! ${f.window} 토큰 ${f.percent}% 사용 — 곧 AI가 멈출 수 있다. 가벼운 무기(모델)나 빠른 공격 속도(낮은 effort)로 아껴 쓰자.`
+        : `⏳ 용사가 지쳐 간다... ${f.window} 토큰 ${f.percent}% 사용.`,
+      f.level === 'danger' ? 'error' : 'story-line',
+    );
+  }
 }
 
 async function refreshUsage(force) {
