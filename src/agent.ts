@@ -331,12 +331,22 @@ function textOf(content: unknown): string {
 // A transcript as chat entries: real user prompts and assistant text only
 // (tool calls and tool results are skipped); consecutive assistant chunks
 // of one reply are merged.
+const COMPACTED_MARKER = '(이전 대화가 길어서 요약된 뒤 이어졌다)';
+
 export function toChatEntries(messages: { type: string; message: unknown }[]): { role: 'user' | 'assistant'; text: string }[] {
   const out: { role: 'user' | 'assistant'; text: string }[] = [];
   for (const m of messages) {
     if (m.type !== 'user' && m.type !== 'assistant') continue;
     const text = textOf((m.message as any)?.content).trim();
     if (!text) continue;
+    if (m.type === 'user') {
+      // Claude Code's own housekeeping, not something the player typed.
+      if (text.startsWith('This session is being continued from a previous conversation')) {
+        out.push({ role: 'assistant', text: COMPACTED_MARKER });
+        continue;
+      }
+      if (text.startsWith('<') || text.startsWith('Caveat: The messages below were generated')) continue;
+    }
     const last = out[out.length - 1];
     if (m.type === 'assistant' && last?.role === 'assistant') last.text += `\n\n${text}`;
     else out.push({ role: m.type, text });
