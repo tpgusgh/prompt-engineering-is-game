@@ -449,3 +449,31 @@ export function blacksmithSvg() {
     <g class="monster-body">${BLACKSMITH}</g>
   </svg>`;
 }
+
+// Treasure chest (the monster fell mid-turn; overkill decides the grade).
+const CHEST_COLORS = {
+  wood: ['#b07a44', '#6b4420', '#d9c08a'],
+  iron: ['#9aa3b0', '#4c5563', '#dfe5ee'],
+  silver: ['#d8e0ea', '#7f8ea3', '#ffffff'],
+  gold: ['#ffd76a', '#b8860b', '#fff4c2'],
+  legend: ['#c9a2ff', '#5b2aa8', '#ffe9ff'],
+};
+export function chestSvg(grade, open = false) {
+  const [body, dark, shine] = CHEST_COLORS[grade] ?? CHEST_COLORS.wood;
+  const lid = open
+    ? `<path d="M44 92 L60 40 L140 40 L156 92 Z" fill="${dark}" stroke="#1a1208" stroke-width="3" transform="rotate(-18 44 92)"/>`
+    : `<path d="M40 96 Q40 56 100 56 Q160 56 160 96 Z" fill="${body}" stroke="#1a1208" stroke-width="3"/><rect x="92" y="70" width="16" height="30" fill="${dark}"/>`;
+  const glow = open ? `<ellipse class="boss-aura" cx="100" cy="92" rx="70" ry="30" fill="${shine}" opacity=".55"/><path d="M70 90 L60 30 M100 90 L100 16 M130 90 L140 30" stroke="${shine}" stroke-width="5" stroke-linecap="round" opacity=".8"/>` : '';
+  return `<svg class="monster-svg chest-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="100" cy="186" rx="70" ry="9" fill="#000" opacity=".4"/>
+    <g class="monster-body">
+      ${glow}
+      <rect x="40" y="94" width="120" height="84" rx="6" fill="${body}" stroke="#1a1208" stroke-width="3"/>
+      <rect x="40" y="94" width="120" height="14" fill="${dark}"/>
+      <rect x="92" y="94" width="16" height="84" fill="${dark}"/>
+      <rect x="88" y="112" width="24" height="22" rx="4" fill="${shine}" stroke="#1a1208" stroke-width="2"/>
+      <circle cx="100" cy="123" r="3.5" fill="#1a1208"/>
+      ${lid}
+    </g>
+  </svg>`;
+}

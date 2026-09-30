@@ -2488,3 +2488,8 @@ body {
 @media (max-width: 720px) {
   .hero-skill-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+.hp-bar-fill.chest-fill {
+  background: linear-gradient(90deg, #b8860b, #ffd76a);
+}
+.ic-gift, .ic-bell { color: #ebcb8b; }

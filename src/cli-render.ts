@@ -9,6 +9,12 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize('The AI is asking you something. The monster waits for your answer.', 'yellow') + '\n';
     case 'gimmickBlocked':
       return colorize(`The boss's rule held: ${event.text}. No damage this turn.`, 'yellow') + '\n';
+    case 'monsterDown':
+      return colorize('The monster falls! The rest of the work pounds on a treasure chest...', 'green') + '\n';
+    case 'chestHit':
+      return colorize(`  chest +${event.damage} (${event.total})`, 'yellow') + '\n';
+    case 'chestOpened':
+      return colorize(`Treasure: ${event.name} (overkill ${event.overkill}) — +${event.coins} coins${event.items.length ? `, ${event.items.join(', ')}` : ''}${event.crystal ? ', +max HP' : ''}`, 'yellow') + '\n';
     case 'traitThorns':
       return colorize(`A failed tool pricks you on the monster's thorns: -${event.damage} HP.`, 'red') + '\n';
     case 'traitRegen':

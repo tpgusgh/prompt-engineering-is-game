@@ -1,6 +1,6 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
-import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
+import { monsterSvg, merchantSvg, blacksmithSvg, chestSvg } from './monster-art.js';
 import './iconize.js';
 import { $ } from './dom.js';
 import { logEl, appendLog, scrollLogToBottom } from './log.js';
@@ -179,6 +179,7 @@ async function loadSetup() {
   themeRuleDefs = info.themeRules ?? [];
   difficultyMult = info.difficulty ?? difficultyMult;
   difficultyReward = info.difficultyReward ?? difficultyReward;
+  chestGrades = info.chestGrades ?? [];
   renderDailyLine();
   runXp = 0;
   renderXp();
@@ -350,7 +351,10 @@ function setInputEnabled(enabled) {
 
 // A turn emits several hpChanged events (one per partial hit, plus one at
 // the end), so hpChanged can't mean "turn over" — only these events do.
-function turnConcluded() {
+// notify: a message for the OS notification when the window isn't in front
+// (the AI finished; time for the next command). Off for hesitation/stop.
+function turnConcluded(notify) {
+  if (notify) notifyTurnDone(notify);
   setInputEnabled(true);
   endOpenAgentRuns();
   refreshUsage(false);
@@ -584,6 +588,7 @@ function closeMerchant() {
 
 // Previous chats in this folder, shown dimmed above today's adventure.
 function setBar(fillEl, labelEl, hp, maxHp, suffix) {
+  fillEl.classList.remove('chest-fill');
   const safeMax = Math.max(1, maxHp);
   const ratio = Math.max(0, Math.min(hp, safeMax)) / safeMax;
   fillEl.style.width = `${ratio * 100}%`;
@@ -1096,6 +1101,7 @@ function renderBattleEvent(event) {
       appendLog('새로운 세션으로 모험을 시작한다.', 'story-line');
       break;
     case 'floorStart': {
+      Object.assign(chest, { active: false, opened: false, total: 0 });
       const info = chapterInfo(activeTheme, event.chapter);
       if (event.floor % 6 === 0) {
         appendLog(`— 챕터 ${event.chapter}: ${info.title} —`, 'story-intro');
@@ -1119,6 +1125,7 @@ function renderBattleEvent(event) {
     }
     case 'gimmickBlocked':
       appendLog(`🛡 보스 규칙에 막혔다! ${event.text} — 이번 턴 피해가 없던 일이 됐다.`, 'error');
+      turnConcluded('보스 규칙에 막혔다. 다음 명령을 내려줘.');
       break;
     case 'gimmickHeal':
       appendLog(`🩹 도구가 실패하자 ${currentMonsterName}이(가) 체력을 ${event.amount} 회복했다!`, 'error');
@@ -1211,7 +1218,7 @@ function renderBattleEvent(event) {
     }
     case 'agentError':
       appendLog(`공격이 빗나갔다! 주문이 실패했다: ${event.error}`, 'error');
-      turnConcluded();
+      turnConcluded('작업이 실패했다. 다음 명령을 내려줘.');
       break;
     case 'attack': {
       if (event.damage === 0) {
@@ -1222,7 +1229,7 @@ function renderBattleEvent(event) {
         flashMonster();
       }
       if (event.matchedKeywords.length > 0) appendLog(`(키워드: ${event.matchedKeywords.join(', ')})`);
-      turnConcluded();
+      turnConcluded(chest.active || chest.opened ? `${currentMonsterName}을(를) 쓰러뜨렸다! 다음 명령을 내려줘.` : `『${skillName()}』 작업 완료 — 다음 명령을 내려줘.`);
       break;
     }
     case 'agentSummary':
@@ -1234,8 +1241,34 @@ function renderBattleEvent(event) {
       }
       break;
     case 'hpChanged':
+      if (chest.active) break; // the bar shows the chest's progress now
       setBar(hpBarFillEl, hpLabelEl, event.hp, event.maxHp, ' HP');
       break;
+    case 'monsterDown':
+      chest.active = true;
+      chest.total = 0;
+      monsterPanel.classList.add('defeated');
+      appendLog(`${currentMonsterName}이(가) 쓰러졌다! 남은 공격은 보물상자를 두드린다...`, 'victory');
+      setTimeout(() => {
+        monsterPanel.classList.remove('defeated');
+        renderChest(false);
+      }, 600);
+      break;
+    case 'chestHit':
+      chest.total = event.total;
+      renderChest(false);
+      flashMonster();
+      break;
+    case 'chestOpened': {
+      chest.active = true;
+      chest.total = event.overkill;
+      chest.opened = true;
+      renderChest(true, event.grade);
+      const itemNames = event.items.map((id) => items.find((i) => i.id === id)?.name ?? id);
+      const extras = [...itemNames, ...(event.crystal ? ['생명의 결정(최대 HP +10)'] : [])];
+      appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${extras.length ? ` · ${extras.join(', ')}` : ''}`, 'victory');
+      break;
+    }
     case 'monsterAttack':
       appendLog(`${currentMonsterName}${pick(COUNTER_LINES)} ${event.damage}의 피해를 받았다!`, 'error');
       shakeScreen();
@@ -1257,7 +1290,7 @@ function renderBattleEvent(event) {
         sfx('fanfare');
       }
     }
-      monsterPanel.classList.add('defeated');
+      if (!chest.opened) monsterPanel.classList.add('defeated');
       appendLog(`${currentMonsterName} 처치! +${event.xpGained} XP (체력 조금 회복)`, 'victory');
       break;
     case 'chapterCleared': {
@@ -2573,3 +2606,45 @@ function renderDifficultyInfo() {
   $('difficulty-info').textContent = `몬스터 HP x${difficultyMult[d]} · 코인·경험치 x${difficultyReward[d]} · ${DIFFICULTY_TEXT[d]}`;
 }
 for (const r of document.querySelectorAll('input[name="difficulty"]')) r.addEventListener('change', renderDifficultyInfo);
+
+// ---------------------------------------------------------------------------
+// Treasure chest: once the monster falls mid-turn, the rest of the damage
+// fills a chest; the bar shows progress to the next grade.
+let chestGrades = [];
+const chest = { active: false, opened: false, total: 0 };
+function gradeFor(total) {
+  return [...chestGrades].reverse().find((g) => total >= g.min) ?? chestGrades[0];
+}
+function renderChest(open, gradeId) {
+  const grade = gradeId ? chestGrades.find((g) => g.id === gradeId) : gradeFor(chest.total);
+  if (!grade) return;
+  const next = chestGrades[chestGrades.indexOf(grade) + 1];
+  monsterArtEl.innerHTML = chestSvg(grade.id, open);
+  monsterNameEl.textContent = open ? `🎁 ${grade.name}` : `보물상자 — ${grade.name}`;
+  const span = next ? next.min - grade.min : 1;
+  hpBarFillEl.style.width = `${next ? Math.min(100, ((chest.total - grade.min) / span) * 100) : 100}%`;
+  hpBarFillEl.classList.add('chest-fill');
+  hpLabelEl.textContent = open
+    ? `넘친 피해 ${chest.total} · ${grade.name} 개봉!`
+    : `넘친 피해 ${chest.total}${next ? ` · 다음 ${next.name}까지 ${next.min - chest.total}` : ' · 최고 등급!'}`;
+}
+
+// ---------------------------------------------------------------------------
+// "AI is done" notification (settings: 사운드·알림 tab), only when the
+// window isn't in front — clicking it brings the game back.
+const NOTIFY_KEY = 'pb-notify';
+let notifyOn = true;
+try {
+  notifyOn = localStorage.getItem(NOTIFY_KEY) !== 'off';
+} catch {}
+$('notify-toggle').checked = notifyOn;
+$('notify-toggle').addEventListener('change', () => {
+  notifyOn = $('notify-toggle').checked;
+  try {
+    localStorage.setItem(NOTIFY_KEY, notifyOn ? 'on' : 'off');
+  } catch {}
+});
+function notifyTurnDone(body) {
+  if (!notifyOn || document.hasFocus()) return;
+  window.promptBattle.notify('프롬프트 배틀', body);
+}

@@ -1,7 +1,7 @@
 import path from 'node:path';
-import os from 'node:os';
 import { isSaveSlot, type SaveSlot } from './saves.ts';
 import { readStore, writeStore } from './store.ts';
+import { dataHome } from './home.ts';
 
 // Per project folder: the Claude session to resume and the chat log shown
 // when the folder is opened again.
@@ -51,13 +51,13 @@ function coerce(value: unknown): FolderSession {
   };
 }
 
-export async function loadFolderSession(cwd: string, homeDir: string = os.homedir()): Promise<FolderSession> {
+export async function loadFolderSession(cwd: string, homeDir: string = dataHome()): Promise<FolderSession> {
   return coerce((await loadAll(homeDir))[cwd]);
 }
 
 // ponytail: read-modify-write of one JSON file; callers in one process must
 // serialize saves (main.ts chains them). Fine for one app window.
-export async function saveFolderSession(cwd: string, session: FolderSession, homeDir: string = os.homedir()): Promise<void> {
+export async function saveFolderSession(cwd: string, session: FolderSession, homeDir: string = dataHome()): Promise<void> {
   const all = await loadAll(homeDir);
   all[cwd] = session;
   await writeStore(storePath(homeDir), all, homeDir);

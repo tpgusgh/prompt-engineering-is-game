@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
 import { applyProgress, coerceDaily, coerceRecords, emptyRecords, emptyRunStats, localDate, type DailyState, type ProgressResult, type Records } from './progress.ts';
+import { dataHome } from './home.ts';
 
 export interface Profile {
   level: number;
@@ -110,7 +110,7 @@ function coerceProfile(parsed: unknown): Profile {
   };
 }
 
-export async function loadProfile(homeDir: string = os.homedir()): Promise<Profile> {
+export async function loadProfile(homeDir: string = dataHome()): Promise<Profile> {
   try {
     return coerceProfile(await readStore(profilePath(homeDir), homeDir));
   } catch (err) {
@@ -122,7 +122,7 @@ export async function loadProfile(homeDir: string = os.homedir()): Promise<Profi
   }
 }
 
-export async function saveProfile(profile: Profile, homeDir: string = os.homedir()): Promise<void> {
+export async function saveProfile(profile: Profile, homeDir: string = dataHome()): Promise<void> {
   await writeStore(profilePath(homeDir), profile, homeDir);
 }
 

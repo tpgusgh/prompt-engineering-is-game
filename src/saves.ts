@@ -1,7 +1,7 @@
 import path from 'node:path';
-import os from 'node:os';
 import { SAVE_SLOTS, AUTO_SAVE_SLOT, type RunState } from './battle.ts';
 import { readStore, writeStore } from './store.ts';
+import { dataHome } from './home.ts';
 
 export const SLOT_COUNT = SAVE_SLOTS;
 
@@ -50,7 +50,7 @@ async function loadRaw(homeDir: string): Promise<Record<string, unknown>> {
 
 // Slots 1..SLOT_COUNT plus the auto slot (last) as an array (index 0 = slot
 // 1); empty or invalid = null.
-export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSlot | null)[]> {
+export async function loadSlots(homeDir: string = dataHome()): Promise<(SaveSlot | null)[]> {
   const raw = await loadRaw(homeDir);
   return Array.from({ length: AUTO_SAVE_SLOT }, (_, i) => {
     const v = raw[String(i + 1)];
@@ -58,13 +58,13 @@ export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSl
   });
 }
 
-export async function writeSlot(slot: number, data: SaveSlot, homeDir: string = os.homedir()): Promise<void> {
+export async function writeSlot(slot: number, data: SaveSlot, homeDir: string = dataHome()): Promise<void> {
   const raw = await loadRaw(homeDir);
   raw[String(slot)] = data;
   await writeStore(storePath(homeDir), raw, homeDir);
 }
 
-export async function deleteSlot(slot: number, homeDir: string = os.homedir()): Promise<void> {
+export async function deleteSlot(slot: number, homeDir: string = dataHome()): Promise<void> {
   const raw = await loadRaw(homeDir);
   delete raw[String(slot)];
   await writeStore(storePath(homeDir), raw, homeDir);

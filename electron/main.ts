@@ -1,11 +1,11 @@
 // electron/main.ts
 import electron from 'electron';
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = electron;
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, Notification } = electron;
 import electronUpdater from 'electron-updater';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
-import { runDungeon, bestiary, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
+import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
@@ -24,6 +24,7 @@ import { SWORD_MAX_LEVEL } from '../src/forge.ts';
 import { isNewerVersion, updateMode, RELEASES_URL, LATEST_RELEASE_API, type UpdateStatus } from '../src/updates.ts';
 import { HERO_CLASSES, getHeroClass } from '../src/classes.ts';
 import { writeJsonAtomic } from '../src/atomic-write.ts';
+import { dataHome } from '../src/home.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +46,8 @@ if (app.isPackaged) {
 // can't be scripted to cheat; PROMPTBATTLE_DEBUG=1 re-enables both (the CI
 // smoke test uses it). Development builds keep them.
 const DEBUG_ALLOWED = !app.isPackaged || process.env.PROMPTBATTLE_DEBUG === '1';
+// A packaged game always uses the real home (the override is for development).
+if (app.isPackaged) delete process.env.PROMPTBATTLE_HOME;
 if (!DEBUG_ALLOWED) {
   app.commandLine.removeSwitch('remote-debugging-port');
   app.commandLine.removeSwitch('remote-debugging-pipe');
@@ -190,6 +193,23 @@ function checkForUpdate(force = false): Promise<UpdateStatus | null> {
   return updateCheck;
 }
 ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boolean(force)));
+
+// "The AI is done" when the window isn't in front: an OS notification that
+// brings the game back when clicked, plus a Dock bounce / taskbar flash.
+ipcMain.on('notify', (_event, title: unknown, body: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isFocused()) return;
+  if (Notification.isSupported()) {
+    const n = new Notification({ title: String(title).slice(0, 80), body: String(body).slice(0, 200) });
+    n.on('click', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    n.show();
+  }
+  if (process.platform === 'darwin') app.dock?.bounce('informational');
+  else mainWindow.flashFrame(true);
+});
+app.on('browser-window-focus', () => mainWindow?.flashFrame(false));
 ipcMain.handle('open-release-page', () => shell.openExternal(RELEASES_URL));
 ipcMain.handle('install-update', () => electronUpdater.autoUpdater.quitAndInstall());
 
@@ -227,6 +247,7 @@ ipcMain.handle('get-setup-info', async () => ({
   themeRules: THEME_RULES,
   difficulty: DIFFICULTY_MULTIPLIER,
   difficultyReward: DIFFICULTY_REWARD,
+  chestGrades: CHEST_GRADES,
   appVersion: app.getVersion(),
 }));
 
@@ -262,7 +283,7 @@ ipcMain.handle('get-usage', async () => {
 // Auth: the Claude Code CLI login (default) or an Anthropic API key. The key
 // is encrypted with the OS keychain (safeStorage) at rest and never sent back
 // to the page — the page only learns whether one is set (and its last 4).
-const SECRETS_FILE = path.join(os.homedir(), '.promptbattle', 'secrets.json');
+const SECRETS_FILE = path.join(dataHome(), '.promptbattle', 'secrets.json');
 let apiKey: string | undefined;
 async function loadApiKey(): Promise<void> {
   try {

@@ -23,6 +23,10 @@ export type BattleEvent =
       trait?: { id: TraitId; name: string; text: string };
     }
   | { type: 'traitThorns'; damage: number }
+  // The monster hit 0 HP mid-turn: it falls, and later hits go to a chest.
+  | { type: 'monsterDown' }
+  | { type: 'chestHit'; damage: number; total: number }
+  | { type: 'chestOpened'; grade: ChestGrade['id']; name: string; overkill: number; coins: number; items: string[]; crystal: boolean }
   | { type: 'traitRegen'; amount: number }
   | { type: 'gimmickBlocked'; text: string }
   | { type: 'gimmickHeal'; amount: number }
@@ -106,6 +110,27 @@ export const BOSS_GIMMICKS: BossGimmick[] = [
 export const BRIEF_LIMIT = 120;
 const gimmickFor = (chapter: number) => BOSS_GIMMICKS[(chapter - 1) % BOSS_GIMMICKS.length];
 
+// Treasure chests: the damage dealt past a monster's last HP (the rest of the
+// AI's work, the closing blow's excess, typing hits) decides the grade.
+export interface ChestGrade {
+  id: 'wood' | 'iron' | 'silver' | 'gold' | 'legend';
+  name: string;
+  min: number;
+  coins: number;
+  items: string[];
+  crystal?: boolean;
+}
+export const CHEST_GRADES: ChestGrade[] = [
+  { id: 'wood', name: '나무 상자', min: 0, coins: 5, items: [] },
+  { id: 'iron', name: '철 상자', min: 20, coins: 15, items: ['bandage'] },
+  { id: 'silver', name: '은 상자', min: 60, coins: 30, items: ['potion'] },
+  { id: 'gold', name: '금 상자', min: 150, coins: 60, items: ['whetstone', 'amulet'] },
+  { id: 'legend', name: '전설의 상자', min: 300, coins: 120, items: ['potion', 'amulet'], crystal: true },
+];
+export function chestFor(overkill: number): ChestGrade {
+  return [...CHEST_GRADES].reverse().find((g) => overkill >= g.min) ?? CHEST_GRADES[0];
+}
+
 export const SAVE_SLOTS = 3;
 // Slot written automatically at the start of every floor (not by /save).
 export const AUTO_SAVE_SLOT = SAVE_SLOTS + 1;
@@ -144,6 +169,8 @@ export interface BattleDeps {
   getModel?: () => string;
   // Story theme: picks the monster rosters and the theme's rules.
   themeId?: string;
+  // Treasure chests from overkill (default on; tests of coin math turn them off).
+  chests?: boolean;
 }
 
 export interface BattleSummary {
@@ -257,6 +284,14 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let pendingMonsterHp = deps.monsterHp;
   let turnRunning = false;
   let sharpened = false; // whetstone: next attack x2
+  const chests = deps.chests ?? true;
+  // This turn's damage past the monster's last HP, and whether it has fallen.
+  let overkill = 0;
+  let monsterDown = false;
+  const hitChest = (damage: number) => {
+    overkill += damage;
+    deps.onBattleEvent({ type: 'chestHit', damage, total: overkill });
+  };
   let shielded = false; // amulet: next counterattack blocked
   // Input typed at the merchant that wasn't a shop command: replayed as the
   // next floor's first input, so a prompt typed there isn't lost.
@@ -483,7 +518,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   };
 
   deps.bindExternalHit?.((damage) => {
-    if (!turnRunning || hp <= 0) return false;
+    if (!turnRunning) return false;
+    if (hp <= 0) {
+      if (!chests) return false;
+      runStats.typingLines += 1;
+      hitChest(damage);
+      return true;
+    }
     hp = Math.max(0, hp - damage);
     runStats.typingLines += 1;
     deps.onBattleEvent({ type: 'typingHit', damage });
@@ -595,6 +636,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       let turnFailures = 0;
       let turnActionDamage = 0;
       turnFailedTool = false;
+      overkill = 0;
+      monsterDown = false;
+      // A boss whose rule is only settled at the end of the turn can't fall early.
+      const canFallEarly = !gimmick || gimmick.id === 'clean';
 
       // Work is damage: every tool action that succeeds (a command, an edit,
       // a subagent's read) lands its own hit as its result comes in — failed
@@ -627,11 +672,22 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
             runStats.testsPassed += 1;
             turnTests += 1;
           }
-          if (hp <= 0) return;
+          if (hp <= 0) {
+            if (chests) hitChest(actionHit);
+            return;
+          }
+          const before = hp;
           turnActionDamage += Math.min(hp, actionHit);
           hp = Math.max(0, hp - actionHit);
           deps.onBattleEvent({ type: 'partialHit', damage: actionHit, agentEvent: call });
           deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
+          if (hp === 0 && chests) {
+            overkill += actionHit - before;
+            if (canFallEarly && !monsterDown) {
+              monsterDown = true;
+              deps.onBattleEvent({ type: 'monsterDown' });
+            }
+          }
         }
       };
 
@@ -652,6 +708,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         gimmick?.id === 'tests' ? turnTests > 0 : gimmick?.id === 'files3' ? turnEdits >= 3 : gimmick?.id === 'brief' ? prompt.length <= BRIEF_LIMIT : true;
       if (!gimmickMet && gimmick) {
         hp = Math.min(maxHp, hp + turnActionDamage);
+        overkill = 0;
         deps.onBattleEvent({ type: 'gimmickBlocked', text: gimmick.text });
       }
       if (gimmick?.id === 'clean' && turnFailures > 0 && hp > 0) {
@@ -682,6 +739,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
         if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
         if (turnTests > 0) damage = Math.round(damage * theme.testBonus);
+        if (chests) overkill += Math.max(0, damage - hp);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
         if (crit) runStats.crits += 1;
@@ -737,6 +795,21 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }
 
     const rewardMult = theme.rewards * (DIFFICULTY_REWARD[deps.difficulty] ?? 1);
+    if (chests && overkill > 0) {
+      const grade = chestFor(overkill);
+      const chestCoins = Math.round(grade.coins * rewardMult * (1 + floor * 0.1));
+      coins += chestCoins;
+      for (const item of grade.items) bag[item] = (bag[item] ?? 0) + 1;
+      if (grade.crystal) {
+        playerMaxHp += CRYSTAL_MAX_HP;
+        playerHp += CRYSTAL_MAX_HP;
+      }
+      deps.onBattleEvent({ type: 'chestOpened', grade: grade.id, name: grade.name, overkill, coins: chestCoins, items: [...grade.items], crystal: Boolean(grade.crystal) });
+      deps.onBattleEvent({ type: 'coinsChanged', coins, gained: chestCoins });
+      if (grade.items.length) emitBag();
+      if (grade.crystal) emitPlayerHp();
+      overkill = 0;
+    }
     const gained = Math.round(xpForFloor(floor) * rewardMult);
     xpGained += gained;
     floorsCleared += 1;

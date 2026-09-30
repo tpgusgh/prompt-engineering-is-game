@@ -363,7 +363,7 @@
         <nav class="settings-tabs">
           <button type="button" data-tab="claude" class="active">🤖 Claude</button>
           <button type="button" data-tab="party">🧙 AI 파티</button>
-          <button type="button" data-tab="sound">🔊 사운드</button>
+          <button type="button" data-tab="sound">🔊 사운드·알림</button>
           <button type="button" data-tab="typing">⌨️ 코딩 타자</button>
         </nav>
         <section class="settings-tab" data-tab="claude">
@@ -409,6 +409,8 @@
             <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />
             <span class="option-sub">배경음악 · 효과음</span>
           </div>
+          <label class="setting-row"><input type="checkbox" id="notify-toggle" checked /> <strong>AI 작업이 끝나면 알림</strong></label>
+          <p class="option-sub">게임 창이 뒤에 있을 때 AI가 작업을 마치면 알림을 띄운다(누르면 게임으로 돌아온다). Mac은 Dock 아이콘이 튀고, Windows는 작업표시줄이 깜빡인다.</p>
         </section>
         <section class="settings-tab" data-tab="typing" hidden>
           <p class="option-sub">AI를 기다리는 동안 나오는 코딩 타자 연습 언어. 아무것도 안 고르면 전부.</p>

@@ -21,6 +21,7 @@ function makeFakeDeps(inputs: string[], turnResult: TurnResult = { summary: 'ok'
       cwd: '/fake/cwd',
       difficulty: 'normal' as const,
       random: () => 0.99, // no merchant, flee fails — override per test
+      chests: false, // treasure chests have their own tests below
     },
     events,
     runTurnCalls,
@@ -930,4 +931,46 @@ test('difficulty scales rewards: easy x0.7, hard x1.5 coins and XP', async () =>
   assert.equal(hard.xpGained, Math.round(20 * 1.5));
   assert.equal(hard.coins, Math.round(10 * 1.5));
   assert.equal(easy.coins, Math.round(10 * 0.7));
+});
+
+test('treasure chest: the overkill of the killing blow picks the grade (goblin 60 HP, 225 blow = 165 → gold)', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, chests: true });
+  const chest = events.find((e) => e.type === 'chestOpened');
+  assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'gold' && chest.overkill === 165);
+  assert.deepEqual(chest.items, ['whetstone', 'amulet']);
+  assert.ok(summary.coins > 10, 'floor coins plus the chest');
+  assert.equal(summary.bag.whetstone, 1);
+});
+
+test('treasure chest: once the monster is down mid-turn, later work hits pile onto the chest', async () => {
+  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action; goblin has 60
+  const calls = Array.from({ length: 7 }, (_, i) => [
+    { type: 'command', value: `echo ${i}`, toolId: `t${i}` },
+    { type: 'toolResult', toolId: `t${i}`, output: 'ok', isError: false },
+  ]).flat();
+  deps.runTurn = scriptedTurn(calls);
+  await runDungeon({ ...deps, chests: true });
+  const types = events.map((e) => e.type);
+  assert.ok(types.indexOf('monsterDown') > -1 && types.indexOf('monsterDown') < types.indexOf('chestHit'), 'down after the 6th hit, then the chest takes the 7th');
+  const hits = events.filter((e) => e.type === 'chestHit');
+  assert.equal(hits.length, 1);
+  const chest = events.find((e) => e.type === 'chestOpened');
+  assert.ok(chest && chest.type === 'chestOpened' && chest.overkill === 50 && chest.grade === 'iron', '10 from the 7th hit + the whole 40 closing blow');
+});
+
+test('treasure chest: grades by overkill', async () => {
+  const { chestFor } = await import('../src/battle.ts');
+  assert.equal(chestFor(5).id, 'wood');
+  assert.equal(chestFor(20).id, 'iron');
+  assert.equal(chestFor(60).id, 'silver');
+  assert.equal(chestFor(150).id, 'gold');
+  assert.equal(chestFor(300).id, 'legend');
+});
+
+test('treasure chest: a boss with a conditional rule is not declared down mid-turn', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...deps, chests: true, startFloor: 11, getDamageMultiplier: () => 100 });
+  assert.equal(events.filter((e) => e.type === 'monsterDown').length, 0);
 });
