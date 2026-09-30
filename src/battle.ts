@@ -4,7 +4,7 @@ import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, BOMB_DAMAGE, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
-import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
+import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
 import { emptyRunStats, isTestCommand, type RunStats } from './progress.ts';
 
@@ -460,8 +460,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     stats = raised;
     statPoints -= 1;
     if (id === 'vitality') {
-      playerMaxHp += VITALITY_HP;
-      playerHp += VITALITY_HP;
+      const gain = Math.max(1, Math.round(playerMaxHp * VITALITY_RATE));
+      playerMaxHp += gain;
+      playerHp += gain;
       emitPlayerHp();
     }
     deps.onBattleEvent({ type: 'statRaised', stat: id, stats: { ...stats }, points: statPoints });

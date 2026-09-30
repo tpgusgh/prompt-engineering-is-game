@@ -511,6 +511,12 @@ test('each monster defeated grants a free stat point; /stat spends it as a free 
   assert.ok(events.some((e) => e.type === 'playerHpChanged' && e.maxHp === 110));
 });
 
+test('vitality adds 10% of the current max HP, not a flat 10', async () => {
+  const { deps } = makeFakeDeps([ONE_SHOT_PROMPT, '/stat vitality', '/quit']);
+  const summary = await runDungeon({ ...deps, playerMaxHp: 200 });
+  assert.equal(summary.playerMaxHp, 220);
+});
+
 test('attack stat and sword level both scale damage', async () => {
   const { deps, events } = makeFakeDeps([WEAK_PROMPT_2, '/quit']);
   await runDungeon({ ...deps, stats: { attack: 5, defense: 0, vitality: 0 }, swordLevel: 2 });

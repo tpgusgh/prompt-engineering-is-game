@@ -10,12 +10,12 @@ export interface StatDef {
 }
 
 export const STAT_MAX_LEVEL = 10;
-export const VITALITY_HP = 10;
+export const VITALITY_RATE = 0.1; // of the current max HP, so it compounds
 
 export const STATS: StatDef[] = [
   { id: 'attack', name: '공격력', effect: '레벨당 피해 +10%' },
   { id: 'defense', name: '방어력', effect: '레벨당 받는 반격 -5%' },
-  { id: 'vitality', name: '체력', effect: '레벨당 최대 HP +10' },
+  { id: 'vitality', name: '체력', effect: '레벨당 최대 HP +10%' },
 ];
 
 export const EMPTY_STATS: Stats = { attack: 0, defense: 0, vitality: 0 };
