@@ -2510,3 +2510,55 @@ body {
   border: 1px solid #bf616a;
   background: rgba(191, 97, 106, 0.15);
 }
+
+.contract-badge {
+  position: relative;
+  cursor: help;
+}
+.contract-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 260px;
+  padding: 10px 12px;
+  background: #1a1f29;
+  border: 1px solid #4c566a;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: #e5e9f0;
+  white-space: normal;
+  text-align: left;
+  font-size: 12.5px;
+}
+.contract-badge:hover .contract-tip,
+.contract-badge:focus-visible .contract-tip {
+  display: block;
+}
+.contract-tip ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.contract-tip small {
+  color: #7b88a1;
+  font-size: 11px;
+}
+
+/* Chest opening: shake, then burst open */
+#monster-art.chest-shaking .monster-svg {
+  animation: chest-shake 0.22s ease-in-out infinite;
+}
+@keyframes chest-shake {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  25% { transform: rotate(-5deg) translateY(-2px); }
+  75% { transform: rotate(5deg) translateY(-2px); }
+}
+#monster-art.chest-opening .monster-svg {
+  animation: chest-burst 0.9s ease-out;
+}
+@keyframes chest-burst {
+  0% { transform: scale(0.85); filter: brightness(2.2) drop-shadow(0 0 30px #ffe9a8); }
+  40% { transform: scale(1.12); filter: brightness(1.5) drop-shadow(0 0 24px #ffe9a8); }
+  100% { transform: scale(1); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5)); }
+}

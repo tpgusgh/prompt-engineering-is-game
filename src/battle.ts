@@ -505,6 +505,11 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       const input = raw.trim();
       if (input === '/quit') return false;
       if (freeCommand(input) || handle(input)) continue;
+      // Bag items are free actions at a shop too (a bomb just fizzles here).
+      if (input.startsWith('/use ')) {
+        useItem(input.slice('/use '.length).trim());
+        continue;
+      }
       onClose();
       if (input !== '/leave' && input !== '') carried = raw;
       return true;

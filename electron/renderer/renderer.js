@@ -1268,9 +1268,21 @@ function renderBattleEvent(event) {
       chest.active = true;
       chest.total = event.overkill;
       chest.opened = true;
-      renderChest(true, event.grade);
-      const found = event.items.map((id) => itemName(id));
-      appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${found.length ? ` · ${found.join(', ')} 발견!` : ''}`, 'victory');
+      // Shake the closed chest, then burst it open; the following events
+      // (coins, floor cleared, shop) wait until it has opened.
+      renderChest(false, event.grade);
+      monsterArtEl.classList.add('chest-shaking');
+      sfx('partial');
+      holdBattleEvents(CHEST_SHAKE_MS + CHEST_REVEAL_MS);
+      setTimeout(() => {
+        monsterArtEl.classList.remove('chest-shaking');
+        renderChest(true, event.grade);
+        monsterArtEl.classList.add('chest-opening');
+        sfx(event.grade === 'gold' || event.grade === 'legend' ? 'fanfare' : 'coin');
+        const found = event.items.map((id) => itemName(id));
+        appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${found.length ? ` · ${found.join(', ')} 발견!` : ''}`, 'victory');
+        setTimeout(() => monsterArtEl.classList.remove('chest-opening'), CHEST_REVEAL_MS);
+      }, CHEST_SHAKE_MS);
       break;
     }
     case 'monsterAttack':
@@ -1514,8 +1526,19 @@ function renderBattleEvent(event) {
 // finished talking on screen.
 const battleQueue = [];
 const typingBehind = new Set(); // bubbles whose shown text lags the stream
+// Animations that should play out before the next events (the chest opening).
+let animHolds = 0;
+const CHEST_SHAKE_MS = 1100;
+const CHEST_REVEAL_MS = 900;
+function holdBattleEvents(ms) {
+  animHolds += 1;
+  setTimeout(() => {
+    animHolds -= 1;
+    drainBattleEvents();
+  }, ms);
+}
 function drainBattleEvents() {
-  while (battleQueue.length && typingBehind.size === 0) renderBattleEvent(battleQueue.shift());
+  while (battleQueue.length && typingBehind.size === 0 && animHolds === 0) renderBattleEvent(battleQueue.shift());
 }
 window.promptBattle.onBattleEvent((event) => {
   battleQueue.push(event);
@@ -2695,7 +2718,26 @@ function renderContract() {
   const pact = pactInfo(heroContract);
   el.hidden = !pact;
   if (!pact) return;
+  const god = heroContract.kind === 'god';
   el.className = `contract-badge ${heroContract.kind}`;
-  el.textContent = `${heroContract.kind === 'god' ? '🤝' : '💀'} ${pact.name}`;
-  el.title = `${heroContract.kind === 'god' ? '모든 타격 +1 · ' : ''}${pact.text}`;
+  el.textContent = `${god ? '🤝' : '💀'} ${pact.name}`;
+  el.tabIndex = 0; // hover or focus shows the card
+  // Hover card: what the pact does (and cost), and the one-pact rule.
+  const tip = document.createElement('div');
+  tip.className = 'contract-tip';
+  tip.setAttribute('role', 'tooltip');
+  const head = document.createElement('strong');
+  head.textContent = `${god ? '원소신의 계약' : '악마의 계약'} — ${pact.name}`;
+  const list = document.createElement('ul');
+  const effects = [...(god ? ['모든 타격 +1'] : []), ...pact.text.split(/,\s*/)];
+  if (!god && pact.hpCost) effects.push(`서명할 때 최대 HP의 ${Math.round(pact.hpCost * 100)}%를 바쳤다`);
+  for (const e of effects) {
+    const li = document.createElement('li');
+    li.textContent = e;
+    list.append(li);
+  }
+  const rule = document.createElement('small');
+  rule.textContent = '계약은 하나만. 또 계약서를 쓰면 모든 계약이 깨지고 최대 HP가 영구히 -10.';
+  tip.append(head, list, rule);
+  el.append(tip);
 }

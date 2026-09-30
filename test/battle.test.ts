@@ -1040,3 +1040,12 @@ test('items: the bomb hits the monster for 30, the scroll gives 30 XP, the elixi
   const hp = events.filter((e) => e.type === 'playerHpChanged').at(-1);
   assert.ok(hp && hp.type === 'playerHpChanged' && hp.hp === hp.maxHp);
 });
+
+test('using a bag item at the merchant keeps the shop open', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/use potion', '/buy bandage', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 50, bag: { potion: 1 }, random: seq(0.1, 0.99) });
+  assert.ok(events.some((e) => e.type === 'itemUsed' && e.itemId === 'potion'));
+  assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'bandage'), 'still shopping after the potion');
+  assert.equal(events.filter((e) => e.type === 'merchantClosed').length, 1);
+  assert.equal(summary.bag.bandage, 1);
+});
