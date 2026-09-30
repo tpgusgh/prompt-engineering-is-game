@@ -12,8 +12,9 @@ const plat = process.platform;
 const arch = process.arch;
 const appDir = {
   darwin: `release/mac${arch === 'arm64' ? '-arm64' : ''}/Prompt Battle.app`,
-  linux: 'release/linux-unpacked',
-  win32: 'release/win-unpacked',
+  // electron-builder names non-x64 unpacked dirs after the arch.
+  linux: arch === 'x64' ? 'release/linux-unpacked' : `release/linux-${arch}-unpacked`,
+  win32: arch === 'x64' ? 'release/win-unpacked' : `release/win-${arch}-unpacked`,
 }[plat];
 const exe = {
   darwin: path.join(appDir, 'Contents/MacOS/Prompt Battle'),
