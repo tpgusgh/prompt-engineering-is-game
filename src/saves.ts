@@ -35,7 +35,8 @@ export function isSaveSlot(v: any): v is SaveSlot {
     isCounts(v.bag) &&
     isCounts(v.stats) &&
     (v.sessionId === undefined || typeof v.sessionId === 'string') &&
-    (v.monsterHp === undefined || isCount(v.monsterHp))
+    (v.monsterHp === undefined || isCount(v.monsterHp)) &&
+    (v.runId === undefined || typeof v.runId === 'string')
   );
 }
 

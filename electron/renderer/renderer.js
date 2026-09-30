@@ -1191,7 +1191,8 @@ function renderBattleEvent(event) {
       appendLog(`🩹 ${currentMonsterName}이(가) 체력을 ${event.amount} 재생했다.`);
       break;
     case 'monsterWaits':
-      appendLog(`❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
+      appendLog(stoppedTurn ? `${currentMonsterName}이(가) 다음 명령을 기다린다...` : `❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
+      stoppedTurn = false;
       break;
     case 'hesitate':
       appendLog('망설였다. 이번 턴은 공격하지 못했다.');
@@ -1360,7 +1361,7 @@ function renderBattleEvent(event) {
       }
     }
       if (!chest.opened) monsterPanel.classList.add('defeated');
-      appendLog(`${currentMonsterName} 처치! +${event.xpGained} XP (체력 조금 회복)`, 'victory');
+      appendLog(`${currentMonsterName} 처치! ${event.xpGained ? `+${event.xpGained} XP` : '경험치 없음 (불러온 저장에서 이미 받은 층)'} (체력 조금 회복)`, 'victory');
       break;
     case 'chapterCleared': {
       const info = chapterInfo(activeTheme, event.chapter);
@@ -1489,7 +1490,7 @@ function renderBattleEvent(event) {
     case 'bonusXp':
       runXp += event.amount;
       renderXp();
-      appendLog(`✨ 경험치 +${event.amount}`, 'victory');
+      appendLog(event.amount ? `✨ 경험치 +${event.amount}` : '✨ 이 층에서 이미 받은 두루마리 경험치다 (불러온 저장, +0)', event.amount ? 'victory' : 'sys-line');
       break;
     case 'reflectHit':
       appendLog(`질투의 계약: 받은 반격의 일부(${event.damage})를 되돌려 줬다!`);
@@ -1575,7 +1576,8 @@ function renderBattleEvent(event) {
       renderUsage();
       break;
     case 'turnInterrupted':
-      appendLog('⏹ 공격을 멈췄다. 지금까지 들어간 타격은 그대로, 마무리 일격은 없다.', 'story-line');
+      stoppedTurn = true;
+      appendLog('⏹ 공격을 멈췄다. 지금까지 들어간 타격은 그대로, 마무리 일격은 없다. 다른 명령을 내려 보자.', 'story-line');
       turnConcluded();
       break;
     case 'typingHit':
@@ -1594,6 +1596,7 @@ function renderBattleEvent(event) {
 // monster's counter (and the hit log) never shows up before the AI has
 // finished talking on screen.
 const battleQueue = [];
+let stoppedTurn = false; // the last turn was stopped with ⏹ (monsterWaits follows)
 const typingBehind = new Set(); // bubbles whose shown text lags the stream
 // Animations that should play out before the next events (the chest opening).
 let animHolds = 0;

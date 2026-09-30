@@ -115,6 +115,17 @@ test('applyRun records xp, stats, coins, bag, max HP and the exact floor to resu
   assert.equal(p.maxHp, 100, 'max HP bonuses from the run are not kept');
 });
 
+test('applyRun keeps what XP each run line was paid, so a reloaded save cannot be paid twice', () => {
+  const p = applyRun(base, summary({ runId: 'r1', paidXp: { floor: 4, scroll: 4 } }), 'adventure');
+  assert.deepEqual(p.xpClaims, { r1: { floor: 4, scroll: 4 } });
+  const q = applyRun(p, summary({ runId: 'r1', paidXp: { floor: 2, scroll: -1 } }), 'adventure');
+  assert.deepEqual(q.xpClaims?.r1, { floor: 4, scroll: 4 }, 'never backwards');
+  let many = base;
+  for (let i = 0; i < 60; i++) many = applyRun(many, summary({ runId: `r${i}`, paidXp: { floor: i, scroll: -1 } }), 'adventure');
+  assert.equal(Object.keys(many.xpClaims ?? {}).length, 50, 'only the latest run lines are kept');
+  assert.ok(many.xpClaims?.r59 && !many.xpClaims?.r0);
+});
+
 test('applyRun: defeat rewinds to the chapter start; progress never goes backwards', () => {
   assert.deepEqual(applyRun(base, summary({ defeated: true, nextFloor: 9 }), 'adventure').storyFloors, { adventure: 6 });
   const ahead = { ...base, storyFloors: { adventure: 14 } };

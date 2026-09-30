@@ -747,7 +747,7 @@ test('action hits land even if the turn later errors; only the closing blow is s
   assert.equal(summary.floorsCleared, 0);
 });
 
-test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and draws a normal counter', async () => {
+test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and the monster waits (no counter)', async () => {
   const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']);
   deps.runTurn = scriptedTurn(
     [{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }],
@@ -756,8 +756,8 @@ test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and d
   await runDungeon(deps);
   assert.ok(events.some((e) => e.type === 'turnInterrupted'));
   assert.equal(events.filter((e) => e.type === 'attack' || e.type === 'agentError').length, 0);
-  const counter = events.find((e) => e.type === 'monsterAttack');
-  assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 6, 'normal, not the 1.5x error counter');
+  assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 0, 'stopping lets you type again instead of taking a hit');
+  assert.ok(events.some((e) => e.type === 'monsterWaits'));
   assert.ok(events.some((e) => e.type === 'sessionSaved' && e.sessionId === 's-int'), 'the session is kept');
 });
 
@@ -1033,6 +1033,31 @@ test('shop: 5 items per visit; the coin charm is a one-time relic that boosts co
   assert.deepEqual(summary.relics, ['coinCharm']);
   const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : 0));
   assert.equal(gains.at(-1), Math.round((10 + 3 * 2) * 1.25), 'the floor after buying pays 25% more');
+});
+
+test('save/load XP dupe: floors and scrolls already paid for this run line give no XP again', async () => {
+  // First time through: floor 0 cleared and a scroll read, all paid.
+  const first = makeFakeDeps([ONE_SHOT_PROMPT, '/use scroll', '/quit']);
+  const s1 = await runDungeon({ ...first.deps, runId: 'r1', bag: { scroll: 1 } });
+  assert.ok(s1.xpGained > 30);
+  assert.equal(s1.runId, 'r1');
+  assert.deepEqual(s1.paidXp, { floor: 0, scroll: 1 });
+  // Reload the save from floor 0 (scroll back in the bag) with that claim: nothing new to earn.
+  const again = makeFakeDeps([ONE_SHOT_PROMPT, '/use scroll', '/quit']);
+  const s2 = await runDungeon({ ...again.deps, runId: 'r1', paidXp: s1.paidXp, bag: { scroll: 1 } });
+  assert.equal(s2.xpGained, 0);
+  assert.ok(again.events.some((e) => e.type === 'floorCleared' && e.xpGained === 0));
+  assert.deepEqual(s2.paidXp, { floor: 0, scroll: 1 }, 'the claim never moves backwards');
+});
+
+test('the bomb scales with the monster: 20% of its max HP, never below 30', async () => {
+  const { deps, events } = makeFakeDeps(['/use bomb', '/quit']);
+  await runDungeon({ ...deps, startFloor: 10, bag: { bomb: 1 } });
+  const start = events.find((e) => e.type === 'floorStart');
+  const bomb = events.find((e) => e.type === 'bombHit');
+  assert.ok(start?.type === 'floorStart' && bomb?.type === 'bombHit');
+  assert.equal(bomb.damage, Math.max(30, Math.round(start.maxHp * 0.2)));
+  assert.ok(bomb.damage > 30, 'deep floors get a bigger boom');
 });
 
 test('items: the bomb hits the monster for 30, the scroll gives 30 XP, the elixir fully heals', async () => {

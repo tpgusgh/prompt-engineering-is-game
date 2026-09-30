@@ -3,6 +3,7 @@ import electron from 'electron';
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, Notification } = electron;
 import electronUpdater from 'electron-updater';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
@@ -464,6 +465,11 @@ ipcMain.handle(
       : requested;
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
+    // Save/load XP dupe guard: a loaded save continues its run line, and the
+    // floors that line was already paid for give no XP again. A save from
+    // before run lines existed gets a stable id from its timestamp.
+    const runId = slot ? (slot.runId ?? `legacy-${slot.savedAt}`) : crypto.randomUUID();
+    const paidXp = profile.xpClaims?.[runId];
     currentParty = requested.party ?? true;
     pendingRank = null;
     const runTokenPromise = rankingConfig ? startRankedRun(rankingConfig) : Promise.resolve(null);
@@ -536,6 +542,8 @@ ipcMain.handle(
       stats: slot?.stats,
       statPoints: slot ? slot.statPoints : startingStatPoints(profile),
       swordLevel: slot ? slot.swordLevel : profile.swordLevel,
+      runId,
+      ...(paidXp ? { paidXp } : {}),
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
         if (event.type !== 'snapshot') {
@@ -608,8 +616,8 @@ ipcMain.handle('create-entry', (_event, parentDir: string, name: string, kind: '
 );
 
 const TREE_SKIP = new Set(['node_modules', '.git', 'release', 'dist', '.superpowers', '.claude', '.DS_Store']);
-const TREE_MAX_ENTRIES = 800;
-const TREE_MAX_DEPTH = 6;
+const TREE_MAX_ENTRIES = 5000;
+const TREE_MAX_DEPTH = 12;
 
 interface TreeNode {
   name: string;

@@ -2,7 +2,7 @@ import { calculateDamage } from './damage.ts';
 import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
-import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, BOMB_DAMAGE, SCROLL_XP, type Item } from './items.ts';
+import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
@@ -101,7 +101,17 @@ export interface RunState {
   sessionId?: string;
   // HP of the monster being fought when saved (absent if saved at a shop).
   monsterHp?: number;
+  // The run line this save belongs to (see PaidXp).
+  runId?: string;
 }
+
+// Highest floor whose clear XP, and whose scroll XP, a run line has already
+// banked into the profile: reloading a save replays those floors for 0 XP.
+export interface PaidXp {
+  floor: number;
+  scroll: number;
+}
+export const NOTHING_PAID: PaidXp = { floor: -1, scroll: -1 };
 
 // Chapter boss rules, in chapter order (then repeating). Conditional ones
 // undo the turn's damage when the condition isn't met; "clean" heals the
@@ -190,6 +200,9 @@ export interface BattleDeps {
   // (permanent items like the coin charm).
   contract?: Contract | null;
   relics?: string[];
+  // Save/load XP dupe guard: this run line and what it was already paid.
+  runId?: string;
+  paidXp?: PaidXp;
 }
 
 export interface BattleSummary {
@@ -212,6 +225,8 @@ export interface BattleSummary {
   relics: string[];
   // Max HP lost for good this run (broken contracts).
   maxHpPenalty: number;
+  runId?: string;
+  paidXp?: PaidXp;
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -339,6 +354,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let floorModel = '';
   const modelRecord = (model: string) => (runStats.byModel[model] ??= { engaged: 0, cleared: 0 });
   let xpGained = 0;
+  const alreadyPaid = deps.paidXp ?? NOTHING_PAID;
+  const paidXp = { ...alreadyPaid };
   let defeated = false;
   // A run starts a fresh Claude session unless resuming this folder's saved
   // one; turns within the run resume it. A resumed id that has never worked
@@ -394,13 +411,16 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       shielded = true;
     } else if (id === 'bomb') {
       const before = hp;
-      hp = Math.max(0, hp - BOMB_DAMAGE);
-      if (chests && hp === 0) overkill = BOMB_DAMAGE - before;
-      deps.onBattleEvent({ type: 'bombHit', damage: BOMB_DAMAGE });
+      const damage = bombDamage(currentMaxHp);
+      hp = Math.max(0, hp - damage);
+      if (chests && hp === 0) overkill = damage - before;
+      deps.onBattleEvent({ type: 'bombHit', damage });
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
     } else if (id === 'scroll') {
-      xpGained += SCROLL_XP;
-      deps.onBattleEvent({ type: 'bonusXp', amount: SCROLL_XP });
+      const amount = floor > alreadyPaid.scroll ? SCROLL_XP : 0;
+      paidXp.scroll = Math.max(paidXp.scroll, floor);
+      xpGained += amount;
+      deps.onBattleEvent({ type: 'bonusXp', amount });
     } else {
       signWith(id === 'contract' ? 'god' : 'demon');
     }
@@ -473,6 +493,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     floor, playerHp, playerMaxHp, coins, bag: { ...bag }, stats: { ...stats }, statPoints, swordLevel,
     ...(sessionId ? { sessionId } : {}),
     ...(hp > 0 ? { monsterHp: hp } : {}),
+    ...(deps.runId ? { runId: deps.runId } : {}),
   });
   // Every wait for input: the per-session autosave (slot 0) and the auto slot
   // (4), both with the live state — a wounded monster stays wounded on load.
@@ -876,7 +897,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
 
       if (playerHp <= 0) break; // thorns finished the hero mid-turn
-      if (hp > 0 && !turn.error && endsWithQuestion(turn.summary)) {
+      // A question, or the player's own stop: the monster waits for the next prompt.
+      if (hp > 0 && !turn.error && (turn.interrupted || endsWithQuestion(turn.summary))) {
         deps.onBattleEvent({ type: 'monsterWaits' });
       } else if (hp > 0) {
         takeHit(counter(Boolean(turn.error)));
@@ -928,7 +950,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (loot && loot.id !== 'crystal') emitBag();
       overkill = 0;
     }
-    const gained = Math.round(xpForFloor(floor) * rewardMult);
+    const gained = floor > alreadyPaid.floor ? Math.round(xpForFloor(floor) * rewardMult) : 0;
+    paidXp.floor = Math.max(paidXp.floor, floor);
     xpGained += gained;
     floorsCleared += 1;
     runStats.floorsCleared += 1;
@@ -972,6 +995,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     contract,
     relics: [...relics],
     maxHpPenalty,
+    ...(deps.runId ? { runId: deps.runId } : {}),
+    paidXp,
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

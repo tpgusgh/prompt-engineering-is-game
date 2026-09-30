@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
-import type { BattleSummary } from './battle.ts';
+import type { BattleSummary, PaidXp } from './battle.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
@@ -35,6 +35,8 @@ export interface Profile {
   contract?: Contract;
   relics: string[];
   maxHpPenalty: number;
+  // What XP each recent run line has banked (save/load dupe guard, see PaidXp).
+  xpClaims?: Record<string, PaidXp>;
 }
 
 const BASE_MAX_HP = 100;
@@ -95,6 +97,20 @@ function withLegacyBestiary(records: Records, p: Record<string, unknown> | null 
   return { ...records, seen: legacy.seen, kills: legacy.kills };
 }
 
+const isFloorMark = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= -1;
+function coerceClaims(v: unknown): Record<string, PaidXp> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, PaidXp> = {};
+  for (const [id, c] of Object.entries(v as Record<string, any>)) {
+    if (isFloorMark(c?.floor) && isFloorMark(c?.scroll)) out[id] = { floor: c.floor, scroll: c.scroll };
+  }
+  return out;
+}
+
+// ponytail: keeps the latest 50 run lines; a save older than that could be
+// paid again, bump it if anyone hoards 50+ runs of saves.
+const MAX_XP_CLAIMS = 50;
+
 function coerceProfile(parsed: unknown): Profile {
   const p = parsed as Record<string, unknown> | null | undefined;
   return {
@@ -116,6 +132,7 @@ function coerceProfile(parsed: unknown): Profile {
     ...(coerceContract(p?.contract) ? { contract: coerceContract(p?.contract) } : {}),
     relics: Array.isArray(p?.relics) ? p.relics.filter((r): r is string => r === 'coinCharm') : [],
     maxHpPenalty: isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0,
+    ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
   };
 }
 
@@ -188,6 +205,15 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   }
   updated.relics = [...(summary.relics ?? profile.relics ?? [])];
   updated.swordLevel = summary.swordLevel;
+  if (summary.runId && summary.paidXp) {
+    const prev = profile.xpClaims?.[summary.runId] ?? { floor: -1, scroll: -1 };
+    const { [summary.runId]: _old, ...others } = profile.xpClaims ?? {};
+    const kept = Object.entries(others).slice(-(MAX_XP_CLAIMS - 1));
+    updated.xpClaims = {
+      ...Object.fromEntries(kept),
+      [summary.runId]: { floor: Math.max(prev.floor, summary.paidXp.floor), scroll: Math.max(prev.scroll, summary.paidXp.scroll) },
+    };
+  }
   if (themeId) {
     const reached = summary.defeated ? summary.chaptersCleared * MONSTER_COUNT : summary.nextFloor;
     updated.storyFloors = { ...profile.storyFloors, [themeId]: Math.max(profile.storyFloors[themeId] ?? 0, reached) };
