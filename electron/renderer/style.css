@@ -2571,3 +2571,60 @@ body {
   color: #ffb3b8;
   font-size: 13px;
 }
+
+.summary-ranking {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #ebcb8b;
+  border-radius: 10px;
+  background: rgba(235, 203, 139, 0.07);
+}
+.rank-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.rank-form input {
+  flex: 1;
+  padding: 8px 10px;
+  background: #1d222d;
+  color: #eceff4;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+}
+#summary-screen .rank-form button {
+  margin: 0;
+}
+.ranking-panel {
+  width: min(760px, calc(100vw - 32px));
+}
+.ranking-scroll {
+  overflow: auto;
+  min-height: 0;
+}
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ranking-table th {
+  position: sticky;
+  top: 0;
+  background: #151922;
+  color: #7b88a1;
+  font-weight: 500;
+  text-align: left;
+  padding: 6px 8px;
+}
+.ranking-table td {
+  padding: 6px 8px;
+  border-top: 1px solid #2e3440;
+  white-space: nowrap;
+}
+.ranking-table td:nth-child(3) {
+  font-weight: 600;
+  color: #ebcb8b;
+}
+.ranking-table tr.top1 td { background: rgba(235, 203, 139, 0.14); }
+.ranking-table tr.top2 td { background: rgba(216, 222, 233, 0.08); }
+.ranking-table tr.top3 td { background: rgba(208, 135, 112, 0.1); }

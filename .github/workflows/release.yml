@@ -66,6 +66,11 @@ jobs:
           v=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
           for d in node_modules/@anthropic-ai/claude-agent-sdk-*; do [ "$d" = "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || rm -rf "$d"; done
           [ -d "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || npm install --no-save --force "@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}@$v"
+      # The ranking key exists only in release builds (never in the repo).
+      - run: node scripts/inject-ranking-config.mjs
+        env:
+          RANKING_URL: ${{ vars.RANKING_URL }}
+          RANKING_APP_SECRET: ${{ secrets.RANKING_APP_SECRET }}
       - run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false

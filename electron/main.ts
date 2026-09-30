@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
+import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
@@ -194,6 +195,31 @@ function checkForUpdate(force = false): Promise<UpdateStatus | null> {
   return updateCheck;
 }
 ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boolean(force)));
+
+// Online ranking: a defeated run can be submitted once (release builds only —
+// they carry the signing key). The run token is fetched when a run starts.
+const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
+let pendingRank: Omit<RankedRun, 'name'> | null = null;
+ipcMain.handle('ranking-list', async () => {
+  if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
+  try {
+    return { entries: await fetchRanking(rankingConfig.url) };
+  } catch (err) {
+    return { error: `랭킹을 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
+  }
+});
+ipcMain.handle('ranking-submit', async (_event, name: unknown) => {
+  if (!rankingConfig?.secret || !pendingRank) return { error: '이 기록은 등록할 수 없다' };
+  const clean = String(name ?? '').trim().slice(0, 16);
+  if (!clean) return { error: '이름을 입력해 줘' };
+  try {
+    const result = await submitScore(rankingConfig, { ...pendingRank, name: clean });
+    pendingRank = null;
+    return result;
+  } catch (err) {
+    return { error: `등록 실패: ${err instanceof Error ? err.message : err}` };
+  }
+});
 
 // "The AI is done" when the window isn't in front: an OS notification that
 // brings the game back when clicked, plus a Dock bounce / taskbar flash.
@@ -382,6 +408,8 @@ ipcMain.handle(
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
     currentParty = requested.party ?? true;
+    pendingRank = null;
+    const runTokenPromise = rankingConfig ? startRankedRun(rankingConfig) : Promise.resolve(null);
     await authReady;
     currentClaude = profile.claude;
     const heroClass = getHeroClass(options.heroClass).id;
@@ -484,7 +512,14 @@ ipcMain.handle(
     await saving;
 
     const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
-    return { summary, profile: updated, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
+    // A defeat can go on the ranking (if the server issued this run a token).
+    const runToken = summary.defeated ? await runTokenPromise : null;
+    const rankStats = { floors: summary.floorsCleared, bosses: summary.runStats.bossesDefeated, xp: summary.xpGained, difficulty: options.difficulty };
+    const rankScore = scoreFor(rankStats);
+    pendingRank = runToken && rankScore > 0 ? { runToken, ...rankStats, theme: options.themeId, heroClass, level: updated.level } : null;
+    const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
+    const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
+    return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
   },
 );
 

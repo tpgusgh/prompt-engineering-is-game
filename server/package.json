@@ -1,0 +1,6 @@
+{
+  "name": "prompt-battle-ranking",
+  "private": true,
+  "type": "module",
+  "description": "Prompt Battle online ranking (Vercel function + Upstash Redis)"
+}

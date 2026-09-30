@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   writeFile: (path, content) => ipcRenderer.invoke('write-file', path, content),
   setParty: (on) => ipcRenderer.invoke('set-party', on),
   getDaily: () => ipcRenderer.invoke('get-daily'),
+  rankingList: () => ipcRenderer.invoke('ranking-list'),
+  rankingSubmit: (name) => ipcRenderer.invoke('ranking-submit', name),
   notify: (title, body) => ipcRenderer.send('notify', title, body),
   deleteSlot: (slot) => ipcRenderer.invoke('delete-slot', slot),
   checkUpdate: (force) => ipcRenderer.invoke('check-update', force),

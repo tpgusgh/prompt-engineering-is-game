@@ -4,3 +4,4 @@ node_modules/
 .claude/
 release/
 song/
+electron/ranking-config.json

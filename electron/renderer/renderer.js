@@ -1776,11 +1776,12 @@ async function startGame({ loadSlot, slot }) {
     const heroClassId = chosenClass;
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId });
     setTimeout(refreshTree, 300);
-    const { summary, profile: updated, progress } = await runPromise;
+    const { summary, profile: updated, progress, ranking } = await runPromise;
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;
     renderSummary(summary, updated, progress, { difficulty, startCoins: from.coins });
+    renderRankingCard(ranking);
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
     // call). Without this, the player would be stuck on the dungeon screen.
@@ -2765,3 +2766,84 @@ function renderContract() {
   tip.append(head, list, rule);
   el.append(tip);
 }
+
+// ---------------------------------------------------------------------------
+// Online ranking: submit a defeated run from the summary; view the top 100.
+const RANK_NAME_KEY = 'pb-rank-name';
+function renderRankingCard(ranking) {
+  const card = $('summary-ranking');
+  card.hidden = !ranking;
+  if (!ranking) return;
+  $('summary-rank-score').textContent = `이번 판 점수 ${fmtNum(ranking.score)}`;
+  $('rank-result').textContent = ranking.submittable ? '' : ranking.reason;
+  $('rank-form').hidden = !ranking.submittable;
+  $('rank-submit').disabled = false;
+  try {
+    $('rank-name').value = localStorage.getItem(RANK_NAME_KEY) ?? '';
+  } catch {}
+}
+$('rank-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('rank-name').value.trim();
+  if (!name) return;
+  try {
+    localStorage.setItem(RANK_NAME_KEY, name);
+  } catch {}
+  $('rank-submit').disabled = true;
+  $('rank-result').textContent = '등록 중...';
+  const result = await window.promptBattle.rankingSubmit(name);
+  if (result.error) {
+    $('rank-result').textContent = result.error;
+    $('rank-submit').disabled = false;
+    return;
+  }
+  $('rank-form').hidden = true;
+  $('rank-result').textContent = result.rank ? `🏆 ${result.rank}위로 등록됐다! (${fmtNum(result.score)}점)` : `등록했지만 상위 100위 밖이다 (${fmtNum(result.score)}점)`;
+  sfx(result.rank && result.rank <= 10 ? 'fanfare' : 'coin');
+});
+
+const CLASS_NAME = { swordsman: '검사', wizard: '마법사', archer: '궁수' };
+async function openRanking() {
+  $('ranking-overlay').hidden = false;
+  const table = $('ranking-table');
+  table.textContent = '';
+  $('ranking-status').textContent = '불러오는 중...';
+  const res = await window.promptBattle.rankingList();
+  if (res.error) {
+    $('ranking-status').textContent = res.error;
+    return;
+  }
+  $('ranking-status').textContent = res.entries.length ? '' : '아직 기록이 없다. 첫 번째가 되어 보자!';
+  const head = document.createElement('tr');
+  for (const h of ['순위', '이름', '점수', '직업', '테마', '처치', '난이도', '날짜']) {
+    const th = document.createElement('th');
+    th.textContent = h;
+    head.append(th);
+  }
+  table.append(head);
+  for (const e of res.entries) {
+    const tr = document.createElement('tr');
+    if (e.rank <= 3) tr.className = `top${e.rank}`;
+    const cells = [
+      e.rank <= 3 ? ['1위', '2위', '3위'][e.rank - 1] : String(e.rank),
+      e.name ?? '',
+      fmtNum(e.score),
+      CLASS_NAME[e.heroClass] ?? '',
+      THEMES.find((t) => t.id === e.theme)?.title ?? '',
+      `${e.floors ?? 0}층 · 보스 ${e.bosses ?? 0}`,
+      DIFFICULTY_LABEL[e.difficulty] ?? '',
+      e.at ? new Date(e.at).toLocaleDateString('ko-KR') : '',
+    ];
+    for (const c of cells) {
+      const td = document.createElement('td');
+      td.textContent = c;
+      tr.append(td);
+    }
+    table.append(tr);
+  }
+}
+$('ranking-btn').addEventListener('click', openRanking);
+$('ranking-close').addEventListener('click', () => ($('ranking-overlay').hidden = true));
+$('ranking-overlay').addEventListener('click', (e) => {
+  if (e.target === $('ranking-overlay')) $('ranking-overlay').hidden = true;
+});

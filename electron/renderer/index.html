@@ -18,6 +18,7 @@
         </div>
         <div class="setup-actions">
           <button type="button" class="settings-btn" id="update-check-btn" title="새 버전이 있는지 확인">🔄 업데이트</button>
+          <button type="button" class="settings-btn" id="ranking-btn" title="온라인 랭킹 (상위 100명)">🏆 랭킹</button>
           <button type="button" class="settings-btn" id="bestiary-btn" title="몬스터 도감">📖 도감</button>
           <button type="button" class="settings-btn" id="records-btn" title="기록 · 업적 · 오늘의 퀘스트">📊 기록</button>
           <button type="button" class="settings-btn" data-open-settings title="설정">⚙️ 설정</button>
@@ -231,6 +232,15 @@
           <div class="xp-row"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
         </div>
         <div id="summary-rewards" class="summary-rewards"></div>
+        <div id="summary-ranking" class="summary-ranking" hidden>
+          <strong>🏆 랭킹 등록</strong>
+          <p id="summary-rank-score" class="summary-sub"></p>
+          <form id="rank-form" class="rank-form">
+            <input id="rank-name" maxlength="16" placeholder="이름 (최대 16자)" autocomplete="off" />
+            <button type="submit" id="rank-submit">등록</button>
+          </form>
+          <p id="rank-result" class="summary-sub"></p>
+        </div>
         <p id="summary-story" class="summary-story"></p>
         <div class="summary-actions">
           <button id="play-again-btn" class="start-btn">▶ 시작 화면으로</button>
@@ -327,6 +337,17 @@
         <div id="bestiary-filter" class="settings-tabs bestiary-filter"></div>
         <div id="bestiary-list" class="bestiary-list"></div>
         <div id="bestiary-detail" class="bestiary-detail" hidden></div>
+      </div>
+    </div>
+
+    <div id="ranking-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel ranking-panel" role="dialog" aria-label="랭킹">
+        <div class="settings-head">
+          <h2>🏆 랭킹 <span class="option-sub">상위 100명 · 쓰러질 때 등록</span></h2>
+          <button type="button" id="ranking-close" aria-label="닫기">✕</button>
+        </div>
+        <p id="ranking-status" class="option-sub"></p>
+        <div class="ranking-scroll"><table id="ranking-table" class="ranking-table"></table></div>
       </div>
     </div>
 
