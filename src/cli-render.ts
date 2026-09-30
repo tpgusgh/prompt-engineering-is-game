@@ -14,7 +14,11 @@ export function formatBattleEvent(event: BattleEvent): string {
     case 'chestHit':
       return colorize(`  chest +${event.damage} (${event.total})`, 'yellow') + '\n';
     case 'chestOpened':
-      return colorize(`Treasure: ${event.name} (overkill ${event.overkill}) — +${event.coins} coins${event.items.length ? `, ${event.items.join(', ')}` : ''}${event.crystal ? ', +max HP' : ''}`, 'yellow') + '\n';
+      return colorize(`Treasure: ${event.name} (overkill ${event.overkill}) — +${event.coins} coins${event.items.length ? `, ${event.items.join(', ')}` : ''}`, 'yellow') + '\n';
+    case 'contractSigned':
+      return colorize(`Contract with ${event.name}: ${event.text}${event.hpCost ? ` (-${event.hpCost} HP)` : ''}`, 'yellow') + '\n';
+    case 'contractBroken':
+      return colorize(`Contracts clash and break! Max HP -${event.penalty} for good (${event.maxHp}).`, 'red') + '\n';
     case 'traitThorns':
       return colorize(`A failed tool pricks you on the monster's thorns: -${event.damage} HP.`, 'red') + '\n';
     case 'traitRegen':

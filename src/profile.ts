@@ -5,6 +5,7 @@ import type { BattleSummary } from './battle.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
+import { coerceContract, type Contract } from './contracts.ts';
 import { applyProgress, coerceDaily, coerceRecords, emptyRecords, emptyRunStats, localDate, type DailyState, type ProgressResult, type Records } from './progress.ts';
 import { dataHome } from './home.ts';
 
@@ -29,10 +30,15 @@ export interface Profile {
   records: Records;
   achievements: string[];
   daily?: DailyState;
+  // Kept across runs: the hero's pact, relics (the coin charm), and max HP
+  // lost for good to broken contracts.
+  contract?: Contract;
+  relics: string[];
+  maxHpPenalty: number;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS, records: emptyRecords(), achievements: [] };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -99,7 +105,7 @@ function coerceProfile(parsed: unknown): Profile {
     storyFloors: coerceStoryFloors(p),
     coins: isValidCount(p?.coins, 0) ? p.coins : DEFAULT_PROFILE.coins,
     bag: coerceCounts(p?.bag, 1),
-    maxHp: isValidCount(p?.maxHp, BASE_MAX_HP) ? p.maxHp : BASE_MAX_HP,
+    maxHp: BASE_MAX_HP - (isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0),
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
     heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
     claude: coerceClaudeSettings(p?.claude),
@@ -107,6 +113,9 @@ function coerceProfile(parsed: unknown): Profile {
     records: withLegacyBestiary(p?.records ? coerceRecords(p.records) : legacyRecords(p), p),
     achievements: Array.isArray(p?.achievements) ? p.achievements.filter((a): a is string => typeof a === 'string') : [],
     ...(coerceDaily(p?.daily) ? { daily: coerceDaily(p?.daily) } : {}),
+    ...(coerceContract(p?.contract) ? { contract: coerceContract(p?.contract) } : {}),
+    relics: Array.isArray(p?.relics) ? p.relics.filter((r): r is string => r === 'coinCharm') : [],
+    maxHpPenalty: isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0,
   };
 }
 
@@ -118,7 +127,7 @@ export async function loadProfile(homeDir: string = dataHome()): Promise<Profile
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       await fs.copyFile(profilePath(homeDir), `${profilePath(homeDir)}.broken-${Date.now()}`).catch(() => {});
     }
-    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, records: emptyRecords(), achievements: [] };
+    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, records: emptyRecords(), achievements: [], relics: [] };
   }
 }
 
@@ -169,8 +178,15 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.totalBattles += summary.floorsEngaged;
   updated.coins = summary.coins;
   updated.bag = { ...summary.bag };
-  // Max HP bonuses (vitality, life crystals) last one run: the next starts at base.
-  updated.maxHp = BASE_MAX_HP;
+  // Max HP bonuses (vitality, life crystals) last one run: the next starts at
+  // base, minus what broken contracts took for good.
+  updated.maxHpPenalty = Math.min(BASE_MAX_HP - 20, (profile.maxHpPenalty ?? 0) + (summary.maxHpPenalty ?? 0));
+  updated.maxHp = BASE_MAX_HP - updated.maxHpPenalty;
+  if (summary.contract !== undefined) {
+    if (summary.contract) updated.contract = summary.contract;
+    else delete updated.contract;
+  }
+  updated.relics = [...(summary.relics ?? profile.relics ?? [])];
   updated.swordLevel = summary.swordLevel;
   if (themeId) {
     const reached = summary.defeated ? summary.chaptersCleared * MONSTER_COUNT : summary.nextFloor;

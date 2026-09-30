@@ -7,7 +7,7 @@ import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } f
 import type { BattleSummary } from '../src/battle.ts';
 import { emptyRecords, emptyRunStats } from '../src/progress.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [] };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -17,9 +17,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, contract: { kind: 'god', id: 'fire' }, relics: ['coinCharm'], maxHpPenalty: 0 }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, contract: { kind: 'god', id: 'fire' }, relics: ['coinCharm'], maxHpPenalty: 0 });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -177,4 +177,15 @@ test('older profiles fill the bestiary from the story floors already reached', a
   assert.deepEqual(profile.records.seen, [0, 1, 2, 3, 4, 5]);
   assert.deepEqual(profile.records.kills, { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1 });
   assert.equal(profile.records.turns, 3);
+});
+
+test('applyRun keeps the contract, relics and broken-contract max HP penalty', () => {
+  const p = applyRun(base, summary({ contract: { kind: 'demon', id: 'greed' }, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
+  assert.deepEqual(p.contract, { kind: 'demon', id: 'greed' });
+  assert.deepEqual(p.relics, ['coinCharm']);
+  assert.equal(p.maxHpPenalty, 10);
+  assert.equal(p.maxHp, 90);
+  const broken = applyRun(p, summary({ contract: null, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
+  assert.equal(broken.contract, undefined);
+  assert.equal(broken.maxHp, 80);
 });

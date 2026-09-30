@@ -2,7 +2,8 @@ import { calculateDamage } from './damage.ts';
 import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
-import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
+import { getItem, shopOffer, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, BOMB_DAMAGE, SCROLL_XP, type Item } from './items.ts';
+import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
 import { emptyRunStats, isTestCommand, type RunStats } from './progress.ts';
@@ -25,8 +26,14 @@ export type BattleEvent =
   | { type: 'traitThorns'; damage: number }
   // The monster hit 0 HP mid-turn: it falls, and later hits go to a chest.
   | { type: 'monsterDown' }
+  | { type: 'contractSigned'; kind: Contract['kind']; id: string; name: string; text: string; hpCost: number }
+  | { type: 'contractBroken'; penalty: number; maxHp: number }
+  | { type: 'relicGained'; itemId: string }
+  | { type: 'bombHit'; damage: number }
+  | { type: 'bonusXp'; amount: number }
+  | { type: 'reflectHit'; damage: number }
   | { type: 'chestHit'; damage: number; total: number }
-  | { type: 'chestOpened'; grade: ChestGrade['id']; name: string; overkill: number; coins: number; items: string[]; crystal: boolean }
+  | { type: 'chestOpened'; grade: ChestGrade['id']; name: string; overkill: number; coins: number; items: string[] }
   | { type: 'traitRegen'; amount: number }
   | { type: 'gimmickBlocked'; text: string }
   | { type: 'gimmickHeal'; amount: number }
@@ -112,20 +119,19 @@ const gimmickFor = (chapter: number) => BOSS_GIMMICKS[(chapter - 1) % BOSS_GIMMI
 
 // Treasure chests: the damage dealt past a monster's last HP (the rest of the
 // AI's work, the closing blow's excess, typing hits) decides the grade.
+// Coins always; an item only by chance (rollChestItem in src/items.ts).
 export interface ChestGrade {
   id: 'wood' | 'iron' | 'silver' | 'gold' | 'legend';
   name: string;
   min: number;
   coins: number;
-  items: string[];
-  crystal?: boolean;
 }
 export const CHEST_GRADES: ChestGrade[] = [
-  { id: 'wood', name: '나무 상자', min: 0, coins: 5, items: [] },
-  { id: 'iron', name: '철 상자', min: 20, coins: 15, items: ['bandage'] },
-  { id: 'silver', name: '은 상자', min: 60, coins: 30, items: ['potion'] },
-  { id: 'gold', name: '금 상자', min: 150, coins: 60, items: ['whetstone', 'amulet'] },
-  { id: 'legend', name: '전설의 상자', min: 300, coins: 120, items: ['potion', 'amulet'], crystal: true },
+  { id: 'wood', name: '나무 상자', min: 0, coins: 5 },
+  { id: 'iron', name: '철 상자', min: 20, coins: 15 },
+  { id: 'silver', name: '은 상자', min: 60, coins: 30 },
+  { id: 'gold', name: '금 상자', min: 150, coins: 60 },
+  { id: 'legend', name: '전설의 상자', min: 300, coins: 120 },
 ];
 export function chestFor(overkill: number): ChestGrade {
   return [...CHEST_GRADES].reverse().find((g) => overkill >= g.min) ?? CHEST_GRADES[0];
@@ -171,6 +177,10 @@ export interface BattleDeps {
   themeId?: string;
   // Treasure chests from overkill (default on; tests of coin math turn them off).
   chests?: boolean;
+  // Carried in the profile: the hero's contract (god or demon) and relics
+  // (permanent items like the coin charm).
+  contract?: Contract | null;
+  relics?: string[];
 }
 
 export interface BattleSummary {
@@ -189,6 +199,10 @@ export interface BattleSummary {
   statPoints: number;
   swordLevel: number;
   runStats: RunStats;
+  contract: Contract | null;
+  relics: string[];
+  // Max HP lost for good this run (broken contracts).
+  maxHpPenalty: number;
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -285,6 +299,12 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let turnRunning = false;
   let sharpened = false; // whetstone: next attack x2
   const chests = deps.chests ?? true;
+  let contract: Contract | null = deps.contract ?? null;
+  let mods = contractMods(contract);
+  const relics = [...(deps.relics ?? [])];
+  let maxHpPenalty = 0;
+  let shopVisits = 0;
+  const coinGain = (n: number) => Math.round(n * mods.coinMult * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
   // This turn's damage past the monster's last HP, and whether it has fallen.
   let overkill = 0;
   let monsterDown = false;
@@ -326,10 +346,16 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'counterBlocked' });
       return;
     }
-    damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats))));
+    damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats)) * mods.counterMult));
     playerHp = Math.max(0, playerHp - damage);
     deps.onBattleEvent({ type: 'monsterAttack', damage });
     deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
+    if (mods.reflect > 0 && hp > 0) {
+      const back = Math.max(1, Math.round(damage * mods.reflect));
+      hp = Math.max(1, hp - back); // envy wounds, it doesn't finish the fight
+      deps.onBattleEvent({ type: 'reflectHit', damage: back });
+      deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
+    }
   };
 
   const emitPlayerHp = () => deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
@@ -344,19 +370,53 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
   // Free action: never costs a turn or draws a counterattack.
   const useItem = (id: string) => {
-    if (!['bandage', 'potion', 'whetstone', 'amulet'].includes(id) || !takeItem(id)) {
+    const usable = ['bandage', 'potion', 'whetstone', 'amulet', 'elixir', 'bomb', 'scroll', 'contract', 'devilContract'];
+    // The bomb needs a monster to throw it at (not at a shop).
+    if (!usable.includes(id) || (id === 'bomb' && hp <= 0) || !takeItem(id)) {
       deps.onBattleEvent({ type: 'itemUseFailed', itemId: id });
       return;
     }
-    if (id === 'potion' || id === 'bandage') {
-      playerHp = Math.min(playerMaxHp, playerHp + (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL));
+    if (id === 'potion' || id === 'bandage' || id === 'elixir') {
+      playerHp = id === 'elixir' ? playerMaxHp : Math.min(playerMaxHp, playerHp + (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL));
       emitPlayerHp();
     } else if (id === 'whetstone') {
       sharpened = true;
-    } else {
+    } else if (id === 'amulet') {
       shielded = true;
+    } else if (id === 'bomb') {
+      const before = hp;
+      hp = Math.max(0, hp - BOMB_DAMAGE);
+      if (chests && hp === 0) overkill = BOMB_DAMAGE - before;
+      deps.onBattleEvent({ type: 'bombHit', damage: BOMB_DAMAGE });
+      deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
+    } else if (id === 'scroll') {
+      xpGained += SCROLL_XP;
+      deps.onBattleEvent({ type: 'bonusXp', amount: SCROLL_XP });
+    } else {
+      signWith(id === 'contract' ? 'god' : 'demon');
     }
     deps.onBattleEvent({ type: 'itemUsed', itemId: id });
+  };
+
+  // A contract scroll: a new pact, or — if one is already held — every pact
+  // breaks and max HP drops for good.
+  const signWith = (kind: Contract['kind']) => {
+    const result = signContract(contract, kind, random);
+    if (result.broken) {
+      contract = null;
+      maxHpPenalty += BREAK_PENALTY;
+      playerMaxHp = Math.max(20, playerMaxHp - BREAK_PENALTY);
+      playerHp = Math.min(playerHp, playerMaxHp);
+      deps.onBattleEvent({ type: 'contractBroken', penalty: BREAK_PENALTY, maxHp: playerMaxHp });
+    } else {
+      contract = result.contract;
+      const pact = pactOf(contract)!;
+      const hpCost = kind === 'demon' ? Math.round(playerMaxHp * (pact as Demon).hpCost) : 0;
+      playerHp = Math.max(1, playerHp - hpCost);
+      deps.onBattleEvent({ type: 'contractSigned', kind, id: pact.id, name: pact.name, text: pact.text, hpCost });
+    }
+    mods = contractMods(contract);
+    emitPlayerHp();
   };
 
   // The merchant's odd/even dice game: `/bet odd|even|홀|짝 <coins>`.
@@ -488,7 +548,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   };
 
   const visitMerchant = () => {
-    deps.onBattleEvent({ type: 'merchantOpen', coins, items: ITEMS });
+    const offer = shopOffer(shopVisits++, relics);
+    deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer });
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
         placeBet(input);
@@ -496,9 +557,11 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
       if (!input.startsWith('/buy ')) return false;
       const id = input.slice('/buy '.length).trim();
-      const item = getItem(id);
+      const item = offer.find((i) => i.id === id);
       if (!item) {
-        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '그런 물건은 없다' });
+        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: getItem(id) ? '오늘은 안 파는 물건이다' : '그런 물건은 없다' });
+      } else if (relics.includes(item.id)) {
+        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '이미 가지고 있다 (한 번만 살 수 있다)' });
       } else if (coins < item.price) {
         deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
       } else {
@@ -507,6 +570,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           playerMaxHp += CRYSTAL_MAX_HP;
           playerHp += CRYSTAL_MAX_HP;
           emitPlayerHp();
+        } else if (item.id === 'coinCharm') {
+          relics.push(item.id);
+          deps.onBattleEvent({ type: 'relicGained', itemId: item.id });
         } else {
           bag[item.id] = (bag[item.id] ?? 0) + 1;
           emitBag();
@@ -519,6 +585,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
   deps.bindExternalHit?.((damage) => {
     if (!turnRunning) return false;
+    damage *= mods.typingDamage;
     if (hp <= 0) {
       if (!chests) return false;
       runStats.typingLines += 1;
@@ -587,7 +654,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           deps.onBattleEvent({ type: 'itemUseFailed', itemId: 'smoke' });
           continue;
         }
-        const success = smoke || random() < FLEE_CHANCE;
+        const success = smoke || random() < (mods.fleeChance ?? FLEE_CHANCE);
         deps.onBattleEvent({ type: 'fleeAttempt', success });
         if (success) {
           fled = true;
@@ -646,7 +713,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       // ones don't — and the prompt's full damage lands as the closing blow
       // when the turn ends normally (not on error or stop). So a short
       // prompt that makes the AI do a lot still hits hard.
-      const actionHit = trait === 'armor' ? Math.max(1, Math.round(actionDamage(damage) / 2)) : actionDamage(damage);
+      const baseAction = actionDamage(damage) + mods.actionBonus + mods.flat;
+      const actionHit = mods.noActionHits ? 0 : trait === 'armor' ? Math.max(1, Math.round(baseAction / 2)) : baseAction;
       const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
         deps.onBattleEvent({ type: 'agentEvent', agentEvent: event });
@@ -672,6 +740,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
             runStats.testsPassed += 1;
             turnTests += 1;
           }
+          if (actionHit === 0) return; // sloth: work deals nothing
           if (hp <= 0) {
             if (chests) hitChest(actionHit);
             return;
@@ -739,6 +808,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
         if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
         if (turnTests > 0) damage = Math.round(damage * theme.testBonus);
+        damage = Math.round((damage + mods.flat) * mods.closingMult * (crit ? mods.critMult : 1) * (isBoss ? mods.bossMult : 1) * (playerHp <= playerMaxHp / 2 ? mods.lowHpMult : 1));
         if (chests) overkill += Math.max(0, damage - hp);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
@@ -770,6 +840,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         takeHit(counter(Boolean(turn.error)));
         if (playerHp <= 0) break;
       }
+      if (mods.healPerTurn > 0 && playerHp < playerMaxHp) {
+        playerHp = Math.min(playerMaxHp, playerHp + mods.healPerTurn);
+        emitPlayerHp();
+      }
       if (trait === 'regen' && hp > 0 && hp < maxHp) {
         const amount = Math.min(maxHp - hp, Math.max(1, Math.round(maxHp * REGEN_RATIO)));
         hp += amount;
@@ -797,17 +871,19 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const rewardMult = theme.rewards * (DIFFICULTY_REWARD[deps.difficulty] ?? 1);
     if (chests && overkill > 0) {
       const grade = chestFor(overkill);
-      const chestCoins = Math.round(grade.coins * rewardMult * (1 + floor * 0.1));
+      const chestCoins = coinGain(grade.coins * rewardMult * (1 + floor * 0.1));
       coins += chestCoins;
-      for (const item of grade.items) bag[item] = (bag[item] ?? 0) + 1;
-      if (grade.crystal) {
+      const loot = rollChestItem(grade.id, random);
+      if (loot?.id === 'crystal') {
         playerMaxHp += CRYSTAL_MAX_HP;
         playerHp += CRYSTAL_MAX_HP;
+        emitPlayerHp();
+      } else if (loot) {
+        bag[loot.id] = (bag[loot.id] ?? 0) + 1;
       }
-      deps.onBattleEvent({ type: 'chestOpened', grade: grade.id, name: grade.name, overkill, coins: chestCoins, items: [...grade.items], crystal: Boolean(grade.crystal) });
+      deps.onBattleEvent({ type: 'chestOpened', grade: grade.id, name: grade.name, overkill, coins: chestCoins, items: loot ? [loot.id] : [] });
       deps.onBattleEvent({ type: 'coinsChanged', coins, gained: chestCoins });
-      if (grade.items.length) emitBag();
-      if (grade.crystal) emitPlayerHp();
+      if (loot && loot.id !== 'crystal') emitBag();
       overkill = 0;
     }
     const gained = Math.round(xpForFloor(floor) * rewardMult);
@@ -819,9 +895,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (currentFloorEngaged) modelRecord(floorModel).cleared += 1;
     deps.onBattleEvent({ type: 'floorCleared', monsterName: spawned.name, xpGained: gained });
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
-    playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL);
+    playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL * mods.clearHealMult + mods.clearHealBonus);
     emitPlayerHp();
-    const coinsGained = Math.round(coinsForFloor(floor, isBoss) * rewardMult);
+    const coinsGained = coinGain(coinsForFloor(floor, isBoss) * rewardMult);
     coins += coinsGained;
     deps.onBattleEvent({ type: 'coinsChanged', coins, gained: coinsGained });
     if (!allMaxed(stats)) {
@@ -851,6 +927,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     statPoints,
     swordLevel,
     runStats: { ...runStats, byModel: { ...runStats.byModel }, seen: [...runStats.seen], kills: { ...runStats.kills } },
+    contract,
+    relics: [...relics],
+    maxHpPenalty,
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

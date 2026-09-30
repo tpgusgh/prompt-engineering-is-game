@@ -2493,3 +2493,20 @@ body {
   background: linear-gradient(90deg, #b8860b, #ffd76a);
 }
 .ic-gift, .ic-bell { color: #ebcb8b; }
+
+.contract-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.contract-badge.god {
+  color: #a3e0ff;
+  border: 1px solid #5e81ac;
+  background: rgba(94, 129, 172, 0.15);
+}
+.contract-badge.demon {
+  color: #ffb3b8;
+  border: 1px solid #bf616a;
+  background: rgba(191, 97, 106, 0.15);
+}

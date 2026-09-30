@@ -180,6 +180,9 @@ async function loadSetup() {
   difficultyMult = info.difficulty ?? difficultyMult;
   difficultyReward = info.difficultyReward ?? difficultyReward;
   chestGrades = info.chestGrades ?? [];
+  pacts = info.pacts ?? pacts;
+  heroContract = profile.contract ?? null;
+  renderContract();
   renderDailyLine();
   runXp = 0;
   renderXp();
@@ -210,7 +213,9 @@ async function loadSetup() {
 loadSetup();
 
 function renderProfileLine() {
-  profileLineEl.textContent = `🎖 ${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}`;
+  const pact = pactInfo(profile.contract);
+  const charm = profile.relics?.includes('coinCharm') ? ' · 코인의 부적' : '';
+  profileLineEl.textContent = `🎖 ${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}${pact ? ` · 계약: ${pact.name}` : ''}${charm}`;
 }
 
 // Battle stat panel: unspent points + one button per stat (a free action).
@@ -516,7 +521,7 @@ function renderCoins() {
 // The bag: each item is a button that uses it (a free action, no turn spent).
 // The game inventory (sidebar, under the file tree): each item with its
 // count, what it does, and a use button (a free action).
-const ITEM_ICONS = { bandage: '🩹', potion: '🧪', whetstone: '🪨', amulet: '🧿', smoke: '💨' };
+const ITEM_ICONS = { bandage: '🩹', potion: '🧪', whetstone: '🪨', amulet: '🧿', smoke: '💨', elixir: '💎', bomb: '💣', scroll: '📃', contract: '🤝', devilContract: '💀' };
 function renderBag() {
   bagEl.textContent = '';
   $('bag-coins').textContent = `🪙 ${coins}`;
@@ -1264,9 +1269,8 @@ function renderBattleEvent(event) {
       chest.total = event.overkill;
       chest.opened = true;
       renderChest(true, event.grade);
-      const itemNames = event.items.map((id) => items.find((i) => i.id === id)?.name ?? id);
-      const extras = [...itemNames, ...(event.crystal ? ['생명의 결정(최대 HP +10)'] : [])];
-      appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${extras.length ? ` · ${extras.join(', ')}` : ''}`, 'victory');
+      const found = event.items.map((id) => itemName(id));
+      appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${found.length ? ` · ${found.join(', ')} 발견!` : ''}`, 'victory');
       break;
     }
     case 'monsterAttack':
@@ -1380,10 +1384,42 @@ function renderBattleEvent(event) {
         bandage: '🩹 붕대를 감았다! 체력이 조금 회복된다.',
         whetstone: '숫돌로 무기를 갈았다! 다음 공격은 2배.',
         amulet: '수호의 부적이 빛난다! 다음 반격을 막아준다.',
+        elixir: '💎 엘릭서를 마셨다! 체력이 완전히 회복됐다.',
+        scroll: '📃 지혜의 두루마리를 읽었다!',
       };
       appendLog(lines[event.itemId] ?? `${itemName(event.itemId)} 사용!`, 'victory');
       break;
     }
+    case 'contractSigned':
+      heroContract = { kind: event.kind, id: event.id };
+      renderContract();
+      appendLog(
+        event.kind === 'god'
+          ? `🤝 ${event.name}와(과) 계약했다! 모든 타격 +1 · ${event.text}`
+          : `💀 ${event.name}와(과) 계약했다... 최대 HP의 대가로 체력 ${event.hpCost}을(를) 바쳤다. ${event.text}`,
+        event.kind === 'god' ? 'victory' : 'crit',
+      );
+      break;
+    case 'contractBroken':
+      heroContract = null;
+      renderContract();
+      appendLog(`⚠️ 계약이 서로 충돌해 모두 깨졌다! 최대 HP가 영구히 ${event.penalty} 줄었다 (최대 HP ${event.maxHp}). 이제 다시 계약할 수 있다.`, 'error');
+      break;
+    case 'relicGained':
+      appendLog(`✨ ${itemName(event.itemId)}을(를) 손에 넣었다! 이제부터 얻는 코인 +25% (영구)`, 'victory');
+      break;
+    case 'bombHit':
+      appendLog(`💣 폭탄을 던졌다! ${currentMonsterName}에게 ${event.damage}의 피해!`, 'crit');
+      flashMonster();
+      break;
+    case 'bonusXp':
+      runXp += event.amount;
+      renderXp();
+      appendLog(`✨ 경험치 +${event.amount}`, 'victory');
+      break;
+    case 'reflectHit':
+      appendLog(`질투의 계약: 받은 반격의 일부(${event.damage})를 되돌려 줬다!`);
+      break;
     case 'itemUseFailed':
       appendLog(`${itemName(event.itemId)}을(를) 쓸 수 없다.`, 'error');
       break;
@@ -2647,4 +2683,19 @@ $('notify-toggle').addEventListener('change', () => {
 function notifyTurnDone(body) {
   if (!notifyOn || document.hasFocus()) return;
   window.promptBattle.notify('프롬프트 배틀', body);
+}
+
+// ---------------------------------------------------------------------------
+// The hero's contract (god or demon), shown next to the HP in battle.
+let pacts = { god: [], demon: [] };
+let heroContract = null;
+const pactInfo = (c) => (c ? pacts[c.kind]?.find((p) => p.id === c.id) : undefined);
+function renderContract() {
+  const el = $('contract-badge');
+  const pact = pactInfo(heroContract);
+  el.hidden = !pact;
+  if (!pact) return;
+  el.className = `contract-badge ${heroContract.kind}`;
+  el.textContent = `${heroContract.kind === 'god' ? '🤝' : '💀'} ${pact.name}`;
+  el.title = `${heroContract.kind === 'god' ? '모든 타격 +1 · ' : ''}${pact.text}`;
 }

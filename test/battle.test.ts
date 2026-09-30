@@ -382,8 +382,9 @@ test('typing a prompt at the merchant closes the shop and attacks the next monst
 });
 
 test('life crystal raises max HP for the run and is reported in the summary', async () => {
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/buy crystal', '/leave', '/quit']);
-  const summary = await runDungeon({ ...deps, coins: 100, random: seq(0.1, 0.99) });
+  // The shelf rotates: the crystal is on the second visit's five.
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy crystal', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 100, random: seq(0.1, 0.1, 0.99) });
   assert.equal(summary.playerMaxHp, 110);
   assert.ok(events.some((e) => e.type === 'playerHpChanged' && e.maxHp === 110));
   assert.deepEqual(summary.bag, {});
@@ -938,9 +939,12 @@ test('treasure chest: the overkill of the killing blow picks the grade (goblin 6
   const summary = await runDungeon({ ...deps, chests: true });
   const chest = events.find((e) => e.type === 'chestOpened');
   assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'gold' && chest.overkill === 165);
-  assert.deepEqual(chest.items, ['whetstone', 'amulet']);
+  assert.deepEqual(chest.items, [], 'no item on a 0.99 roll (gold drops 50% of the time)');
   assert.ok(summary.coins > 10, 'floor coins plus the chest');
-  assert.equal(summary.bag.whetstone, 1);
+  const lucky = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon({ ...lucky.deps, chests: true, random: seq(0, 0, 0.99) });
+  const luckyChest = lucky.events.find((e) => e.type === 'chestOpened');
+  assert.ok(luckyChest && luckyChest.type === 'chestOpened' && luckyChest.items.length === 1, 'a low roll drops an item');
 });
 
 test('treasure chest: once the monster is down mid-turn, later work hits pile onto the chest', async () => {
@@ -973,4 +977,66 @@ test('treasure chest: a boss with a conditional rule is not declared down mid-tu
   deps.runTurn = scriptedTurn([{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
   await runDungeon({ ...deps, chests: true, startFloor: 11, getDamageMultiplier: () => 100 });
   assert.equal(events.filter((e) => e.type === 'monsterDown').length, 0);
+});
+
+test('contracts: a god contract adds +1 to the closing blow and is kept in the summary', async () => {
+  const { deps, events } = makeFakeDeps(['/use contract', 'x', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { contract: 1 }, random: seq(0.7, 0.99) }); // 0.7 → thunder (index 4)
+  const signed = events.find((e) => e.type === 'contractSigned');
+  assert.ok(signed && signed.type === 'contractSigned' && signed.kind === 'god' && signed.id === 'thunder' && signed.hpCost === 0);
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 11, '10 + 1');
+  assert.deepEqual(summary.contract, { kind: 'god', id: 'thunder' });
+});
+
+test('contracts: a demon costs max HP to sign; a second contract of any kind breaks them all (-10 max HP for good)', async () => {
+  const { deps, events } = makeFakeDeps(['/use devilContract', '/use contract', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { devilContract: 1, contract: 1 }, random: seq(0, 0.99) }); // 0 → pride (30%)
+  const signed = events.find((e) => e.type === 'contractSigned');
+  assert.ok(signed && signed.type === 'contractSigned' && signed.id === 'pride' && signed.hpCost === 30);
+  assert.ok(events.some((e) => e.type === 'contractBroken' && e.penalty === 10 && e.maxHp === 90));
+  assert.equal(summary.contract, null);
+  assert.equal(summary.maxHpPenalty, 10);
+  assert.equal(summary.playerMaxHp, 90);
+});
+
+test('contracts: an existing contract from the profile breaks on the next scroll too', async () => {
+  const { deps } = makeFakeDeps(['/use contract', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { contract: 1 }, contract: { kind: 'demon', id: 'greed' } });
+  assert.equal(summary.contract, null);
+  assert.equal(summary.maxHpPenalty, 10);
+});
+
+test('contracts: sloth removes work hits and doubles the closing blow; greed adds 50% coins', async () => {
+  const sloth = makeFakeDeps(['x'.repeat(150), '/quit']);
+  sloth.deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...sloth.deps, contract: { kind: 'demon', id: 'sloth' } });
+  assert.equal(sloth.events.filter((e) => e.type === 'partialHit').length, 0);
+  const attack = sloth.events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 80);
+  const greed = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const s = await runDungeon({ ...greed.deps, contract: { kind: 'demon', id: 'greed' } });
+  assert.equal(s.coins, 15, '10 floor coins x1.5');
+});
+
+test('shop: 5 items per visit; the coin charm is a one-time relic that boosts coins', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 500, random: seq(0.1, 0.1, 0.1, 0.99), getDamageMultiplier: () => 10 });
+  const shelves = events.filter((e) => e.type === 'merchantOpen');
+  assert.ok(shelves.every((e) => e.type === 'merchantOpen' && e.items.length === 5));
+  assert.ok(events.some((e) => e.type === 'relicGained' && e.itemId === 'coinCharm'));
+  assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'coinCharm'), 'only once');
+  assert.deepEqual(summary.relics, ['coinCharm']);
+  const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : 0));
+  assert.equal(gains.at(-1), Math.round((10 + 3 * 2) * 1.25), 'the floor after buying pays 25% more');
+});
+
+test('items: the bomb hits the monster for 30, the scroll gives 30 XP, the elixir fully heals', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/use bomb', '/use scroll', '/use elixir', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { bomb: 1, scroll: 1, elixir: 1 } });
+  assert.ok(events.some((e) => e.type === 'bombHit' && e.damage === 30));
+  assert.ok(events.some((e) => e.type === 'bonusXp' && e.amount === 30));
+  assert.equal(summary.xpGained, 30);
+  const hp = events.filter((e) => e.type === 'playerHpChanged').at(-1);
+  assert.ok(hp && hp.type === 'playerHpChanged' && hp.hp === hp.maxHp);
 });

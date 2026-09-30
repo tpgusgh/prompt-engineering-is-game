@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
+import { GODS, DEMONS } from '../src/contracts.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
@@ -248,6 +249,7 @@ ipcMain.handle('get-setup-info', async () => ({
   difficulty: DIFFICULTY_MULTIPLIER,
   difficultyReward: DIFFICULTY_REWARD,
   chestGrades: CHEST_GRADES,
+  pacts: { god: GODS, demon: DEMONS },
   appVersion: app.getVersion(),
 }));
 
@@ -429,6 +431,8 @@ ipcMain.handle(
       monsterHp: slot?.monsterHp,
       bindExternalHit: (fn) => (externalHit = fn),
       getModel: () => currentModel,
+      contract: profile.contract ?? null,
+      relics: profile.relics,
       themeId: options.themeId,
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
