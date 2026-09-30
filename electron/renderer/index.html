@@ -294,7 +294,9 @@
       <div class="exit-panel">
         <h2>잠시 쉬어갈까?</h2>
         <p>오늘 모험을 끝내도 진행 층수, 코인, 가방, 이 폴더의 Claude 세션과 대화 기록이 저장된다. 다음에 이어할 수 있다.</p>
+        <p id="exit-unsaved" class="exit-unsaved" hidden>⚠️ 마지막으로 저장한 뒤에 진행한 내용이 있다. 저장하지 않고 나가면 이 판의 능력치·HP·몬스터 상태는 슬롯에 남지 않는다 (층마다 자동 저장만 남는다). 저장하지 않고 나갈까?</p>
         <div class="exit-actions">
+          <button type="button" id="exit-save" hidden>💾 저장하고 나가기</button>
           <button type="button" id="exit-confirm">오늘 모험 종료하기</button>
           <button type="button" id="exit-cancel">이어하기</button>
         </div>

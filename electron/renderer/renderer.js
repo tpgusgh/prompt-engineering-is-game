@@ -1099,6 +1099,7 @@ playMusic('title');
 
 function renderBattleEvent(event) {
   soundFor(event);
+  if (PROGRESS_EVENTS.has(event.type)) unsaved = true;
   speechFor(event);
   switch (event.type) {
     case 'runStart':
@@ -1489,11 +1490,18 @@ function renderBattleEvent(event) {
       break;
     case 'slotSaved':
       slots[event.slot - 1] = event.data;
+      unsaved = false;
       appendLog(`💾 슬롯 ${event.slot}에 저장했다.`, 'victory');
+      if (saveThenExit) {
+        saveThenExit = false;
+        leaveRun();
+      }
       break;
     case 'saveFailed':
+      saveThenExit = false;
       appendLog(`저장 실패: ${event.reason}`, 'error');
       break;
+
     case 'sessionSwitched':
       currentSessionId = event.sessionId;
       contextUsage = null;
@@ -1745,6 +1753,8 @@ async function startGame({ loadSlot, slot }) {
   closeMerchant();
   closeBlacksmith();
   exitOverlay.hidden = true;
+  unsaved = false;
+  saveThenExit = false;
   setInputEnabled(true);
   renderBag();
   if (sessionId) {
@@ -1867,18 +1877,32 @@ $('bet-all').addEventListener('click', () => {
   betAmountInput.value = String(coins);
 });
 
+// Progress since the last manual save: leaving then asks first.
+let unsaved = false;
+let saveThenExit = false;
+const PROGRESS_EVENTS = new Set(['turnStart', 'floorCleared', 'purchased', 'itemUsed', 'statRaised', 'enhanceResult', 'betResult', 'contractSigned', 'contractBroken', 'relicGained']);
 exitBtn.addEventListener('click', () => {
+  $('exit-unsaved').hidden = !unsaved;
+  $('exit-save').hidden = !unsaved;
+  exitConfirmBtn.textContent = unsaved ? '저장 안 하고 종료' : '오늘 모험 종료하기';
   exitOverlay.hidden = false;
 });
+$('exit-save').addEventListener('click', () => {
+  exitOverlay.hidden = true;
+  saveThenExit = true;
+  $('save-btn').click();
+});
+$('save-close').addEventListener('click', () => (saveThenExit = false));
+function leaveRun() {
+  exitOverlay.hidden = true;
+  setInputEnabled(false);
+  window.promptBattle.submitPrompt('/quit');
+}
 exitCancelBtn.addEventListener('click', () => {
   exitOverlay.hidden = true;
   promptInput.focus();
 });
-exitConfirmBtn.addEventListener('click', () => {
-  exitOverlay.hidden = true;
-  setInputEnabled(false);
-  window.promptBattle.submitPrompt('/quit');
-});
+exitConfirmBtn.addEventListener('click', leaveRun);
 
 playAgainBtn.addEventListener('click', async () => {
   summaryScreen.hidden = true;
