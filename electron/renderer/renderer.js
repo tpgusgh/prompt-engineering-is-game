@@ -549,17 +549,6 @@ function closeMerchant() {
 }
 
 // Previous chats in this folder, shown dimmed above today's adventure.
-function renderHistory(history) {
-  if (history.length === 0) return;
-  const shown = history.slice(-50);
-  appendLog(`— 이 폴더의 이전 대화 기록 (${shown.length}/${history.length}) —`, 'history-header');
-  for (const entry of shown) {
-    if (entry.role === 'user') appendUserChat(entry.text, 'history');
-    else renderMarkdownLog(entry.text, 'history');
-  }
-  appendLog('— 오늘의 모험 —', 'history-header');
-}
-
 function setBar(fillEl, labelEl, hp, maxHp, suffix) {
   const safeMax = Math.max(1, maxHp);
   const ratio = Math.max(0, Math.min(hp, safeMax)) / safeMax;
@@ -1249,6 +1238,11 @@ function renderBattleEvent(event) {
       contextUsage = null;
       renderUsage();
       sessionBanner.hidden = true;
+      // /new: the old chat belongs to a session Claude no longer sees.
+      if (event.reason === 'new') {
+        finalizeLive();
+        logEl.textContent = '';
+      }
       appendLog('새로운 세션이 시작되었다.', 'story-line');
       break;
     case 'sessionNearlyFull':
@@ -1631,9 +1625,9 @@ async function startGame({ loadSlot, slot }) {
     const title = sessionSelect.selectedOptions[0]?.textContent ?? '';
     await renderSessionHistory(sessionId, slot ? '저장된 세션' : title.replace(/ · .*$/, ''));
     appendLog('이전 세션을 이어서 모험을 계속한다.', 'story-line');
-  } else {
-    renderHistory((await window.promptBattle.getFolderSession(chosenFolder)).history);
   }
+  // A new session starts on a clean log: Claude doesn't remember earlier
+  // sessions, so their chat isn't shown either.
   if (!slot) appendLog(`⭐ 레벨 ${profile.level} 보너스: 능력치 포인트 ${profile.level}개로 시작한다! 위쪽 버튼으로 바로 올려보자.`, 'coin-line');
   if (slot) {
     const from = loadSlot ? `슬롯 ${loadSlot}을(를)` : '이 세션의 자동 저장을';

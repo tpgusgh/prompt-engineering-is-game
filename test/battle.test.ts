@@ -292,7 +292,7 @@ test('/new resets the session and runs the rest of the line as a fresh-session p
   };
   await runDungeon(deps);
   assert.deepEqual(sessionIdsSeen, [undefined, undefined], 'the /new turn resumes nothing');
-  assert.ok(events.some((e) => e.type === 'sessionReset'));
+  assert.ok(events.some((e) => e.type === 'sessionReset' && e.reason === 'new'));
 });
 
 test('warns once when the session context passes 80% of the window', async () => {

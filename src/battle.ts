@@ -39,7 +39,8 @@ export type BattleEvent =
   | { type: 'playerDefeated' }
   | { type: 'floorCleared'; monsterName: string; xpGained: number }
   | { type: 'chapterCleared'; chapter: number }
-  | { type: 'sessionReset' }
+  // reason 'new': the player asked for a fresh session (/new).
+  | { type: 'sessionReset'; reason?: 'new' }
   | { type: 'sessionNearlyFull'; usedTokens: number; contextWindow: number }
   | { type: 'sessionSaved'; sessionId: string }
   | { type: 'fleeAttempt'; success: boolean }
@@ -539,7 +540,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (prompt === '/new' || prompt.startsWith('/new ')) {
         sessionId = undefined;
         warnedSessionFull = false;
-        deps.onBattleEvent({ type: 'sessionReset' });
+        deps.onBattleEvent({ type: 'sessionReset', reason: 'new' });
         prompt = prompt.slice('/new'.length).trim();
         if (prompt.length === 0) continue;
       }
