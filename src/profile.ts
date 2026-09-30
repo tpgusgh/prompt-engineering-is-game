@@ -6,6 +6,7 @@ import type { BattleSummary } from './battle.ts';
 import { VITALITY_HP } from './stats.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
+import { writeJsonAtomic } from './atomic-write.ts';
 
 export interface Profile {
   level: number;
@@ -77,15 +78,17 @@ export async function loadProfile(homeDir: string = os.homedir()): Promise<Profi
     const raw = await fs.readFile(profilePath(homeDir), 'utf-8');
     const parsed = JSON.parse(raw);
     return coerceProfile(parsed);
-  } catch {
+  } catch (err) {
+    // Unreadable (not just missing): keep a copy before the next save replaces it.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      await fs.copyFile(profilePath(homeDir), `${profilePath(homeDir)}.broken-${Date.now()}`).catch(() => {});
+    }
     return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {} };
   }
 }
 
 export async function saveProfile(profile: Profile, homeDir: string = os.homedir()): Promise<void> {
-  const filePath = profilePath(homeDir);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(profile, null, 2), 'utf-8');
+  await writeJsonAtomic(profilePath(homeDir), profile);
 }
 
 // Flat curve: every XP_PER_LEVEL XP is a level (the UI's XP bar fills toward it).

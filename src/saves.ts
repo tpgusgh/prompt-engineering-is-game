@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { SAVE_SLOTS, AUTO_SAVE_SLOT, type RunState } from './battle.ts';
+import { writeJsonAtomic } from './atomic-write.ts';
 
 export const SLOT_COUNT = SAVE_SLOTS;
 
@@ -61,7 +62,5 @@ export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSl
 export async function writeSlot(slot: number, data: SaveSlot, homeDir: string = os.homedir()): Promise<void> {
   const raw = await loadRaw(homeDir);
   raw[String(slot)] = data;
-  const file = storePath(homeDir);
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(raw, null, 2), 'utf-8');
+  await writeJsonAtomic(storePath(homeDir), raw);
 }

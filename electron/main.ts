@@ -20,6 +20,7 @@ import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
 import { isNewerVersion, updateMode, RELEASES_URL, LATEST_RELEASE_API, type UpdateStatus } from '../src/updates.ts';
 import { HERO_CLASSES, getHeroClass } from '../src/classes.ts';
+import { writeJsonAtomic } from '../src/atomic-write.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,11 @@ ipcMain.handle('stop-turn', () => {
   if (!currentTurnStop) return false;
   currentTurnStop.abort();
   return true;
+});
+// AI party on/off from the settings window: applies from the next turn.
+let currentParty = true;
+ipcMain.handle('set-party', (_event, on: boolean) => {
+  currentParty = Boolean(on);
 });
 ipcMain.handle('typing-hit', () => externalHit?.(1) ?? false);
 
@@ -250,7 +256,7 @@ ipcMain.handle('set-api-key', async (_event, key: string | null) => {
     if (!safeStorage.isEncryptionAvailable()) return { ok: false, message: '이 컴퓨터에서 키체인 암호화를 쓸 수 없어 저장하지 않았다' };
     apiKey = trimmed;
     const encrypted = safeStorage.encryptString(trimmed).toString('base64');
-    await fs.writeFile(SECRETS_FILE, JSON.stringify({ anthropicApiKey: encrypted }), { mode: 0o600 });
+    await writeJsonAtomic(SECRETS_FILE, { anthropicApiKey: encrypted }, 0o600);
   }
   capabilityCache.clear();
   return { ok: true, ...keyInfo() };
@@ -306,7 +312,7 @@ ipcMain.handle(
       : requested;
     currentCwd = path.resolve(options.cwd);
     queuedCommands = [];
-    const party = requested.party ?? true;
+    currentParty = requested.party ?? true;
     await authReady;
     currentClaude = profile.claude;
     const heroClass = getHeroClass(options.heroClass).id;
@@ -341,7 +347,7 @@ ipcMain.handle(
         currentTurnStop = stop;
         try {
           return await runAgentTurn(prompt, cwd, sessionId, onEvent, {
-            model: currentModel, party, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal,
+            model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal,
           });
         } finally {
           if (currentTurnStop === stop) currentTurnStop = null;

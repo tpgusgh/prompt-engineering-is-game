@@ -141,3 +141,13 @@ test('titles by level: the highest unlocked one applies', async () => {
   assert.equal(titleForLevel(999), TITLES[TITLES.length - 1].title);
   assert.deepEqual(TITLES.map((t) => t.level), [...TITLES.map((t) => t.level)].sort((a, b) => a - b), 'ascending');
 });
+
+test('an unreadable profile is kept as a .broken copy before falling back to defaults', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
+  await writeFile(path.join(dir, '.promptbattle', 'profile.json'), '');
+  const profile = await loadProfile(dir);
+  assert.equal(profile.level, 1);
+  const { readdir } = await import('node:fs/promises');
+  assert.ok((await readdir(path.join(dir, '.promptbattle'))).some((f) => f.startsWith('profile.json.broken-')));
+});

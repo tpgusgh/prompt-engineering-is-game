@@ -1,11 +1,16 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
-import { SNIPPETS } from './typing-snippets.js';
-import { MONSTER_LINES, BOSS_LINES, MERCHANT_IDLE, BLACKSMITH_IDLE } from './monster-lines.js';
+import { $ } from './dom.js';
+import { logEl, appendLog, scrollLogToBottom } from './log.js';
+import { THEMES, chapterInfo } from './story.js';
+import { decorateReply } from './reply-format.js';
+import { startTyping, stopTyping } from './typing-drill.js';
+import { speechFor } from './speech.js';
+import { openSettings } from './settings-window.js';
+import './updates.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
-const $ = (id) => document.getElementById(id);
 const setupScreen = $('setup-screen');
 const dungeonScreen = $('dungeon-screen');
 const summaryScreen = $('summary-screen');
@@ -32,7 +37,6 @@ const sessionBanner = $('session-banner');
 const sessionBannerText = $('session-banner-text');
 const sessionBannerPrompt = $('session-banner-prompt');
 const sessionBannerUse = $('session-banner-use');
-const logEl = $('log');
 const attackForm = $('attack-form');
 const promptInput = $('prompt-input');
 const fleeBtn = $('flee-btn');
@@ -65,51 +69,6 @@ const exitOverlay = $('exit-overlay');
 const exitConfirmBtn = $('exit-confirm');
 const exitCancelBtn = $('exit-cancel');
 
-// ---------------------------------------------------------------------------
-// Story. Each theme is a chain of chapters; every chapter ends in a boss
-// (the 6th floor of the cycle, see src/battle.ts). Beyond the written
-// chapters the story keeps going with generated ones — a project rarely ends
-// just because one boss fell.
-const THEMES = [
-  {
-    id: 'adventure',
-    title: '모험을 떠나기',
-    chapters: [
-      { title: '고대 유적의 입구', intro: '전설의 모험가가 되어, 미지의 유적에 첫 발을 내딛는다...', boss: '유적의 수호룡', outro: '수호룡이 쓰러지자, 유적 깊은 곳으로 이어지는 계단이 드러났다.' },
-      { title: '잊혀진 지하 도시', intro: '계단 아래에는 수백 년 전 버려진 도시가 잠들어 있었다...', boss: '심연의 파수꾼', outro: '파수꾼의 눈빛이 꺼지고, 천장의 틈 사이로 별빛이 쏟아진다.' },
-      { title: '별이 떨어진 산맥', intro: '별빛을 따라 오른 산맥 꼭대기, 하늘이 갈라져 있다...', boss: '별을 삼킨 용', outro: '마침내 별이 제자리로 돌아갔다. 하지만 지도 끝에는 아직 빈칸이 남아 있다.' },
-    ],
-  },
-  {
-    id: 'demon-king',
-    title: '마왕 잡으러 가기',
-    chapters: [
-      { title: '마왕성 외곽', intro: '세상을 위협하는 마왕을 물리치기 위해 검을 뽑아 든다...', boss: '마왕', outro: '마왕이 쓰러졌다! ...그런데 왕좌 뒤편에서 더 짙은 어둠이 꿈틀거린다.' },
-      { title: '흑막의 부활', intro: '마왕은 꼭두각시에 불과했다. 진짜 흑막, 마신이 깨어났다...', boss: '마신', outro: '마신이 소멸하며 남긴 균열이 다른 차원으로 이어져 있다.' },
-      { title: '차원의 틈', intro: '균열 너머, 모든 세계를 집어삼키려는 존재가 기다린다...', boss: '차원의 군주', outro: '세계는 구해졌다. 하지만 용사의 여정은 아직 끝나지 않았다.' },
-    ],
-  },
-  {
-    id: 'debug-quest',
-    title: '버그 소탕전',
-    chapters: [
-      { title: '레거시 모놀리스', intro: '코드 속 깊은 곳에 숨은 버그들을 소탕하러 던전에 들어선다...', boss: '레거시 코드 드래곤', outro: '드래곤을 리팩터링했다! ...그 순간 프로덕션 알람이 울린다.' },
-      { title: '새벽 3시의 장애', intro: '배포 직후, 모니터링 대시보드가 붉게 물든다...', boss: '새벽 3시의 장애 드래곤', outro: '장애가 복구됐다. 이제 미뤄둔 마이그레이션을 마주할 차례다.' },
-      { title: '끝나지 않는 마이그레이션', intro: '스키마 v1에서 v47까지, 수많은 마이그레이션이 길을 막는다...', boss: '끝나지 않는 마이그레이션', outro: '마이그레이션 완료. 백로그에는 아직 티켓이 남아 있다.' },
-    ],
-  },
-];
-
-function chapterInfo(theme, chapter) {
-  const written = theme.chapters[chapter - 1];
-  if (written) return written;
-  return {
-    title: `더 깊은 곳 (챕터 ${chapter})`,
-    intro: `이야기는 계속된다. 챕터 ${chapter}, 더 강한 적들이 기다리고 있다...`,
-    boss: `${chapter}번째 군주`,
-    outro: `챕터 ${chapter}의 군주가 쓰러졌다. 여정은 계속된다.`,
-  };
-}
 
 let weapons = [];
 let items = [];
@@ -145,29 +104,45 @@ const classWeapon = (model) => heroClass()?.weapons[model] ?? { name: '무기', 
 const enhancedName = (model, level) =>
   `${heroClass()?.modifiers[Math.max(0, Math.min(level, swordMax))] ?? ''} ${classWeapon(model).name}`.trim();
 
-function weaponLabel(w) {
-  return `${classWeapon(w.model).name} — ${classWeapon(w.model).flavor} (x${w.multiplier})`;
+// Token cost as dots: stronger models and higher effort use up the plan's
+// usage limits faster. Weapons are ranked by damage multiplier.
+const costDots = (n, max) => '●'.repeat(n) + '○'.repeat(Math.max(0, max - n));
+const weaponCost = (w) => costDots([...weapons].sort((a, b) => a.multiplier - b.multiplier).indexOf(w) + 1, weapons.length);
+
+// Setup choices are radio inputs styled as cards (keyboard still works).
+function choiceCard(name, value, checked, title, sub, onChange) {
+  const label = document.createElement('label');
+  label.className = 'choice';
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = name;
+  input.value = value;
+  input.checked = checked;
+  input.addEventListener('change', onChange);
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  label.append(input, strong);
+  if (sub) {
+    const small = document.createElement('small');
+    small.textContent = sub;
+    label.append(small);
+  }
+  return label;
 }
 
 function renderWeaponOptions() {
   weaponOptionsEl.textContent = '';
   weaponSelect.textContent = '';
   for (const w of weapons) {
-    const label = document.createElement('label');
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'weapon';
-    input.value = w.model;
-    input.checked = w.model === chosenWeapon;
-    input.addEventListener('change', () => {
+    const card = choiceCard('weapon', w.model, w.model === chosenWeapon, classWeapon(w.model).name, `${classWeapon(w.model).flavor} · 피해 x${w.multiplier} · 토큰 ${weaponCost(w)}`, () => {
       chosenWeapon = w.model;
     });
-    label.append(input, ` ${weaponLabel(w)}`);
-    weaponOptionsEl.append(label);
+    card.title = classWeapon(w.model).flavor;
+    weaponOptionsEl.append(card);
 
     const option = document.createElement('option');
     option.value = w.model;
-    option.textContent = `${classWeapon(w.model).name} (x${w.multiplier})`;
+    option.textContent = `${classWeapon(w.model).name} (x${w.multiplier} · 토큰 ${weaponCost(w)})`;
     weaponSelect.append(option);
   }
   weaponSelect.value = chosenWeapon;
@@ -177,22 +152,11 @@ function renderClassOptions() {
   const el = $('class-options');
   el.textContent = '';
   for (const c of heroClasses) {
-    const label = document.createElement('label');
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'hero-class';
-    input.value = c.id;
-    input.checked = c.id === chosenClass;
-    input.addEventListener('change', () => {
+    const card = choiceCard('hero-class', c.id, c.id === chosenClass, `${c.icon} ${c.name}`, Object.values(c.weapons).map((w) => w.name).join(' · '), () => {
       chosenClass = c.id;
       renderWeaponOptions();
-      renderSetupStats();
     });
-    const sub = document.createElement('span');
-    sub.className = 'option-sub';
-    sub.textContent = `(${Object.values(c.weapons).map((w) => w.name).join(' · ')})`;
-    label.append(input, ` ${c.icon} ${c.name} `, sub);
-    el.append(label);
+    el.append(card);
   }
 }
 
@@ -225,30 +189,17 @@ async function loadSetup() {
   statDefs = info.stats;
   statMax = info.statMaxLevel;
   swordMax = info.swordMaxLevel;
-  renderSetupStats();
   renderProfileLine();
 
   themeOptionsEl.textContent = '';
   for (const theme of THEMES) {
-    const label = document.createElement('label');
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.name = 'theme';
-    input.value = theme.id;
-    input.checked = theme.id === chosenThemeId;
-    input.addEventListener('change', () => {
-      chosenThemeId = theme.id;
-      refreshContinueOption();
-    });
-    label.append(input, ` ${theme.title}`);
     const floor = savedFloor(theme.id);
-    if (floor > 0) {
-      const sub = document.createElement('span');
-      sub.className = 'option-sub';
-      sub.textContent = `(${floorText(floor)}까지 진행)`;
-      label.append(sub);
-    }
-    themeOptionsEl.append(label);
+    themeOptionsEl.append(
+      choiceCard('theme', theme.id, theme.id === chosenThemeId, theme.title, floor > 0 ? `${floorText(floor)}까지 진행` : '처음부터', () => {
+        chosenThemeId = theme.id;
+        refreshContinueOption();
+      }),
+    );
   }
 
   renderClassOptions();
@@ -257,33 +208,6 @@ async function loadSetup() {
   renderClaudeSettings();
 }
 loadSetup();
-
-// ---------------------------------------------------------------------------
-// Stats: read-only on the setup screen; points from defeated monsters are
-// spent in battle (stat panel). The sword's +N comes from the blacksmith.
-function renderSetupStats() {
-  const list = $('stat-options');
-  list.textContent = '';
-  for (const s of statDefs) {
-    const row = document.createElement('div');
-    row.className = 'stat-row';
-    const label = document.createElement('span');
-    label.textContent = `${s.name} (최대 Lv.${statMax})`;
-    const effect = document.createElement('span');
-    effect.className = 'option-sub';
-    effect.textContent = s.effect;
-    row.append(label, effect);
-    list.append(row);
-  }
-  const sword = document.createElement('div');
-  sword.className = 'stat-row';
-  sword.append(`무기 강화 +${profile.swordLevel}/${swordMax}`);
-  const swordFx = document.createElement('span');
-  swordFx.className = 'option-sub';
-  swordFx.textContent = `"${enhancedName(chosenWeapon, profile.swordLevel)}" · 피해 +${profile.swordLevel * 10}% (영구)`;
-  sword.append(swordFx);
-  list.append(sword);
-}
 
 function renderProfileLine() {
   profileLineEl.textContent = `🎖 ${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}`;
@@ -463,174 +387,6 @@ function renderParty() {
   el.textContent = `프로세스 ${members.length + 1}개 동시 진행 · ` + members.map((m) => `${roleOf(m.agentType).icon} ${roleOf(m.agentType).name}: ${m.description}`).join('  ·  ') + bg;
 }
 
-// Coding typing drill while the AI works: type a random line of code
-// exactly; finishing it deals 1 damage, shows what it does for 3s (tap for
-// the long explanation, which pauses), then the next line.
-const typingInput = $('typing-input');
-let typingSnippet = null;
-let typingStartedAt = 0;
-let typingMistakes = 0;
-let typingDone = 0;
-let typingNextTimer = null;
-let typingActive = false;
-let lastTypedTitle = '';
-
-function renderTypingTarget() {
-  const typed = typingInput.value;
-  const target = $('typing-target');
-  target.textContent = '';
-  const code = typingSnippet.code;
-  for (let i = 0; i < code.length; i++) {
-    const span = document.createElement('span');
-    span.textContent = code[i];
-    if (i < typed.length) span.className = typed[i] === code[i] ? 'ok' : 'bad';
-    else if (i === typed.length) span.className = 'cursor';
-    target.append(span);
-  }
-}
-
-// Which languages to drill (remembered on this machine; empty = all).
-const TYPING_LANGS_KEY = 'pb-typing-langs';
-const ALL_LANGS = [...new Set(SNIPPETS.map((s) => s.lang))].sort((a, b) => a.localeCompare(b));
-let typingLangs = new Set();
-try {
-  typingLangs = new Set(JSON.parse(localStorage.getItem(TYPING_LANGS_KEY) || '[]').filter((l) => ALL_LANGS.includes(l)));
-} catch {}
-const typingPool = () => {
-  const pool = typingLangs.size ? SNIPPETS.filter((s) => typingLangs.has(s.lang)) : SNIPPETS;
-  return pool.length ? pool : SNIPPETS;
-};
-function saveTypingLangs() {
-  try {
-    localStorage.setItem(TYPING_LANGS_KEY, JSON.stringify([...typingLangs]));
-  } catch {}
-}
-function renderTypingLangs() {
-  const panel = $('typing-langs');
-  panel.textContent = '';
-  const count = (lang) => SNIPPETS.filter((s) => s.lang === lang).length;
-  const all = document.createElement('button');
-  all.type = 'button';
-  all.textContent = typingLangs.size ? '전부 보기' : '✓ 전부';
-  all.addEventListener('click', () => {
-    typingLangs.clear();
-    saveTypingLangs();
-    renderTypingLangs();
-    if (typingActive) nextSnippet();
-  });
-  panel.append(all);
-  for (const lang of ALL_LANGS) {
-    const label = document.createElement('label');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = typingLangs.has(lang);
-    box.addEventListener('change', () => {
-      if (box.checked) typingLangs.add(lang);
-      else typingLangs.delete(lang);
-      saveTypingLangs();
-      renderTypingLangs();
-      // Switch right away if the current line is no longer in the pool.
-      if (typingActive && typingSnippet && !typingPool().includes(typingSnippet)) nextSnippet();
-    });
-    label.append(box, ` ${lang} `);
-    const n = document.createElement('span');
-    n.className = 'option-sub';
-    n.textContent = String(count(lang));
-    label.append(n);
-    panel.append(label);
-  }
-  $('typing-settings').textContent = typingLangs.size ? `⚙️ ${[...typingLangs].join(', ')}` : '⚙️ 언어: 전부';
-}
-$('typing-settings').addEventListener('click', () => {
-  $('typing-langs').hidden = !$('typing-langs').hidden;
-});
-renderTypingLangs();
-
-function nextSnippet() {
-  clearTimeout(typingNextTimer);
-  const pool = typingPool();
-  let pickOne;
-  do pickOne = pool[Math.floor(Math.random() * pool.length)];
-  while (pool.length > 1 && pickOne === typingSnippet);
-  typingSnippet = pickOne;
-  typingStartedAt = 0;
-  typingMistakes = 0;
-  typingInput.value = '';
-  typingInput.disabled = false;
-  $('typing-lang').textContent = typingSnippet.lang;
-  $('typing-explain').hidden = true;
-  renderTypingTarget();
-  if (typingActive) typingInput.focus();
-}
-
-function startTyping() {
-  typingActive = true;
-  typingDone = 0;
-  $('typing-stats').textContent = '';
-  nextSnippet();
-}
-
-function stopTyping() {
-  typingActive = false;
-  clearTimeout(typingNextTimer);
-  if (typingDone > 0) appendLog(`⌨️ 기다리는 동안 코드 ${typingDone}줄을 완성했다!`, 'coin-line');
-  typingDone = 0;
-}
-
-typingInput.addEventListener('input', async () => {
-  if (!typingSnippet) return;
-  const value = typingInput.value;
-  $('typing-hint').hidden = !/[\u3131-\u318e\uac00-\ud7a3]/.test(value);
-  if (!typingStartedAt && value) typingStartedAt = performance.now();
-  const i = value.length - 1;
-  if (i >= 0 && value[i] !== typingSnippet.code[i]) {
-    typingMistakes += 1;
-    sfx('typo');
-  } else if (i >= 0) sfx('key');
-  renderTypingTarget();
-  if (value !== typingSnippet.code) return;
-  // Completed.
-  typingInput.disabled = true;
-  typingDone += 1;
-  const minutes = Math.max(0.01, (performance.now() - typingStartedAt) / 60000);
-  const cpm = Math.round(typingSnippet.code.length / minutes);
-  const accuracy = Math.max(0, Math.round(100 - (typingMistakes / typingSnippet.code.length) * 100));
-  $('typing-stats').textContent = `${cpm}타/분 · 정확도 ${accuracy}% · ${typingDone}줄 완성`;
-  lastTypedTitle = typingSnippet.title;
-  sfx('typed');
-  window.promptBattle.typingHit();
-  const explain = $('typing-explain');
-  explain.hidden = false;
-  explain.className = 'typing-explain';
-  explain.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'typing-explain-title';
-  head.textContent = `✅ ${typingSnippet.title}`;
-  const body = document.createElement('div');
-  body.textContent = typingSnippet.short;
-  const more = document.createElement('div');
-  more.className = 'option-sub';
-  more.textContent = '눌러서 자세히 보기';
-  explain.append(head, body, more);
-  const snippet = typingSnippet;
-  explain.onclick = () => {
-    // Long view: pause the auto-advance until "next" is pressed.
-    clearTimeout(typingNextTimer);
-    explain.classList.add('long');
-    body.textContent = snippet.long;
-    more.textContent = '';
-    const next = document.createElement('button');
-    next.type = 'button';
-    next.textContent = '다음 코드 ▶';
-    next.onclick = (e) => {
-      e.stopPropagation();
-      nextSnippet();
-    };
-    more.append(next);
-    explain.onclick = null;
-  };
-  typingNextTimer = setTimeout(() => typingActive && nextSnippet(), 3000);
-});
 
 // ---------------------------------------------------------------------------
 // Live typing: the AI's streamed text is typed into a bubble a few
@@ -704,18 +460,6 @@ pickFolderBtn.addEventListener('click', async () => {
   }
 });
 
-function scrollLogToBottom() {
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
-function appendLog(text, className) {
-  const line = document.createElement('div');
-  if (className) line.className = className;
-  line.textContent = text;
-  logEl.appendChild(line);
-  scrollLogToBottom();
-  return line;
-}
 
 // My most recent message, shown next to the monster so I remember what I
 // asked for while the AI works on it.
@@ -1943,88 +1687,6 @@ promptInput.addEventListener('keydown', (e) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Color the important parts of a reply: success / failure / warning words and
-// file paths in prose, and a light syntax highlight inside code blocks.
-const HIGHLIGHTS = [
-  { cls: 'hl-bad', re: /(실패|오류|에러|버그|깨짐|\berror\b|\bfail(?:ed|ure|s)?\b|\bexception\b|❌|✗)/gi },
-  { cls: 'hl-ok', re: /(성공|통과|완료|해결|수정됨|고쳤|\bpass(?:ed|es)?\b|\bsuccess\b|✅|✓)/gi },
-  { cls: 'hl-warn', re: /(주의|경고|위험|\bwarning\b|\bTODO\b|⚠️?)/gi },
-  { cls: 'hl-path', re: /(?:[\w.-]+\/)*[\w.-]+\.(?:tsx?|jsx?|mjs|cjs|py|json|md|css|html|go|rs|java|kt|swift|c|cpp|h|sh|ya?ml|toml|sql|txt)\b/g },
-];
-
-function highlightText(root) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement.closest('pre, code, a, .hl') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
-  });
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const node of nodes) {
-    const text = node.nodeValue;
-    const marks = [];
-    for (const { cls, re } of HIGHLIGHTS) {
-      re.lastIndex = 0;
-      for (let m; (m = re.exec(text)); ) marks.push({ start: m.index, end: m.index + m[0].length, cls });
-    }
-    if (marks.length === 0) continue;
-    marks.sort((a, b) => a.start - b.start || b.end - a.end);
-    const frag = document.createDocumentFragment();
-    let pos = 0;
-    for (const mk of marks) {
-      if (mk.start < pos) continue; // overlapping: first one wins
-      frag.append(text.slice(pos, mk.start));
-      const span = document.createElement('span');
-      span.className = `hl ${mk.cls}`;
-      span.textContent = text.slice(mk.start, mk.end);
-      frag.append(span);
-      pos = mk.end;
-    }
-    frag.append(text.slice(pos));
-    node.replaceWith(frag);
-  }
-}
-
-const KEYWORDS = new Set(('const let var function return if else for while do switch case break continue new class extends import export from default async await try catch finally throw typeof instanceof in of yield ' +
-  'def lambda pass with as elif not and or is None True False self print ' +
-  'func go defer chan struct interface type package map range fn let mut impl pub use match enum trait ' +
-  'public private protected static void int string bool float double long char null true false this super ' +
-  'SELECT FROM WHERE JOIN ON GROUP BY ORDER INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX AND OR NOT LIMIT HAVING AS').split(/\s+/));
-
-function highlightCode(codeEl) {
-  const lang = (codeEl.className.match(/language-(\w+)/) || [])[1] || '';
-  const hashComments = /^(py|python|bash|sh|shell|zsh|yaml|yml|toml|ruby|rb|r|dockerfile|make)$/i.test(lang);
-  const src = codeEl.textContent;
-  const token = new RegExp(
-    [
-      hashComments ? '(#.*)' : '(\\/\\/.*|\\/\\*[\\s\\S]*?\\*\\/)',
-      '("(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`)',
-      '(\\b\\d+(?:\\.\\d+)?\\b)',
-      '([A-Za-z_][\\w]*)',
-    ].join('|'),
-    'g',
-  );
-  const frag = document.createDocumentFragment();
-  let pos = 0;
-  for (let m; (m = token.exec(src)); ) {
-    const [whole, comment, str, num, word] = m;
-    const cls = comment ? 'tok-com' : str ? 'tok-str' : num ? 'tok-num' : word && KEYWORDS.has(word) ? 'tok-kw' : null;
-    if (!cls) continue;
-    frag.append(src.slice(pos, m.index));
-    const span = document.createElement('span');
-    span.className = cls;
-    span.textContent = whole;
-    frag.append(span);
-    pos = m.index + whole.length;
-  }
-  frag.append(src.slice(pos));
-  codeEl.textContent = '';
-  codeEl.append(frag);
-}
-
-function decorateReply(el) {
-  highlightText(el);
-  for (const code of el.querySelectorAll('pre code')) highlightCode(code);
-}
 
 // ---------------------------------------------------------------------------
 // Tool cards: what the AI *does* (commands, edits, reads) is shown as a
@@ -2131,7 +1793,8 @@ function renderEffortSelects() {
       const { label, multiplier } = speedInfo.attackSpeed[level];
       const option = document.createElement('option');
       option.value = level;
-      option.textContent = select.id === 'effort-battle' ? `${label} x${multiplier}` : `${label} — ${level} (피해 x${multiplier})`;
+      const cost = costDots(speedInfo.levels.indexOf(level) + 1, speedInfo.levels.length);
+      option.textContent = select.id === 'effort-battle' ? `${label} x${multiplier} · 토큰 ${cost}` : `${label} — ${level} (피해 x${multiplier} · 토큰 ${cost})`;
       select.append(option);
     }
     select.value = claudeSettings.effort;
@@ -2519,129 +2182,4 @@ setInterval(() => {
   if (agentRuns.some((r) => !r.endedAt)) renderAgents();
 }, 1000);
 
-// ---------------------------------------------------------------------------
-// Monster speech bubble: idle chatter that keeps changing, plus lines when it
-// appears, gets hit, attacks, is blocked, is nearly dead, dies, or you flee.
-const speech = { index: 0, isBoss: false, dead: false, saidLow: false, last: '', lastEventAt: 0, idleTimer: null };
-const speechEl = $('monster-speech');
-function linesFor(kind) {
-  const own = MONSTER_LINES[speech.index % MONSTER_LINES.length]?.[kind] ?? [];
-  return speech.isBoss ? [...own, ...(BOSS_LINES[kind] ?? [])] : own;
-}
-function pickLine(lines) {
-  if (lines.length === 0) return null;
-  let line;
-  do line = lines[Math.floor(Math.random() * lines.length)];
-  while (lines.length > 1 && line === speech.last);
-  speech.last = line;
-  return line;
-}
-function monsterSay(kind) {
-  const line = pickLine(linesFor(kind));
-  if (!line) return;
-  speechEl.textContent = line;
-  speechEl.className = `monster-speech say-${kind}`;
-  speechEl.hidden = false;
-  void speechEl.offsetWidth; // restart the pop
-  speechEl.classList.add('pop');
-  if (kind !== 'idle') speech.lastEventAt = Date.now();
-  scheduleIdle();
-}
-function scheduleIdle() {
-  clearTimeout(speech.idleTimer);
-  speech.idleTimer = setTimeout(() => {
-    if (!speech.dead && !monsterPanel.hidden && !dungeonScreen.hidden && Date.now() - speech.lastEventAt > 4000) monsterSay('idle');
-    else scheduleIdle();
-  }, 6000 + Math.random() * 2000);
-}
-function speechFor(event) {
-  switch (event.type) {
-    case 'floorStart':
-      Object.assign(speech, { index: event.monsterIndex, isBoss: event.isBoss, dead: false, saidLow: false });
-      monsterSay('appear');
-      break;
-    case 'partialHit':
-    case 'typingHit':
-      // Many hits can land in a row: don't flicker the bubble on every one.
-      if (!speech.dead && Date.now() - speech.lastEventAt > 1800) monsterSay('hit');
-      break;
-    case 'attack':
-      if (!speech.dead) monsterSay(event.crit ? 'crit' : 'hit');
-      break;
-    case 'hpChanged':
-      if (!speech.dead && !speech.saidLow && event.hp > 0 && event.hp <= event.maxHp * 0.25) {
-        speech.saidLow = true;
-        monsterSay('lowHp');
-      }
-      break;
-    case 'monsterAttack':
-      monsterSay('attack');
-      break;
-    case 'counterBlocked':
-      monsterSay('blocked');
-      break;
-    case 'floorCleared':
-      speech.dead = true;
-      monsterSay('death');
-      break;
-    case 'fleeAttempt':
-      if (event.success) monsterSay('flee');
-      break;
-    case 'merchantOpen':
-      startShopChatter(merchantPanel, MERCHANT_IDLE);
-      break;
-    case 'blacksmithOpen':
-      startShopChatter($('blacksmith-panel'), BLACKSMITH_IDLE);
-      break;
-    case 'merchantClosed':
-    case 'blacksmithClosed':
-      stopShopChatter();
-      break;
-  }
-}
-// Shopkeepers: their greeting line keeps changing while the shop is open.
-let shopTimer = null;
-function startShopChatter(panel, lines) {
-  stopShopChatter();
-  const greet = panel.querySelector('.merchant-greeting');
-  const first = greet.textContent;
-  let last = first;
-  shopTimer = setInterval(() => {
-    let line;
-    do line = lines[Math.floor(Math.random() * lines.length)];
-    while (lines.length > 1 && line === last);
-    last = line;
-    greet.textContent = `"${line}"`;
-    greet.classList.remove('pop');
-    void greet.offsetWidth;
-    greet.classList.add('pop');
-  }, 6000);
-}
-function stopShopChatter() {
-  clearInterval(shopTimer);
-  shopTimer = null;
-}
 
-// ---------------------------------------------------------------------------
-// New version banner: Windows/Linux AppImage download it in the background
-// and install on restart; the Mac build links to the release page.
-function showUpdate(status) {
-  if (!status) return;
-  const action = $('update-action');
-  action.hidden = status.state === 'downloading';
-  if (status.state === 'available') {
-    $('update-text').textContent = `🆕 새 버전 v${status.version}이 나왔다!`;
-    action.textContent = '다운로드 페이지';
-    action.onclick = () => window.promptBattle.openReleasePage();
-  } else if (status.state === 'downloading') {
-    $('update-text').textContent = `⬇️ 새 버전 v${status.version} 받는 중...`;
-  } else {
-    $('update-text').textContent = `✅ 새 버전 v${status.version} 준비 완료`;
-    action.textContent = '재시작해서 설치';
-    action.onclick = () => window.promptBattle.installUpdate();
-  }
-  $('update-banner').hidden = false;
-}
-$('update-dismiss').addEventListener('click', () => ($('update-banner').hidden = true));
-window.promptBattle.onUpdateStatus(showUpdate);
-window.promptBattle.checkUpdate().then(showUpdate);

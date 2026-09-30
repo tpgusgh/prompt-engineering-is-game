@@ -8,84 +8,59 @@
   </head>
   <body>
     <section id="setup-screen">
-      <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
-      <p id="profile-line" class="profile-line"></p>
-      <div class="xp-row setup-xp"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
-      <button id="pick-folder-btn">프로젝트 폴더 선택</button>
-      <p id="folder-path"></p>
-      <label id="session-picker" class="continue-label" hidden>
-        Claude 세션 <select id="session-select"></select>
-        <span id="session-hint" class="option-sub"></span>
-      </label>
-      <fieldset>
-        <legend>테마</legend>
-        <div id="theme-options" class="option-list"></div>
+      <header class="setup-header">
+        <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
+        <div class="setup-hero">
+          <p id="profile-line" class="profile-line"></p>
+          <div class="xp-row setup-xp"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
+        </div>
+        <button type="button" class="settings-btn" data-open-settings title="설정">⚙️ 설정</button>
+      </header>
+
+      <div class="setup-card folder-card">
+        <button id="pick-folder-btn">📁 프로젝트 폴더 선택</button>
+        <p id="folder-path" class="folder-path">AI가 작업할 폴더를 골라줘</p>
+        <label id="session-picker" class="continue-label" hidden>
+          Claude 세션 <select id="session-select"></select>
+          <span id="session-hint" class="option-sub"></span>
+        </label>
+      </div>
+
+      <div class="setup-card">
+        <h2 class="card-title">⚔️ 새 모험</h2>
+        <div class="choice-row">
+          <span class="choice-label">테마</span>
+          <div id="theme-options" class="choice-grid"></div>
+        </div>
         <label id="continue-label" class="continue-label" hidden>
           <input type="checkbox" id="continue-story" /> <span id="continue-text"></span>
         </label>
-      </fieldset>
-      <fieldset>
-        <legend>직업</legend>
-        <div id="class-options" class="option-list class-options"></div>
-      </fieldset>
-      <fieldset>
-        <legend>무기 (Claude 모델)</legend>
-        <div id="weapon-options" class="option-list"></div>
-      </fieldset>
-      <fieldset>
-        <legend>용사 능력치</legend>
-        <div id="stat-options" class="stat-list"></div>
-        <p class="option-sub">능력치는 판마다 Lv.0부터 시작: 새 판은 <strong>용사 레벨만큼 포인트</strong>를 받고 시작하고, 몬스터를 쓰러뜨릴 때마다 포인트 1개 (전투 중 사용). 저장 슬롯을 불러오면 그 판의 능력치가 돌아온다. 무기 강화는 영구 (던전의 대장장이).</p>
-      </fieldset>
-      <fieldset>
-        <legend>⚙️ Claude 설정 <span class="option-sub">(이 게임의 세션에만 적용 · 내 Claude Code 설정은 안 바뀜)</span></legend>
-        <div class="setting-row">
-          🔑 연결 방식
-          <label><input type="radio" name="auth-mode" value="cli" /> Claude Code 로그인 (CLI)</label>
-          <label><input type="radio" name="auth-mode" value="api" /> API 키</label>
-          <button type="button" id="auth-check">연결 확인</button>
-          <span id="auth-status" class="option-sub"></span>
+        <div class="choice-row">
+          <span class="choice-label">직업</span>
+          <div id="class-options" class="choice-grid"></div>
         </div>
-        <div id="api-key-row" class="setting-row" hidden>
-          <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
-          <button type="button" id="api-key-save">저장</button>
-          <button type="button" id="api-key-clear">삭제</button>
-          <span id="api-key-info" class="option-sub"></span>
-        </div>
-        <label class="setting-row">⚡ 공격 속도 (effort) <select id="effort-select"></select></label>
-        <div class="setting-row">
-          🧩 스킬
-          <label><input type="radio" name="skills-mode" value="all" /> 전부 켜기</label>
-          <label><input type="radio" name="skills-mode" value="none" /> 전부 끄기</label>
-          <label><input type="radio" name="skills-mode" value="custom" /> 골라서 켜기</label>
-          <span id="skill-count" class="option-sub"></span>
-        </div>
-        <div id="skill-picker" class="skill-picker" hidden>
-          <div class="skill-tools">
-            <input id="skill-search" placeholder="스킬 검색 (이름·설명)" autocomplete="off" />
-            <button type="button" id="skill-all-visible">보이는 것 켜기</button>
-            <button type="button" id="skill-none-visible">보이는 것 끄기</button>
+        <div class="choice-row">
+          <span class="choice-label">무기</span>
+          <div>
+            <div id="weapon-options" class="choice-grid"></div>
+            <p class="choice-hint">토큰 ●가 많을수록 세게 때리지만 Claude 사용량 한도가 빨리 줄어든다.</p>
           </div>
-          <div id="skill-list" class="skill-list"></div>
         </div>
-        <div class="setting-row">🔌 MCP 서버 <button type="button" id="caps-refresh" title="다시 불러오기">↻</button></div>
-        <div id="mcp-list" class="mcp-list"></div>
-      </fieldset>
-      <fieldset>
-        <legend>AI 파티</legend>
-        <label><input type="checkbox" id="party-mode" checked /> 🧙 마법사 · 🗡 검사 · 🏹 궁수 서브에이전트 사용 <span class="option-sub">(AI가 여러 에이전트를 동시에 보내 탐색·구현·검증 — 토큰을 더 씀)</span></label>
-      </fieldset>
-      <fieldset>
-        <legend>난이도</legend>
-        <label><input type="radio" name="difficulty" value="easy" /> 쉬움</label>
-        <label><input type="radio" name="difficulty" value="normal" checked /> 보통</label>
-        <label><input type="radio" name="difficulty" value="hard" /> 어려움</label>
-      </fieldset>
-      <button id="start-btn" disabled>던전 입장</button>
-      <fieldset>
-        <legend>불러오기</legend>
-        <div id="slot-list" class="slot-list"></div>
-      </fieldset>
+        <div class="choice-row">
+          <span class="choice-label">난이도</span>
+          <div class="choice-grid difficulty-grid">
+            <label class="choice"><input type="radio" name="difficulty" value="easy" /><strong>쉬움</strong></label>
+            <label class="choice"><input type="radio" name="difficulty" value="normal" checked /><strong>보통</strong></label>
+            <label class="choice"><input type="radio" name="difficulty" value="hard" /><strong>어려움</strong></label>
+          </div>
+        </div>
+        <button id="start-btn" class="start-btn" disabled>▶ 던전 입장</button>
+      </div>
+
+      <div class="setup-card">
+        <h2 class="card-title">💾 이어하기</h2>
+        <div id="slot-list" class="slot-list slot-grid"></div>
+      </div>
       <p id="setup-error" class="error-text" hidden></p>
       <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
     </section>
@@ -117,6 +92,7 @@
         <div class="battle-top">
           <div id="chapter-banner" class="chapter-banner"></div>
           <button type="button" id="agents-btn" class="agents-btn" title="서브에이전트 기록 (최근 10개)">👥 에이전트</button>
+          <button type="button" class="agents-btn" data-open-settings title="설정">⚙️</button>
         </div>
         <div id="monster-panel">
           <h2 id="monster-name"></h2>
@@ -142,10 +118,6 @@
           <span id="coin-label" class="coin-label"></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
           <label class="weapon-select" title="effort: 느릴수록 깊게 생각하고 세게 때린다">⚡ <select id="effort-battle"></select></label>
-          <span class="sound-controls">
-            <button type="button" id="mute-btn" title="소리 켜기/끄기">🔊</button>
-            <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />
-          </span>
         </div>
         <div id="stat-panel" class="stat-panel"></div>
 
@@ -201,7 +173,6 @@
               <span id="typing-stats" class="typing-stats"></span>
               <button type="button" id="typing-settings" class="typing-settings" title="연습할 언어 고르기">⚙️ 언어</button>
             </div>
-            <div id="typing-langs" class="typing-langs" hidden></div>
             <div id="typing-target" class="typing-target"></div>
             <input id="typing-input" class="typing-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="위 코드를 똑같이 입력 (영문) — 완성하면 몬스터에게 1 피해" />
             <div id="typing-hint" class="typing-hint" hidden>한/영 키로 영문 입력으로 바꿔줘</div>
@@ -307,6 +278,71 @@
           </span>
         </div>
         <div id="file-viewer-body" class="file-viewer-body"></div>
+      </div>
+    </div>
+
+    <div id="settings-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel" role="dialog" aria-label="설정">
+        <div class="settings-head">
+          <h2>⚙️ 설정</h2>
+          <button type="button" id="settings-close" aria-label="닫기">✕</button>
+        </div>
+        <nav class="settings-tabs">
+          <button type="button" data-tab="claude" class="active">🤖 Claude</button>
+          <button type="button" data-tab="party">🧙 AI 파티</button>
+          <button type="button" data-tab="sound">🔊 사운드</button>
+          <button type="button" data-tab="typing">⌨️ 코딩 타자</button>
+        </nav>
+        <section class="settings-tab" data-tab="claude">
+          <p class="option-sub">이 게임의 세션에만 적용 · 내 Claude Code 설정은 안 바뀜. 게임 중에 바꾸면 다음 공격부터.</p>
+        <div class="setting-row">
+          🔑 연결 방식
+          <label><input type="radio" name="auth-mode" value="cli" /> Claude Code 로그인 (CLI)</label>
+          <label><input type="radio" name="auth-mode" value="api" /> API 키</label>
+          <button type="button" id="auth-check">연결 확인</button>
+          <span id="auth-status" class="option-sub"></span>
+        </div>
+        <div id="api-key-row" class="setting-row" hidden>
+          <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+          <button type="button" id="api-key-save">저장</button>
+          <button type="button" id="api-key-clear">삭제</button>
+          <span id="api-key-info" class="option-sub"></span>
+        </div>
+        <label class="setting-row">⚡ 공격 속도 (effort) <select id="effort-select"></select></label>
+        <p class="option-sub">느릴수록 깊게 생각해서 세게 때리지만 토큰 ●가 많이 든다.</p>
+        <div class="setting-row">
+          🧩 스킬
+          <label><input type="radio" name="skills-mode" value="all" /> 전부 켜기</label>
+          <label><input type="radio" name="skills-mode" value="none" /> 전부 끄기</label>
+          <label><input type="radio" name="skills-mode" value="custom" /> 골라서 켜기</label>
+          <span id="skill-count" class="option-sub"></span>
+        </div>
+        <div id="skill-picker" class="skill-picker" hidden>
+          <div class="skill-tools">
+            <input id="skill-search" placeholder="스킬 검색 (이름·설명)" autocomplete="off" />
+            <button type="button" id="skill-all-visible">보이는 것 켜기</button>
+            <button type="button" id="skill-none-visible">보이는 것 끄기</button>
+          </div>
+          <div id="skill-list" class="skill-list"></div>
+        </div>
+        <div class="setting-row">🔌 MCP 서버 <button type="button" id="caps-refresh" title="다시 불러오기">↻</button></div>
+        <div id="mcp-list" class="mcp-list"></div>
+        </section>
+        <section class="settings-tab" data-tab="party" hidden>
+          <label class="setting-row party-toggle"><input type="checkbox" id="party-mode" checked /> <strong>파티 모드 켜기</strong></label>
+          <p class="option-sub">🧙 마법사 · 🗡 검사 · 🏹 궁수가 서브에이전트로 함께 싸운다. AI가 여러 에이전트를 동시에 보내 탐색·구현·검증해서 빠르지만, 토큰을 더 쓴다 (토큰 ●●●). 게임 중에 바꾸면 다음 공격부터 적용.</p>
+        </section>
+        <section class="settings-tab" data-tab="sound" hidden>
+          <div class="setting-row sound-controls">
+            <button type="button" id="mute-btn" title="소리 켜기/끄기">🔊</button>
+            <input type="range" id="volume" min="0" max="1" step="0.05" title="볼륨" />
+            <span class="option-sub">배경음악 · 효과음</span>
+          </div>
+        </section>
+        <section class="settings-tab" data-tab="typing" hidden>
+          <p class="option-sub">AI를 기다리는 동안 나오는 코딩 타자 연습 언어. 아무것도 안 고르면 전부.</p>
+          <div id="typing-langs" class="typing-langs"></div>
+        </section>
       </div>
     </div>
 

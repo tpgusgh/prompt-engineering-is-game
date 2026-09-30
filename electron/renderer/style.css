@@ -12,7 +12,11 @@ body {
 [hidden] {
   display: none !important;
 }
-#setup-screen,
+#setup-screen {
+  max-width: 760px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
 #summary-screen {
   max-width: 420px;
   margin: 80px auto;
@@ -22,7 +26,8 @@ body {
   font-size: 28px;
 }
 #setup-screen button,
-#summary-screen button {
+#summary-screen button,
+.settings-panel button {
   margin-top: 16px;
   padding: 10px 20px;
   font-size: 14px;
@@ -1359,14 +1364,14 @@ body {
 .mcp-connected { color: #a3be8c; }
 .mcp-failed { color: #bf616a; }
 .mcp-needs-auth { color: #ebcb8b; }
-#setup-screen .skill-tools button,
-#setup-screen #caps-refresh {
+.settings-panel .skill-tools button,
+.settings-panel #caps-refresh {
   margin: 0;
   padding: 3px 10px;
   font-size: 12px;
   white-space: nowrap;
 }
-#setup-screen .skill-tools input {
+.settings-panel .skill-tools input {
   min-width: 0;
   margin: 0;
   padding: 4px 8px;
@@ -1476,9 +1481,9 @@ body {
   border: 1px solid #4c566a;
   border-radius: 4px;
 }
-#setup-screen #auth-check,
-#setup-screen #api-key-save,
-#setup-screen #api-key-clear {
+.settings-panel #auth-check,
+.settings-panel #api-key-save,
+.settings-panel #api-key-clear {
   margin: 0;
   padding: 3px 10px;
   font-size: 12px;
@@ -1587,8 +1592,7 @@ body {
 .xp-level { color: #ebcb8b; font-weight: bold; }
 .xp-label { color: #aeb7c7; font-size: 11px; white-space: nowrap; }
 .setup-xp {
-  justify-content: center;
-  margin: -4px 0 10px;
+  margin: 4px 0 0;
 }
 .setup-xp .hp-bar-track.xp { width: 220px; }
 
@@ -1763,9 +1767,9 @@ body {
 
 .title-logo {
   display: block;
-  width: 180px;
-  height: 180px;
-  margin: 8px auto 6px;
+  width: 96px;
+  height: 96px;
+  margin: 0;
   filter: drop-shadow(0 8px 24px rgba(129, 90, 255, 0.35));
 }
 
@@ -1797,4 +1801,234 @@ body {
   background: none;
   border: none;
   color: #7b88a1;
+}
+
+/* Start screen: header, cards, choice cards */
+.setup-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.setup-hero {
+  flex: 1;
+  min-width: 0;
+}
+.setup-hero .profile-line {
+  margin: 0;
+  font-size: 14px;
+}
+#setup-screen .settings-btn {
+  margin: 0;
+  align-self: flex-start;
+}
+.setup-card {
+  background: #151922;
+  border: 1px solid #2e3440;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.card-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #eceff4;
+}
+.folder-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+#setup-screen .folder-card #pick-folder-btn {
+  margin: 0;
+}
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: #aeb7c7;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-card .continue-label {
+  flex-basis: 100%;
+  margin: 0;
+}
+.choice-row {
+  display: grid;
+  grid-template-columns: 4.5em 1fr;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.choice-label {
+  padding-top: 10px;
+  font-size: 13px;
+  color: #7b88a1;
+}
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.difficulty-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #1d222d;
+  border: 1px solid #3b4252;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.choice strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #e5e9f0;
+}
+.choice small {
+  font-size: 11px;
+  color: #7b88a1;
+  line-height: 1.35;
+}
+.choice:hover {
+  border-color: #5e81ac;
+}
+.choice:has(input:checked) {
+  border-color: #88c0d0;
+  background: #22303c;
+  box-shadow: 0 0 0 1px #88c0d0 inset;
+}
+.choice:has(input:focus-visible) {
+  outline: 2px solid #ebcb8b;
+  outline-offset: 2px;
+}
+#setup-screen .start-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #5e81ac;
+  border-color: #81a1c1;
+}
+#setup-screen .start-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  max-height: none;
+  margin: 0;
+}
+#setup-screen .slot-grid .slot-row {
+  margin: 0;
+  padding: 8px 10px;
+}
+#setup-screen .usage-bar {
+  text-align: center;
+}
+
+/* Settings window */
+.settings-panel {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: #151922;
+  border: 1px solid #3b4252;
+  border-radius: 10px;
+  padding: 14px 18px 18px;
+  box-sizing: border-box;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.settings-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.settings-panel .settings-head button {
+  margin: 0;
+  padding: 2px 10px;
+  background: none;
+  border: none;
+}
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 12px 0;
+  border-bottom: 1px solid #2e3440;
+}
+.settings-panel .settings-tabs button {
+  margin: 0;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #7b88a1;
+}
+.settings-panel .settings-tabs button.active {
+  color: #eceff4;
+  border-bottom-color: #88c0d0;
+}
+.settings-tab {
+  overflow-y: auto;
+  min-height: 0;
+}
+.settings-tab > .option-sub {
+  display: block;
+  margin: 0 0 8px;
+}
+.settings-panel .setting-row button,
+.settings-panel .sound-controls button {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.settings-tab .typing-langs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px 12px;
+  padding: 10px;
+}
+.settings-tab .typing-langs .option-sub {
+  margin-left: 2px;
+}
+.settings-tab {
+  min-height: 220px;
+}
+.settings-tab .typing-langs button {
+  margin: 0;
+  justify-self: start;
+}
+.battle-top #agents-btn {
+  right: 44px;
+}
+
+.choice-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #7b88a1;
+}
+.party-toggle strong {
+  font-size: 14px;
 }

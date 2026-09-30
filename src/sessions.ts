@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { isSaveSlot, type SaveSlot } from './saves.ts';
+import { writeJsonAtomic } from './atomic-write.ts';
 
 // Per project folder: the Claude session to resume and the chat log shown
 // when the folder is opened again.
@@ -60,9 +61,7 @@ export async function loadFolderSession(cwd: string, homeDir: string = os.homedi
 export async function saveFolderSession(cwd: string, session: FolderSession, homeDir: string = os.homedir()): Promise<void> {
   const all = await loadAll(homeDir);
   all[cwd] = session;
-  const file = storePath(homeDir);
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(all, null, 2), 'utf-8');
+  await writeJsonAtomic(storePath(homeDir), all);
 }
 
 export function appendHistory(history: ChatEntry[], entry: ChatEntry): ChatEntry[] {
