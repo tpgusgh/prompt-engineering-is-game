@@ -255,7 +255,7 @@ test('every 6th floor is a chapter boss with 1.5x HP, and clearing it emits chap
     assert.equal(floorStart.isBoss, true);
     assert.equal(floorStart.chapter, 1);
     assert.equal(floorStart.monsterIndex, 5);
-    assert.equal(floorStart.maxHp, Math.round(495 * 1.5), 'floor-5 dragon (495) boosted 1.5x as a boss');
+    assert.equal(floorStart.maxHp, Math.round(550 * 1.5), 'floor-5 dragon (220 x 2.5 = 550) boosted 1.5x as a boss');
   }
   assert.ok(events.some((e) => e.type === 'chapterCleared' && e.chapter === 1));
   assert.equal(summary.chaptersCleared, 1);
@@ -842,7 +842,7 @@ test('bestiary lists every monster with its first-meeting HP, counter damage and
   assert.equal(all[0].counter, 6);
   const boss = all[5];
   assert.equal(boss.isBoss, true);
-  assert.equal(boss.maxHp, Math.round(495 * 1.5));
+  assert.equal(boss.maxHp, Math.round(550 * 1.5));
   assert.equal(boss.gimmick?.id, 'clean');
   assert.equal(all[11].gimmick?.id, 'tests');
 });
@@ -898,8 +898,8 @@ test('themes: demon-king bosses have 30% more HP and every floor pays 1.5x', asy
   const demon = makeFakeDeps(['/quit']);
   await runDungeon({ ...demon.deps, startFloor: 5, themeId: 'demon-king' });
   const hp = (evs: BattleEvent[]) => { const e = evs.find((x) => x.type === 'floorStart'); return e && e.type === 'floorStart' ? e.maxHp : -1; };
-  assert.equal(hp(plain.events), Math.round(495 * 1.5), 'no theme: the plain boss multiplier');
-  assert.equal(hp(demon.events), Math.round(630 * 1.5 * 1.3), '마왕 루트킷 (280 base, floor 5 = 630) with the demon-king boss bonus');
+  assert.equal(hp(plain.events), Math.round(550 * 1.5), 'no theme: the plain boss multiplier');
+  assert.equal(hp(demon.events), Math.round(700 * 1.5 * 1.3), '마왕 루트킷 (280 base x 2.5 = 700) with the demon-king boss bonus');
   const xp = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
   const s = await runDungeon({ ...xp.deps, themeId: 'demon-king', getDamageMultiplier: () => 10 });
   assert.equal(s.xpGained, Math.round(20 * 1.5));
@@ -937,7 +937,7 @@ test('treasure chest: the overkill of the killing blow picks the grade (goblin 6
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
   const summary = await runDungeon({ ...deps, chests: true });
   const chest = events.find((e) => e.type === 'chestOpened');
-  assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'gold' && chest.overkill === 165);
+  assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'diamond' && chest.overkill === 165, '165 past a 60-HP goblin = 275% → diamond');
   assert.deepEqual(chest.items, [], 'no item on a 0.99 roll (gold drops 50% of the time)');
   assert.ok(summary.coins > 10, 'floor coins plus the chest');
   const lucky = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
@@ -959,16 +959,15 @@ test('treasure chest: once the monster is down mid-turn, later work hits pile on
   const hits = events.filter((e) => e.type === 'chestHit');
   assert.equal(hits.length, 1);
   const chest = events.find((e) => e.type === 'chestOpened');
-  assert.ok(chest && chest.type === 'chestOpened' && chest.overkill === 50 && chest.grade === 'iron', '10 from the 7th hit + the whole 40 closing blow');
+  assert.ok(chest && chest.type === 'chestOpened' && chest.overkill === 50 && chest.grade === 'gold', '10 from the 7th hit + the whole 40 closing blow = 83% of 60 HP');
 });
 
 test('treasure chest: grades by overkill', async () => {
   const { chestFor } = await import('../src/battle.ts');
-  assert.equal(chestFor(5).id, 'wood');
-  assert.equal(chestFor(20).id, 'iron');
-  assert.equal(chestFor(60).id, 'silver');
-  assert.equal(chestFor(150).id, 'gold');
-  assert.equal(chestFor(300).id, 'legend');
+  // By overkill relative to the monster's max HP, so chests keep up with it.
+  const grades = [[5, 'wood'], [15, 'iron'], [35, 'silver'], [70, 'gold'], [120, 'platinum'], [200, 'diamond'], [300, 'legend'], [500, 'mythic']] as const;
+  for (const [overkill, id] of grades) assert.equal(chestFor(overkill, 100).id, id, `${overkill}% → ${id}`);
+  assert.equal(chestFor(50, 1000).id, 'wood', 'the same 50 is nothing against a 1000-HP monster');
 });
 
 test('treasure chest: a boss with a conditional rule is not declared down mid-turn', async () => {
@@ -1063,4 +1062,14 @@ test('the merchant buys bag items back at half price', async () => {
   assert.equal(events.filter((e) => e.type === 'sellFailed').length, 2, 'none left / not in the bag');
   assert.equal(summary.bag.potion, undefined);
   assert.equal(summary.coins, 10 + 15);
+});
+
+test('counters grow +10% per chapter', async () => {
+  const ch2 = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...ch2.deps, startFloor: 6 });
+  const start = ch2.events.find((e) => e.type === 'floorStart');
+  const counter = ch2.events.find((e) => e.type === 'monsterAttack');
+  assert.ok(start && start.type === 'floorStart' && counter && counter.type === 'monsterAttack');
+  const base = Math.max(3, Math.round(start.maxHp * 0.1));
+  assert.equal(counter.damage, Math.round(base * 1.1), 'chapter 2: +10%');
 });

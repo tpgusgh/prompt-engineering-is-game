@@ -503,13 +503,33 @@ pickFolderBtn.addEventListener('click', async () => {
 // asked for while the AI works on it.
 function setLastPrompt(text) {
   $('last-prompt-text').textContent = text;
+  $('last-prompt-answers').textContent = '';
+  $('last-prompt-answers').hidden = true;
   $('last-prompt').hidden = !text;
   $('last-prompt').classList.remove('expanded');
+}
+// A quest answer stacks under the original command (which stays), with the
+// question it answered.
+let answeringQuest = null; // the question, while its answer is being sent
+function addQuestAnswer(question, answer) {
+  const list = $('last-prompt-answers');
+  const li = document.createElement('li');
+  const q = document.createElement('small');
+  q.textContent = `❔ ${question}`;
+  const a = document.createElement('span');
+  a.textContent = `↳ ${answer}`;
+  li.append(q, a);
+  list.append(li);
+  list.hidden = false;
+  $('last-prompt').hidden = false;
 }
 $('last-prompt').addEventListener('click', () => $('last-prompt').classList.toggle('expanded'));
 
 function appendUserChat(text, extraClass) {
-  setLastPrompt(text);
+  if (answeringQuest !== null) {
+    addQuestAnswer(answeringQuest, text);
+    answeringQuest = null;
+  } else setLastPrompt(text);
   const line = appendLog(text, `user-chat${extraClass ? ` ${extraClass}` : ''}`);
   line.dataset.who = '나';
   return line;
@@ -1135,7 +1155,7 @@ function renderBattleEvent(event) {
       appendLog('새로운 세션으로 모험을 시작한다.', 'story-line');
       break;
     case 'floorStart': {
-      Object.assign(chest, { active: false, opened: false, total: 0 });
+      Object.assign(chest, { active: false, opened: false, total: 0, maxHp: event.maxHp });
       const info = chapterInfo(activeTheme, event.chapter);
       if (event.floor % 6 === 0) {
         appendLog(`— 챕터 ${event.chapter}: ${info.title} —`, 'story-intro');
@@ -1311,7 +1331,7 @@ function renderBattleEvent(event) {
         monsterArtEl.classList.remove('chest-shaking');
         renderChest(true, event.grade);
         monsterArtEl.classList.add('chest-opening');
-        sfx(event.grade === 'gold' || event.grade === 'legend' ? 'fanfare' : 'coin');
+        sfx(['wood', 'iron', 'silver'].includes(event.grade) ? 'coin' : 'fanfare');
         const found = event.items.map((id) => itemName(id));
         appendLog(`🎁 ${event.name} 개봉! (넘친 피해 ${event.overkill}) +${event.coins} 코인${found.length ? ` · ${found.join(', ')} 발견!` : ''}`, 'victory');
         setTimeout(() => monsterArtEl.classList.remove('chest-opening'), CHEST_REVEAL_MS);
@@ -1905,6 +1925,7 @@ attackForm.addEventListener('submit', (e) => {
   // Show my message right away, then jump to the bottom.
   const shown = trimmed.startsWith('/new ') ? trimmed.slice(5).trim() : trimmed;
   if (shown && !shown.startsWith('/') && !atMerchant) appendUserChat(shown);
+  answeringQuest = null;
   window.promptBattle.submitPrompt(text);
   autoGrowInput();
   requestAnimationFrame(scrollLogToBottom);
@@ -2221,8 +2242,13 @@ function noteQuestion(el) {
   pendingQuest = el;
   if (inputEnabled && $('turn-panel').hidden) showQuest(el);
 }
+// The question line of a quest, short, for the answer stack.
+let questSummary = '';
 function showQuest(el) {
   pendingQuest = null;
+  const lines = el.textContent.split('\n').map((l) => l.trim()).filter(Boolean);
+  const q = [...lines].reverse().find((l) => /[?？]$/.test(l)) ?? lines.at(-1) ?? '';
+  questSummary = q.length > 80 ? `${q.slice(0, 79)}…` : q;
   const body = $('quest-body');
   body.innerHTML = el.innerHTML;
   // Choices: a trailing list becomes big buttons (and leaves the body).
@@ -2254,6 +2280,7 @@ function answerQuest(text) {
   // Whatever was in the prompt box isn't thrown away: back to the memo.
   const draft = promptInput.value.trim();
   if (draft && draft !== answer) keepInMemo(draft);
+  answeringQuest = questSummary;
   promptInput.value = answer;
   attackForm.requestSubmit();
 }
@@ -2741,22 +2768,26 @@ for (const r of document.querySelectorAll('input[name="difficulty"]')) r.addEven
 // Treasure chest: once the monster falls mid-turn, the rest of the damage
 // fills a chest; the bar shows progress to the next grade.
 let chestGrades = [];
-const chest = { active: false, opened: false, total: 0 };
-function gradeFor(total) {
-  return [...chestGrades].reverse().find((g) => total >= g.min) ?? chestGrades[0];
+// Grades are shares of the fallen monster's max HP (g.min is a percentage).
+const chest = { active: false, opened: false, total: 0, maxHp: 1 };
+const chestPct = () => (chest.total / Math.max(1, chest.maxHp)) * 100;
+function gradeFor() {
+  const pct = chestPct();
+  return [...chestGrades].reverse().find((g) => pct >= g.min) ?? chestGrades[0];
 }
 function renderChest(open, gradeId) {
-  const grade = gradeId ? chestGrades.find((g) => g.id === gradeId) : gradeFor(chest.total);
+  const grade = gradeId ? chestGrades.find((g) => g.id === gradeId) : gradeFor();
   if (!grade) return;
   const next = chestGrades[chestGrades.indexOf(grade) + 1];
   monsterArtEl.innerHTML = chestSvg(grade.id, open);
   monsterNameEl.textContent = open ? `🎁 ${grade.name}` : `보물상자 — ${grade.name}`;
-  const span = next ? next.min - grade.min : 1;
-  hpBarFillEl.style.width = `${next ? Math.min(100, ((chest.total - grade.min) / span) * 100) : 100}%`;
+  const pct = chestPct();
+  hpBarFillEl.style.width = `${next ? Math.min(100, Math.max(0, ((pct - grade.min) / (next.min - grade.min)) * 100)) : 100}%`;
   hpBarFillEl.classList.add('chest-fill');
+  const toNext = next ? Math.max(1, Math.ceil((next.min / 100) * chest.maxHp - chest.total)) : 0;
   hpLabelEl.textContent = open
-    ? `넘친 피해 ${chest.total} · ${grade.name} 개봉!`
-    : `넘친 피해 ${chest.total}${next ? ` · 다음 ${next.name}까지 ${next.min - chest.total}` : ' · 최고 등급!'}`;
+    ? `넘친 피해 ${chest.total} (몬스터 HP의 ${Math.round(pct)}%) · ${grade.name} 개봉!`
+    : `넘친 피해 ${chest.total} (${Math.round(pct)}%)${next ? ` · 다음 ${next.name}까지 ${toNext}` : ' · 최고 등급!'}`;
 }
 
 // ---------------------------------------------------------------------------

@@ -45,13 +45,16 @@ export function shopOffer(visit: number, relics: string[]): Item[] {
 
 // Chest loot: coins always; an item only by chance, better chests more often
 // and from a better table.
-const DROP_CHANCE = { wood: 0.05, iron: 0.15, silver: 0.3, gold: 0.5, legend: 0.8 } as const;
+const DROP_CHANCE = { wood: 0.05, iron: 0.15, silver: 0.3, gold: 0.5, platinum: 0.6, diamond: 0.7, legend: 0.8, mythic: 0.95 } as const;
 const DROP_TABLE: Record<keyof typeof DROP_CHANCE, ItemId[]> = {
   wood: ['bandage'],
   iron: ['bandage', 'smoke', 'bomb'],
   silver: ['potion', 'bomb', 'scroll', 'whetstone'],
   gold: ['whetstone', 'amulet', 'elixir', 'scroll', 'contract', 'devilContract'],
+  platinum: ['elixir', 'amulet', 'scroll', 'contract', 'devilContract'],
+  diamond: ['elixir', 'crystal', 'contract', 'devilContract'],
   legend: ['elixir', 'crystal', 'contract', 'devilContract', 'amulet'],
+  mythic: ['crystal', 'elixir', 'contract', 'devilContract'],
 };
 export function rollChestItem(grade: keyof typeof DROP_CHANCE, random: () => number): Item | null {
   if (random() >= DROP_CHANCE[grade]) return null;

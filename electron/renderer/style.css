@@ -2762,3 +2762,25 @@ body {
   border-color: #ebcb8b;
 }
 .ic-hand-coins { color: #ebcb8b; }
+
+.last-prompt-answers {
+  margin: 8px 0 0;
+  padding: 6px 0 0;
+  list-style: none;
+  border-top: 1px dashed #4c566a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.last-prompt-answers li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.last-prompt-answers small {
+  color: #ebcb8b;
+  font-size: 11px;
+}
+.last-prompt-answers span {
+  color: #d8dee9;
+}

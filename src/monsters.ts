@@ -174,13 +174,16 @@ export const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
   hard: 1.4,
 };
 
+// HP multiplier by floor: linear early, steeper later (the hero's power
+// multiplies — stats, sword, weapon, skill — so monsters must keep up).
 const HP_GROWTH_PER_FLOOR = 0.25;
+const HP_GROWTH_SQUARED = 0.01;
 
 export function spawnMonster(floor: number, difficulty: Difficulty, themeId?: string): { name: string; art: string; maxHp: number; index: number; trait: TraitId } {
   const roster = rosterFor(themeId, Math.floor(floor / MONSTER_COUNT) + 1);
   const slot = floor % MONSTER_COUNT;
   const template = ROSTERS[roster][slot];
-  const floorScaling = 1 + floor * HP_GROWTH_PER_FLOOR;
+  const floorScaling = 1 + floor * HP_GROWTH_PER_FLOOR + floor * floor * HP_GROWTH_SQUARED;
   const maxHp = Math.round(template.baseHp * floorScaling * DIFFICULTY_MULTIPLIER[difficulty]);
   return { name: template.name, art: template.art, maxHp, index: roster * MONSTER_COUNT + slot, trait: template.trait };
 }

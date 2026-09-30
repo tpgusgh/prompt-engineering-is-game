@@ -60,3 +60,9 @@ test('every roster has 6 monsters with unique names', async () => {
   assert.equal(new Set(names).size, names.length);
   assert.equal(ROSTER_NAMES.length, ROSTER_COUNT);
 });
+
+test('HP curve: 1 + 0.25 per floor + 0.01 per floor squared', () => {
+  // floor 10 of the default order is chapter 2's 5th monster (base 165): x4.5.
+  assert.equal(spawnMonster(10, 'normal').maxHp, Math.round(165 * (1 + 2.5 + 1)));
+  assert.equal(spawnMonster(0, 'normal').maxHp, 60);
+});

@@ -456,7 +456,10 @@ const CHEST_COLORS = {
   iron: ['#9aa3b0', '#4c5563', '#dfe5ee'],
   silver: ['#d8e0ea', '#7f8ea3', '#ffffff'],
   gold: ['#ffd76a', '#b8860b', '#fff4c2'],
+  platinum: ['#e6eef5', '#8aa0b4', '#ffffff'],
+  diamond: ['#9fe8ff', '#2a8fb8', '#e8fbff'],
   legend: ['#c9a2ff', '#5b2aa8', '#ffe9ff'],
+  mythic: ['#ff9ed2', '#b0206f', '#fff1a8'],
 };
 export function chestSvg(grade, open = false) {
   const [body, dark, shine] = CHEST_COLORS[grade] ?? CHEST_COLORS.wood;

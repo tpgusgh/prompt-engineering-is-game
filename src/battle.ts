@@ -122,21 +122,28 @@ const gimmickFor = (chapter: number) => BOSS_GIMMICKS[(chapter - 1) % BOSS_GIMMI
 // Treasure chests: the damage dealt past a monster's last HP (the rest of the
 // AI's work, the closing blow's excess, typing hits) decides the grade.
 // Coins always; an item only by chance (rollChestItem in src/items.ts).
+// The grade is the overkill as a share of the monster's max HP (min is %), so
+// chests keep up with stronger monsters.
 export interface ChestGrade {
-  id: 'wood' | 'iron' | 'silver' | 'gold' | 'legend';
+  id: 'wood' | 'iron' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'legend' | 'mythic';
   name: string;
   min: number;
   coins: number;
 }
 export const CHEST_GRADES: ChestGrade[] = [
   { id: 'wood', name: '나무 상자', min: 0, coins: 5 },
-  { id: 'iron', name: '철 상자', min: 20, coins: 15 },
-  { id: 'silver', name: '은 상자', min: 60, coins: 30 },
-  { id: 'gold', name: '금 상자', min: 150, coins: 60 },
-  { id: 'legend', name: '전설의 상자', min: 300, coins: 120 },
+  { id: 'iron', name: '철 상자', min: 15, coins: 15 },
+  { id: 'silver', name: '은 상자', min: 35, coins: 30 },
+  { id: 'gold', name: '금 상자', min: 70, coins: 60 },
+  { id: 'platinum', name: '백금 상자', min: 120, coins: 90 },
+  { id: 'diamond', name: '다이아 상자', min: 200, coins: 130 },
+  { id: 'legend', name: '전설의 상자', min: 300, coins: 180 },
+  { id: 'mythic', name: '신화의 상자', min: 500, coins: 300 },
 ];
-export function chestFor(overkill: number): ChestGrade {
-  return [...CHEST_GRADES].reverse().find((g) => overkill >= g.min) ?? CHEST_GRADES[0];
+export const chestPercent = (overkill: number, maxHp: number) => (overkill / Math.max(1, maxHp)) * 100;
+export function chestFor(overkill: number, maxHp: number): ChestGrade {
+  const pct = chestPercent(overkill, maxHp);
+  return [...CHEST_GRADES].reverse().find((g) => pct >= g.min) ?? CHEST_GRADES[0];
 }
 
 export const SAVE_SLOTS = 3;
@@ -267,7 +274,7 @@ export function bestiary() {
     const floor = (first.chapter - 1) * MONSTER_COUNT + slot;
     const spawned = spawnMonster(floor, 'normal', first.themeId);
     const maxHp = m.isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
-    const counter = Math.round(counterDamage(maxHp, false) * (m.trait === 'fierce' ? FIERCE : 1));
+    const counter = Math.round(counterDamage(maxHp, false) * (1 + 0.1 * (first.chapter - 1)) * (m.trait === 'fierce' ? FIERCE : 1));
     return {
       ...m,
       rosterName: ROSTER_NAMES[m.roster],
@@ -643,8 +650,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (!runStats.seen.includes(monsterIndex)) runStats.seen.push(monsterIndex);
     const trait = spawned.trait;
     let turnFailedTool = false; // debug-quest: a failed tool call hardens the counter
+    // Counters grow with the monster's HP, plus 10% per chapter.
+    const chapterPower = 1 + 0.1 * (chapter - 1);
     const counter = (punished: boolean) =>
-      Math.round(counterDamage(maxHp, punished) * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1));
+      Math.round(counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1));
     currentMaxHp = maxHp;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
@@ -902,7 +911,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
     const rewardMult = theme.rewards * (DIFFICULTY_REWARD[deps.difficulty] ?? 1);
     if (chests && overkill > 0) {
-      const grade = chestFor(overkill);
+      const grade = chestFor(overkill, maxHp);
       const chestCoins = coinGain(grade.coins * rewardMult * (1 + floor * 0.1));
       coins += chestCoins;
       const loot = rollChestItem(grade.id, random);
