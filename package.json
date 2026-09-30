@@ -1,6 +1,6 @@
 {
   "name": "prompt-engineering-is-game",
-  "version": "0.26.1",
+  "version": "0.27.0",
   "description": "Turn-based RPG wrapper around real AI coding — longer prompts hit harder.",
   "type": "module",
   "main": "electron/main.ts",
