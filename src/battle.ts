@@ -1,9 +1,10 @@
 import { calculateDamage } from './damage.ts';
-import { spawnMonster, MONSTER_COUNT, type Difficulty } from './monsters.ts';
+import { spawnMonster, listMonsters, MONSTER_COUNT, type Difficulty } from './monsters.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
+import { emptyRunStats, isTestCommand, type RunStats } from './progress.ts';
 
 export type BattleEvent =
   | { type: 'runStart'; playerHp: number; playerMaxHp: number }
@@ -16,7 +17,11 @@ export type BattleEvent =
       monsterName: string;
       monsterArt: string;
       maxHp: number;
+      // Chapter bosses fight with a special rule.
+      gimmick?: BossGimmick;
     }
+  | { type: 'gimmickBlocked'; text: string }
+  | { type: 'gimmickHeal'; amount: number }
   | { type: 'hesitate' }
   | { type: 'monsterWaits' }
   | { type: 'turnStart'; prompt: string }
@@ -80,6 +85,22 @@ export interface RunState {
   monsterHp?: number;
 }
 
+// Chapter boss rules, in chapter order (then repeating). Conditional ones
+// undo the turn's damage when the condition isn't met; "clean" heals the
+// boss whenever a tool call fails.
+export interface BossGimmick {
+  id: 'clean' | 'tests' | 'files3' | 'brief';
+  text: string;
+}
+export const BOSS_GIMMICKS: BossGimmick[] = [
+  { id: 'clean', text: '🩹 재생: 도구가 한 번이라도 실패하면 보스가 체력을 회복한다' },
+  { id: 'tests', text: '🧪 테스트 결계: 이번 턴에 테스트가 통과해야만 피해가 들어간다' },
+  { id: 'files3', text: '📝 서류 더미: 한 턴에 파일을 3개 이상 고쳐야 피해가 들어간다' },
+  { id: 'brief', text: '🤐 침묵의 저주: 120자 이하로 짧게 명령해야 피해가 들어간다' },
+];
+export const BRIEF_LIMIT = 120;
+const gimmickFor = (chapter: number) => BOSS_GIMMICKS[(chapter - 1) % BOSS_GIMMICKS.length];
+
 export const SAVE_SLOTS = 3;
 // Slot written automatically at the start of every floor (not by /save).
 export const AUTO_SAVE_SLOT = SAVE_SLOTS + 1;
@@ -114,6 +135,8 @@ export interface BattleDeps {
   bindExternalHit?: (hit: (damage: number) => boolean) => void;
   // Flee and merchant rolls; injectable so tests are deterministic.
   random?: () => number;
+  // The model the next attack uses (for per-model win records).
+  getModel?: () => string;
 }
 
 export interface BattleSummary {
@@ -131,6 +154,7 @@ export interface BattleSummary {
   stats: Stats;
   statPoints: number;
   swordLevel: number;
+  runStats: RunStats;
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -174,6 +198,17 @@ function counterDamage(monsterMaxHp: number, punished: boolean): number {
   return punished ? Math.round(base * 1.5) : base;
 }
 
+// Bestiary entries: each monster as first met (normal difficulty) — its HP,
+// the counterattack it deals, and a boss's rule.
+export function bestiary() {
+  return listMonsters().map((m) => {
+    const spawned = spawnMonster(m.firstFloor, 'normal');
+    const maxHp = m.isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
+    const chapter = Math.floor(m.firstFloor / MONSTER_COUNT) + 1;
+    return { ...m, chapter, maxHp, counter: counterDamage(maxHp, false), gimmick: m.isBoss ? gimmickFor(chapter) : undefined };
+  });
+}
+
 export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const random = deps.random ?? Math.random;
   let playerMaxHp = deps.playerMaxHp ?? 100;
@@ -204,6 +239,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let floor = deps.startFloor ?? 0;
   let floorsCleared = 0;
   let floorsEngaged = 0;
+  const runStats = emptyRunStats();
+  let floorModel = '';
+  const modelRecord = (model: string) => (runStats.byModel[model] ??= { engaged: 0, cleared: 0 });
   let xpGained = 0;
   let defeated = false;
   // A run starts a fresh Claude session unless resuming this folder's saved
@@ -271,6 +309,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const roll = Math.floor(random() * 6) + 1;
     const won = (roll % 2 === 1) === (choice === 'odd');
     coins += won ? amount : -amount;
+    if (won) runStats.betsWon += 1;
     deps.onBattleEvent({ type: 'betResult', choice, roll, won, amount, coins });
   };
 
@@ -414,6 +453,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   deps.bindExternalHit?.((damage) => {
     if (!turnRunning || hp <= 0) return false;
     hp = Math.max(0, hp - damage);
+    runStats.typingLines += 1;
     deps.onBattleEvent({ type: 'typingHit', damage });
     deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
     return true;
@@ -421,10 +461,12 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
   while (true) {
     const spawned = spawnMonster(floor, deps.difficulty);
-    const monsterIndex = floor % MONSTER_COUNT;
-    const isBoss = monsterIndex === MONSTER_COUNT - 1;
+    const monsterIndex = spawned.index;
+    const isBoss = floor % MONSTER_COUNT === MONSTER_COUNT - 1;
     const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
     const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
+    const gimmick = isBoss ? gimmickFor(chapter) : undefined;
+    if (!runStats.seen.includes(monsterIndex)) runStats.seen.push(monsterIndex);
     currentMaxHp = maxHp;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
@@ -437,6 +479,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       monsterName: spawned.name,
       monsterArt: spawned.art,
       maxHp,
+      ...(gimmick ? { gimmick } : {}),
     });
     if (hp < maxHp) deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
     // Floor autosave: this floor, from the start of the fight.
@@ -507,6 +550,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
       const { crit, matchedKeywords } = base;
       deps.onBattleEvent({ type: 'turnStart', prompt });
+      runStats.turns += 1;
+      floorModel = deps.getModel?.() ?? 'unknown';
+      const turnStartedAt = Date.now();
+      let turnTests = 0;
+      let turnEdits = 0;
+      let turnFailures = 0;
+      let turnActionDamage = 0;
 
       // Work is damage: every tool action that succeeds (a command, an edit,
       // a subagent's read) lands its own hit as its result comes in — failed
@@ -521,7 +571,20 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (event.type === 'toolResult') {
           const call = calls.get(event.toolId);
           calls.delete(event.toolId);
-          if (!call || event.isError || hp <= 0) return;
+          if (!call) return;
+          if (event.isError) {
+            turnFailures += 1;
+            return;
+          }
+          if (call.type === 'file') {
+            runStats.filesEdited += 1;
+            turnEdits += 1;
+          } else if (call.type === 'command' && isTestCommand(call.value)) {
+            runStats.testsPassed += 1;
+            turnTests += 1;
+          }
+          if (hp <= 0) return;
+          turnActionDamage += Math.min(hp, actionHit);
           hp = Math.max(0, hp - actionHit);
           deps.onBattleEvent({ type: 'partialHit', damage: actionHit, agentEvent: call });
           deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
@@ -536,6 +599,21 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         turn = { summary: '', filesChanged: [], commandsRun: [], error: err instanceof Error ? err.message : String(err) };
       } finally {
         turnRunning = false;
+      }
+      runStats.tokens += turn.tokensUsed ?? 0;
+      runStats.longestTurnMs = Math.max(runStats.longestTurnMs, Date.now() - turnStartedAt);
+      // Boss rule not met: the turn's work hits are undone and the closing
+      // blow doesn't land.
+      const gimmickMet =
+        gimmick?.id === 'tests' ? turnTests > 0 : gimmick?.id === 'files3' ? turnEdits >= 3 : gimmick?.id === 'brief' ? prompt.length <= BRIEF_LIMIT : true;
+      if (!gimmickMet && gimmick) {
+        hp = Math.min(maxHp, hp + turnActionDamage);
+        deps.onBattleEvent({ type: 'gimmickBlocked', text: gimmick.text });
+      }
+      if (gimmick?.id === 'clean' && turnFailures > 0 && hp > 0) {
+        const heal = Math.round(maxHp * 0.1) * turnFailures;
+        hp = Math.min(maxHp, hp + heal);
+        deps.onBattleEvent({ type: 'gimmickHeal', amount: heal });
       }
       // Only adopt a session id from a turn that actually succeeded — resuming
       // a session captured from a failed turn (a broken/never-saved session)
@@ -555,9 +633,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         // Stopped by the player: hits so far stay, no closing blow.
         deps.onBattleEvent({ type: 'turnInterrupted' });
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
-      } else {
+      } else if (gimmickMet) {
         hp = Math.max(0, hp - damage);
+        runStats.bestHit = Math.max(runStats.bestHit, damage);
+        if (crit) runStats.crits += 1;
         deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords });
+        if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
+      } else {
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       }
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
@@ -584,7 +666,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }
 
     hp = -1; // between floors / at a shop: no monster to save
-    if (currentFloorEngaged) floorsEngaged += 1;
+    if (currentFloorEngaged) {
+      floorsEngaged += 1;
+      modelRecord(floorModel).engaged += 1;
+    }
     if (playerHp <= 0) {
       defeated = true;
       deps.onBattleEvent({ type: 'playerDefeated' });
@@ -599,6 +684,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const gained = xpForFloor(floor);
     xpGained += gained;
     floorsCleared += 1;
+    runStats.floorsCleared += 1;
+    if (isBoss) runStats.bossesDefeated += 1;
+    runStats.kills[monsterIndex] = (runStats.kills[monsterIndex] ?? 0) + 1;
+    if (currentFloorEngaged) modelRecord(floorModel).cleared += 1;
     deps.onBattleEvent({ type: 'floorCleared', monsterName: spawned.name, xpGained: gained });
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
     playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL);
@@ -632,6 +721,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     stats: { ...stats },
     statPoints,
     swordLevel,
+    runStats: { ...runStats, byModel: { ...runStats.byModel }, seen: [...runStats.seen], kills: { ...runStats.kills } },
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

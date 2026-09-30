@@ -40,7 +40,8 @@ console.log('claude --version:', execFileSync(claude, ['--version'], { encoding:
 
 // CI Linux runners can't use Chromium's SUID sandbox helper from an unpacked dir.
 const args = [`--remote-debugging-port=${PORT}`, ...(plat === 'linux' ? ['--no-sandbox'] : [])];
-const child = spawn(exe, args, { stdio: ['ignore', 'inherit', 'inherit'] });
+// The release build refuses remote debugging unless asked for explicitly.
+const child = spawn(exe, args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, PROMPTBATTLE_DEBUG: '1' } });
 let exited = null;
 child.on('exit', (code) => (exited = code));
 const done = (code) => {

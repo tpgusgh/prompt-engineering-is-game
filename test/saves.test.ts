@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { loadSlots, writeSlot, SLOT_COUNT, type SaveSlot } from '../src/saves.ts';
+import { loadSlots, writeSlot, deleteSlot, SLOT_COUNT, type SaveSlot } from '../src/saves.ts';
 
 const slot: SaveSlot = {
   savedAt: 1700000000000, cwd: '/proj', themeId: 'adventure', difficulty: 'normal', model: 'claude-sonnet-5',
@@ -30,4 +30,12 @@ test('invalid slot data loads as empty', async () => {
   await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
   await writeFile(path.join(dir, '.promptbattle', 'saves.json'), JSON.stringify({ 1: { floor: 'x' }, 3: slot }));
   assert.deepEqual(await loadSlots(dir), [null, null, slot, null]);
+});
+
+test('deleteSlot empties just that slot', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  await writeSlot(1, slot, dir);
+  await writeSlot(2, slot, dir);
+  await deleteSlot(1, dir);
+  assert.deepEqual(await loadSlots(dir), [null, slot, null, null]);
 });

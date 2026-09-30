@@ -2032,3 +2032,226 @@ body {
 .party-toggle strong {
   font-size: 14px;
 }
+
+.slot-row .slot-place {
+  font-size: 15px;
+  font-weight: 600;
+  color: #eceff4;
+}
+.slot-row small {
+  color: #7b88a1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.setup-actions {
+  display: flex;
+  gap: 8px;
+  align-self: flex-start;
+}
+#setup-screen .setup-actions .settings-btn {
+  margin: 0;
+}
+.daily-line {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #ebcb8b;
+}
+.boss-rule {
+  margin: 4px auto 0;
+  max-width: 520px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  text-align: center;
+  color: #ebcb8b;
+  background: rgba(235, 203, 139, 0.08);
+  border: 1px solid rgba(235, 203, 139, 0.35);
+  border-radius: 6px;
+}
+.boss-rule-line {
+  color: #ebcb8b;
+  font-weight: 600;
+}
+.summary-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.reward-achievement,
+.reward-daily {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #22303c;
+  border: 1px solid #88c0d0;
+  font-size: 13px;
+}
+.reward-daily {
+  border-color: #ebcb8b;
+}
+.records-panel {
+  width: min(720px, calc(100vw - 32px));
+}
+.records-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+.records-body h3 {
+  margin: 14px 0 8px;
+  font-size: 14px;
+}
+.records-daily {
+  color: #ebcb8b;
+  font-size: 13px;
+}
+.records-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.records-stats div {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  background: #1d222d;
+  border: 1px solid #2e3440;
+  border-radius: 8px;
+}
+.records-stats strong {
+  font-size: 16px;
+  color: #eceff4;
+}
+.records-stats small,
+.records-models small,
+.ach-card small {
+  color: #7b88a1;
+  font-size: 11px;
+}
+.records-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #aeb7c7;
+}
+.model-row {
+  display: grid;
+  grid-template-columns: 9em 1fr 9em;
+  align-items: center;
+  gap: 10px;
+}
+.records-achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+.ach-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #1d222d;
+  border: 1px solid #2e3440;
+  border-radius: 8px;
+  opacity: 0.55;
+}
+.ach-card.got {
+  opacity: 1;
+  border-color: #ebcb8b;
+}
+.ach-card strong {
+  font-size: 13px;
+}
+.slot-cell {
+  position: relative;
+  display: flex;
+}
+.slot-cell > .slot-row {
+  flex: 1;
+}
+#setup-screen .slot-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin: 0;
+  padding: 2px 6px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  opacity: 0.5;
+}
+#setup-screen .slot-delete:hover {
+  opacity: 1;
+  border-color: #bf616a;
+}
+.slot-cell,
+.slot-cell > .slot-row {
+  min-width: 0;
+}
+.slot-cell > .slot-row {
+  width: 100%;
+}
+
+.bestiary-panel {
+  width: min(820px, calc(100vw - 32px));
+}
+.bestiary-list {
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+.bestiary-chapter {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #88c0d0;
+}
+.bestiary-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  background: #1d222d;
+  border: 1px solid #2e3440;
+  border-radius: 8px;
+}
+.bestiary-card.boss {
+  border-color: #b48ead;
+}
+.bestiary-art .monster-svg {
+  width: 72px;
+  height: 72px;
+}
+.bestiary-card.unknown .bestiary-art {
+  filter: brightness(0) opacity(0.45);
+}
+.bestiary-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bestiary-info strong {
+  font-size: 13.5px;
+}
+.bestiary-info small {
+  font-size: 11px;
+  color: #7b88a1;
+}
+.bestiary-info .bestiary-rule {
+  color: #ebcb8b;
+}
+.bestiary-info .bestiary-kills {
+  color: #a3be8c;
+}
+
+#setup-screen .setup-actions .settings-btn {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}

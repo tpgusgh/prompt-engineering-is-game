@@ -12,9 +12,15 @@
         <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
         <div class="setup-hero">
           <p id="profile-line" class="profile-line"></p>
+          <p id="daily-line" class="daily-line"></p>
           <div class="xp-row setup-xp"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
         </div>
-        <button type="button" class="settings-btn" data-open-settings title="설정">⚙️ 설정</button>
+        <div class="setup-actions">
+          <button type="button" class="settings-btn" id="update-check-btn" title="새 버전이 있는지 확인">🔄 업데이트</button>
+          <button type="button" class="settings-btn" id="bestiary-btn" title="몬스터 도감">📖 도감</button>
+          <button type="button" class="settings-btn" id="records-btn" title="기록 · 업적 · 오늘의 퀘스트">📊 기록</button>
+          <button type="button" class="settings-btn" data-open-settings title="설정">⚙️ 설정</button>
+        </div>
       </header>
 
       <div class="setup-card folder-card">
@@ -32,9 +38,6 @@
           <span class="choice-label">테마</span>
           <div id="theme-options" class="choice-grid"></div>
         </div>
-        <label id="continue-label" class="continue-label" hidden>
-          <input type="checkbox" id="continue-story" /> <span id="continue-text"></span>
-        </label>
         <div class="choice-row">
           <span class="choice-label">직업</span>
           <div id="class-options" class="choice-grid"></div>
@@ -106,6 +109,7 @@
           </div>
           <div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
           <p id="hp-label"></p>
+          <p id="boss-rule" class="boss-rule" hidden></p>
         </div>
 
         <div id="player-panel">
@@ -201,6 +205,7 @@
       <h2 id="summary-title">런 종료</h2>
       <p id="summary-text"></p>
       <p id="summary-story" class="summary-story"></p>
+      <div id="summary-rewards" class="summary-rewards"></div>
       <button id="play-again-btn">다시 하기</button>
     </section>
 
@@ -278,6 +283,44 @@
           </span>
         </div>
         <div id="file-viewer-body" class="file-viewer-body"></div>
+      </div>
+    </div>
+
+    <div id="bestiary-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel bestiary-panel" role="dialog" aria-label="몬스터 도감">
+        <div class="settings-head">
+          <h2>📖 몬스터 도감 <span id="bestiary-count" class="option-sub"></span></h2>
+          <button type="button" id="bestiary-close" aria-label="닫기">✕</button>
+        </div>
+        <p class="option-sub">처음 만났을 때 기준 (보통 난이도). 층이 올라갈수록 HP와 반격이 더 세진다. 만나지 못한 몬스터는 ??? 로 보인다.</p>
+        <div id="bestiary-list" class="bestiary-list"></div>
+      </div>
+    </div>
+
+    <div id="records-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel records-panel" role="dialog" aria-label="기록">
+        <div class="settings-head">
+          <h2>📊 기록</h2>
+          <button type="button" id="records-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="records-body">
+          <section>
+            <h3>📅 오늘의 퀘스트</h3>
+            <div id="records-daily" class="records-daily"></div>
+          </section>
+          <section>
+            <h3>📈 전투 기록</h3>
+            <div id="records-stats" class="records-stats"></div>
+          </section>
+          <section>
+            <h3>⚔️ 무기(모델)별 승률</h3>
+            <div id="records-models" class="records-models"></div>
+          </section>
+          <section>
+            <h3>🏆 업적 <span id="records-ach-count" class="option-sub"></span></h3>
+            <div id="records-achievements" class="records-achievements"></div>
+          </section>
+        </div>
       </div>
     </div>
 

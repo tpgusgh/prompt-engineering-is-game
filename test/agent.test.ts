@@ -258,3 +258,9 @@ test('a background task notification carries its summary as the agent report', (
   const info = extractToolInfo({ type: 'system', subtype: 'task_notification', task_id: 't1', tool_use_id: 'tu_9', status: 'completed', summary: 'Tests: 12 passed' });
   assert.deepEqual(info.taskReports, { tu_9: 'Tests: 12 passed' });
 });
+
+test('a result message reports the tokens the turn used (input + output + cache)', () => {
+  const info = extractToolInfo({ type: 'result', subtype: 'success', is_error: false, result: 'ok', usage: { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 5, cache_read_input_tokens: 100 } });
+  assert.equal(info.tokensUsed, 135);
+  assert.equal(extractToolInfo({ type: 'assistant', message: { content: [] } }).tokensUsed, undefined);
+});

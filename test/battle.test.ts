@@ -1,7 +1,7 @@
 // test/battle.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runDungeon, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
+import { runDungeon, bestiary, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import type { TurnResult } from '../src/agent.ts';
 
 const ONE_SHOT_PROMPT = 'test refactor ' + 'x'.repeat(700); // crits at 225 damage, one-shots floors 0-2
@@ -380,7 +380,7 @@ test('typing a prompt at the merchant closes the shop and attacks the next monst
   assert.deepEqual(runTurnCalls, [ONE_SHOT_PROMPT, WEAK_PROMPT_2]);
 });
 
-test('life crystal raises max HP permanently and is reported in the summary', async () => {
+test('life crystal raises max HP for the run and is reported in the summary', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/buy crystal', '/leave', '/quit']);
   const summary = await runDungeon({ ...deps, coins: 100, random: seq(0.1, 0.99) });
   assert.equal(summary.playerMaxHp, 110);
@@ -752,4 +752,96 @@ test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and d
   const counter = events.find((e) => e.type === 'monsterAttack');
   assert.ok(counter && counter.type === 'monsterAttack' && counter.damage === 6, 'normal, not the 1.5x error counter');
   assert.ok(events.some((e) => e.type === 'sessionSaved' && e.sessionId === 's-int'), 'the session is kept');
+});
+
+test('the run reports its stats: turns, tokens, tests passed, edits, crits, best hit, floors per model', async () => {
+  const { deps } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  deps.runTurn = scriptedTurn(
+    [
+      { type: 'command', value: 'npm test', toolId: 't1' },
+      { type: 'toolResult', toolId: 't1', output: 'ok', isError: false },
+      { type: 'file', value: 'src/a.ts', toolId: 't2' },
+      { type: 'toolResult', toolId: 't2', output: 'ok', isError: false },
+      { type: 'command', value: 'npm test', toolId: 't3' },
+      { type: 'toolResult', toolId: 't3', output: 'fail', isError: true },
+    ],
+    { summary: 'done', filesChanged: [], commandsRun: [], tokensUsed: 500 },
+  );
+  const summary = await runDungeon({ ...deps, getModel: () => 'sonnet' });
+  const s = summary.runStats;
+  assert.equal(s.turns, 1);
+  assert.equal(s.tokens, 500);
+  assert.equal(s.testsPassed, 1, 'the failed test run does not count');
+  assert.equal(s.filesEdited, 1);
+  assert.equal(s.crits, 1);
+  assert.equal(s.bestHit, 225);
+  assert.equal(s.floorsCleared, 1);
+  assert.deepEqual(s.byModel, { sonnet: { engaged: 1, cleared: 1 } });
+  assert.deepEqual(s.seen, [0, 1], 'floor 0 fought, floor 1 met before quitting');
+  assert.deepEqual(s.kills, { 0: 1 });
+});
+
+test('typing-drill hits count as typed lines', async () => {
+  let hit: ((d: number) => boolean) | undefined;
+  const { deps } = makeFakeDeps(['x', '/quit']);
+  deps.runTurn = async () => {
+    hit?.(1);
+    return { summary: 'ok', filesChanged: [], commandsRun: [] };
+  };
+  const summary = await runDungeon({ ...deps, bindExternalHit: (fn) => (hit = fn) });
+  assert.equal(summary.runStats.typingLines, 1);
+});
+
+test('boss gimmicks: chapter 1 boss heals when a tool fails', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'no', isError: true }]);
+  await runDungeon({ ...deps, startFloor: 5 });
+  const start = events.find((e) => e.type === 'floorStart');
+  assert.ok(start && start.type === 'floorStart' && start.gimmick?.id === 'clean');
+  assert.ok(events.some((e) => e.type === 'gimmickHeal'));
+});
+
+test('boss gimmicks: the chapter 2 boss only takes damage from a turn whose tests passed', async () => {
+  const blocked = makeFakeDeps(['x'.repeat(150), '/quit']);
+  blocked.deps.runTurn = scriptedTurn([{ type: 'file', value: 'a.ts', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...blocked.deps, startFloor: 11 });
+  const start = blocked.events.find((e) => e.type === 'floorStart');
+  assert.ok(start && start.type === 'floorStart' && start.gimmick?.id === 'tests');
+  assert.ok(blocked.events.some((e) => e.type === 'gimmickBlocked'));
+  assert.equal(blocked.events.filter((e) => e.type === 'attack').length, 0);
+  const lastHp = blocked.events.filter((e) => e.type === 'hpChanged').at(-1);
+  assert.ok(lastHp && lastHp.type === 'hpChanged' && lastHp.hp === lastHp.maxHp, 'the edit hit was undone');
+
+  const passed = makeFakeDeps(['x'.repeat(150), '/quit']);
+  passed.deps.runTurn = scriptedTurn([{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...passed.deps, startFloor: 11 });
+  assert.equal(passed.events.filter((e) => e.type === 'gimmickBlocked').length, 0);
+  assert.equal(passed.events.filter((e) => e.type === 'attack').length, 1);
+});
+
+test('boss gimmicks: chapter 3 needs 3 edits, chapter 4 needs a short prompt', async () => {
+  const edits = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...edits.deps, startFloor: 17 });
+  assert.ok(edits.events.some((e) => e.type === 'floorStart' && e.gimmick?.id === 'files3'));
+  assert.ok(edits.events.some((e) => e.type === 'gimmickBlocked'));
+
+  const long = makeFakeDeps(['x'.repeat(200), '/quit']);
+  await runDungeon({ ...long.deps, startFloor: 23 });
+  assert.ok(long.events.some((e) => e.type === 'floorStart' && e.gimmick?.id === 'brief'));
+  assert.ok(long.events.some((e) => e.type === 'gimmickBlocked'));
+  const short = makeFakeDeps(['x'.repeat(50), '/quit']);
+  await runDungeon({ ...short.deps, startFloor: 23 });
+  assert.equal(short.events.filter((e) => e.type === 'gimmickBlocked').length, 0);
+});
+
+test('bestiary lists every monster with its first-meeting HP, counter damage and boss rule', () => {
+  const all = bestiary();
+  assert.equal(all[0].name, '버그 고블린');
+  assert.equal(all[0].maxHp, 60);
+  assert.equal(all[0].counter, 6);
+  const boss = all[5];
+  assert.equal(boss.isBoss, true);
+  assert.equal(boss.maxHp, Math.round(495 * 1.5));
+  assert.equal(boss.gimmick?.id, 'clean');
+  assert.equal(all[11].gimmick?.id, 'tests');
 });

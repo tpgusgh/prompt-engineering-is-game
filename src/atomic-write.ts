@@ -22,11 +22,11 @@ async function renameWithRetry(from: string, to: string): Promise<void> {
   }
 }
 
-async function write(file: string, data: unknown, mode?: number): Promise<void> {
+async function write(file: string, text: string, mode?: number): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${++seq}.tmp`;
   try {
-    await fs.writeFile(tmp, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode });
+    await fs.writeFile(tmp, text, { encoding: 'utf-8', mode });
     await renameWithRetry(tmp, file);
   } catch (err) {
     await fs.rm(tmp, { force: true });
@@ -35,8 +35,12 @@ async function write(file: string, data: unknown, mode?: number): Promise<void> 
 }
 
 export function writeJsonAtomic(file: string, data: unknown, mode?: number): Promise<void> {
+  return writeTextAtomic(file, JSON.stringify(data, null, 2), mode);
+}
+
+export function writeTextAtomic(file: string, text: string, mode?: number): Promise<void> {
   const key = path.resolve(file);
-  const next = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(() => write(file, data, mode));
+  const next = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(() => write(file, text, mode));
   queues.set(key, next);
   void next.finally(() => {
     if (queues.get(key) === next) queues.delete(key);

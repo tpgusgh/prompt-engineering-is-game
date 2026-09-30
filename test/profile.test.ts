@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
+import { emptyRecords, emptyRunStats } from '../src/progress.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const } };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [] };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -16,9 +17,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' } }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7 }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' } });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7 }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -38,7 +39,7 @@ test('loadProfile coerces a field with the wrong type back to its default instea
     'utf-8',
   );
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 5, xp: 0, totalWins: 0, totalBattles: 12, ...EXTRA }, 'good fields kept, bad-typed fields fall back individually');
+  assert.deepEqual(profile, { level: 5, xp: 0, totalWins: 0, totalBattles: 12, ...EXTRA, records: { ...emptyRecords(), maxLevel: 5, seen: [0] } }, 'good fields kept, bad-typed fields fall back individually');
 });
 
 test('loadProfile rejects negative, fractional, and non-finite counts, not just wrong types', async () => {
@@ -50,7 +51,7 @@ test('loadProfile rejects negative, fractional, and non-finite counts, not just 
     'utf-8',
   );
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 1, xp: 0, totalWins: 0, totalBattles: 0, ...EXTRA });
+  assert.deepEqual(profile, { level: 1, xp: 0, totalWins: 0, totalBattles: 0, ...EXTRA, records: { ...emptyRecords(), seen: [0] } });
 });
 
 test('storyFloors keeps only valid entries; legacy storyChapters migrate to chapter-start floors', async () => {
@@ -111,7 +112,7 @@ test('applyRun records xp, stats, coins, bag, max HP and the exact floor to resu
   assert.deepEqual(p.storyFloors, { adventure: 9 });
   assert.equal(p.swordLevel, 4);
   assert.equal('stats' in p, false, 'stats are per-run, never saved to the profile');
-  assert.equal(p.maxHp, 100, "vitality's +10 from this run is stripped; only permanent max HP (crystals) is kept");
+  assert.equal(p.maxHp, 100, 'max HP bonuses from the run are not kept');
 });
 
 test('applyRun: defeat rewinds to the chapter start; progress never goes backwards', () => {
@@ -150,4 +151,20 @@ test('an unreadable profile is kept as a .broken copy before falling back to def
   assert.equal(profile.level, 1);
   const { readdir } = await import('node:fs/promises');
   assert.ok((await readdir(path.join(dir, '.promptbattle'))).some((f) => f.startsWith('profile.json.broken-')));
+});
+
+test('finishRun folds run stats into records and pays achievement coins', async () => {
+  const { finishRun } = await import('../src/profile.ts');
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  const profile = await loadProfile(dir);
+  const summary = { floorsCleared: 1, floorsEngaged: 1, xpGained: 20, defeated: false, nextFloor: 1, chaptersCleared: 0, coins: 10, bag: {}, playerMaxHp: 100, stats: { attack: 0, defense: 0, vitality: 0 }, statPoints: 0, swordLevel: 0, runStats: { ...emptyRunStats(), floorsCleared: 1, turns: 1 } } as BattleSummary;
+  const { profile: updated, progress } = finishRun(profile, summary, 'adventure', '2026-09-30');
+  assert.equal(updated.records.turns, 1);
+  assert.ok(updated.achievements.includes('first-win'));
+  assert.equal(updated.coins, 10 + progress.rewardCoins);
+});
+
+test('applyRun: life crystals only last for the run they were bought in', () => {
+  const p = applyRun(base, summary({ playerMaxHp: 120, stats: { attack: 0, defense: 0, vitality: 0 } }), 'adventure');
+  assert.equal(p.maxHp, 100);
 });

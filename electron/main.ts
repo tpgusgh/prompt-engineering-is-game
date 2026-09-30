@@ -5,13 +5,14 @@ import electronUpdater from 'electron-updater';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
-import { runDungeon, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
+import { runDungeon, bestiary, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
-import { loadSlots, writeSlot } from '../src/saves.ts';
+import { loadSlots, writeSlot, deleteSlot } from '../src/saves.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
-import { loadProfile, saveProfile, applyRun, startingStatPoints, XP_PER_LEVEL, TITLES } from '../src/profile.ts';
+import { loadProfile, saveProfile, finishRun, startingStatPoints, XP_PER_LEVEL, TITLES } from '../src/profile.ts';
+import { ACHIEVEMENTS, DAILY_QUESTS, currentDaily, localDate } from '../src/progress.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
@@ -38,6 +39,16 @@ if (app.isPackaged) {
   );
 }
 
+// The released app has no DevTools and no remote debugging, so the page
+// can't be scripted to cheat; PROMPTBATTLE_DEBUG=1 re-enables both (the CI
+// smoke test uses it). Development builds keep them.
+const DEBUG_ALLOWED = !app.isPackaged || process.env.PROMPTBATTLE_DEBUG === '1';
+if (!DEBUG_ALLOWED) {
+  app.commandLine.removeSwitch('remote-debugging-port');
+  app.commandLine.removeSwitch('remote-debugging-pipe');
+  app.commandLine.removeSwitch('inspect');
+}
+
 let mainWindow: InstanceType<typeof BrowserWindow> | null = null;
 
 // One dungeon run at a time, one window: a single pending resolver is enough.
@@ -61,7 +72,16 @@ let currentParty = true;
 ipcMain.handle('set-party', (_event, on: boolean) => {
   currentParty = Boolean(on);
 });
-ipcMain.handle('typing-hit', () => externalHit?.(1) ?? false);
+// A typed line can't be finished faster than this: blocks scripted spam of
+// the hit from the page (devtools console etc.).
+const TYPING_HIT_MIN_MS = 1500;
+let lastTypingHitAt = 0;
+ipcMain.handle('typing-hit', () => {
+  const now = Date.now();
+  if (now - lastTypingHitAt < TYPING_HIT_MIN_MS) return false;
+  lastTypingHitAt = now;
+  return externalHit?.(1) ?? false;
+});
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -72,6 +92,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      devTools: DEBUG_ALLOWED,
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -136,30 +157,37 @@ ipcMain.on('save-and-close-done', (_event, ok: boolean) => {
 // restart; the Mac build points at the release page. Failures (offline,
 // rate limit) are silent — it's only a convenience.
 let updateCheck: Promise<UpdateStatus | null> | null = null;
-function checkForUpdate(): Promise<UpdateStatus | null> {
-  if (!app.isPackaged) return Promise.resolve(null);
+let updaterWired = false;
+// force: the "업데이트 확인" button — checks again (also in development).
+function checkForUpdate(force = false): Promise<UpdateStatus | null> {
+  if (!app.isPackaged && !force) return Promise.resolve(null);
+  if (force) updateCheck = null;
   updateCheck ??= (async () => {
+    const latest = { state: 'latest', version: app.getVersion() } as const;
     try {
-      if (updateMode(process.platform, process.env) === 'install') {
+      if (app.isPackaged && updateMode(process.platform, process.env) === 'install') {
         const { autoUpdater } = electronUpdater;
-        autoUpdater.on('update-downloaded', (info) => {
-          mainWindow?.webContents.send('update-status', { state: 'ready', version: info.version } satisfies UpdateStatus);
-        });
+        if (!updaterWired) {
+          updaterWired = true;
+          autoUpdater.on('update-downloaded', (info) => {
+            mainWindow?.webContents.send('update-status', { state: 'ready', version: info.version } satisfies UpdateStatus);
+          });
+        }
         const result = await autoUpdater.checkForUpdates();
         const version = result?.updateInfo.version;
-        return version && isNewerVersion(version, app.getVersion()) ? { state: 'downloading', version } : null;
+        return version && isNewerVersion(version, app.getVersion()) ? { state: 'downloading', version } : latest;
       }
       const res = await fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } });
       if (!res.ok) return null;
       const { tag_name: tag } = (await res.json()) as { tag_name?: string };
-      return tag && isNewerVersion(tag, app.getVersion()) ? { state: 'available', version: tag.replace(/^v/, ''), url: RELEASES_URL } : null;
+      return tag && isNewerVersion(tag, app.getVersion()) ? { state: 'available', version: tag.replace(/^v/, ''), url: RELEASES_URL } : latest;
     } catch {
       return null;
     }
   })();
   return updateCheck;
 }
-ipcMain.handle('check-update', () => checkForUpdate());
+ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boolean(force)));
 ipcMain.handle('open-release-page', () => shell.openExternal(RELEASES_URL));
 ipcMain.handle('install-update', () => electronUpdater.autoUpdater.quitAndInstall());
 
@@ -190,7 +218,15 @@ ipcMain.handle('get-setup-info', async () => ({
   classes: HERO_CLASSES,
   xpPerLevel: XP_PER_LEVEL,
   titles: TITLES,
+  // Plain data only (the achievement checks are functions: they stay here).
+  achievements: ACHIEVEMENTS.map(({ done: _done, ...a }) => a),
+  dailyQuests: DAILY_QUESTS,
+  bestiary: bestiary(),
+  appVersion: app.getVersion(),
 }));
+
+// Today's quest (a new day swaps it in even before the next run ends).
+ipcMain.handle('get-daily', async () => currentDaily((await loadProfile()).daily, localDate()));
 
 // Settings tab: what can be toggled (skills, MCP servers) per folder, and
 // the chosen settings (saved in the profile; a running game picks changes up
@@ -278,6 +314,11 @@ ipcMain.handle('get-folder-session', (_event, cwd: string) => loadFolderSession(
 ipcMain.handle('list-sessions', (_event, cwd: string) => listFolderSessions(path.resolve(cwd)));
 ipcMain.handle('session-history', (_event, cwd: string, sessionId: string) => loadSessionHistory(sessionId, path.resolve(cwd)));
 ipcMain.handle('list-slots', () => loadSlots());
+ipcMain.handle('delete-slot', async (_event, slot: number) => {
+  if (!Number.isInteger(slot) || slot < 1 || slot > AUTO_SAVE_SLOT) return loadSlots();
+  await deleteSlot(slot);
+  return loadSlots();
+});
 
 ipcMain.handle(
   'start-run',
@@ -361,6 +402,7 @@ ipcMain.handle(
       playerHp: slot?.playerHp,
       monsterHp: slot?.monsterHp,
       bindExternalHit: (fn) => (externalHit = fn),
+      getModel: () => currentModel,
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => getWeapon(currentModel).multiplier * ATTACK_SPEED[(currentClaude ?? profile.claude).effort].multiplier,
@@ -405,11 +447,13 @@ ipcMain.handle(
     });
 
     // Settings changed mid-run win over the copy loaded at the start.
-    const updated = { ...applyRun(profile, summary, options.themeId), heroClass, claude: currentClaude ?? profile.claude };
+    const finished = finishRun(profile, summary, options.themeId);
+    const updated = { ...finished.profile, heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
     await saving;
 
-    return { summary, profile: updated };
+    const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
+    return { summary, profile: updated, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
   },
 );
 

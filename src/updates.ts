@@ -28,4 +28,5 @@ export function updateMode(platform: string, env: Record<string, string | undefi
 export type UpdateStatus =
   | { state: 'available'; version: string; url: string } // notify only: go download it
   | { state: 'downloading'; version: string }
-  | { state: 'ready'; version: string }; // downloaded: installs on restart
+  | { state: 'ready'; version: string } // downloaded: installs on restart
+  | { state: 'latest'; version: string }; // a manual check found nothing newer

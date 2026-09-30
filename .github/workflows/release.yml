@@ -1,0 +1,79 @@
+# Builds every desktop version on its own runner and publishes them to the
+# GitHub release for the pushed vX.Y.Z tag (`npm run release` pushes it):
+# Mac (Apple Silicon + Intel), Linux (x64 + arm64) AppImage, Windows x64.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to (re)build, e.g. v0.17.0
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+      - name: Create the release with its CHANGELOG notes
+        run: |
+          node -e "import('./scripts/release.mjs').then(({ extractNotes }) => { const fs = require('node:fs'); const v = process.env.TAG.replace(/^v/, ''); const n = extractNotes(fs.readFileSync('CHANGELOG.md', 'utf-8'), v); if (!n) { console.error('no CHANGELOG section for ' + v); process.exit(1); } fs.writeFileSync('notes.md', n); })"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Prompt Battle $TAG" --notes-file notes.md
+
+  build:
+    needs: create
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mac-arm64, os: macos-latest, args: --mac --arm64, sdk: darwin-arm64, smoke: true, files: 'release/*.dmg' }
+          - { name: mac-x64, os: macos-latest, args: --mac --x64, sdk: darwin-x64, smoke: false, files: 'release/*.dmg' }
+          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64, sdk: linux-x64, smoke: true, files: 'release/*.AppImage release/latest-linux*.yml' }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, args: --linux --arm64, sdk: linux-arm64, smoke: true, files: 'release/*.AppImage release/latest-linux*.yml' }
+          - { name: win-x64, os: windows-latest, args: --win --x64, sdk: win32-x64, smoke: true, files: 'release/*.exe release/*.exe.blockmap release/latest.yml' }
+    runs-on: ${{ matrix.os }}
+    name: build (${{ matrix.name }})
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+      - run: npm ci
+      - run: npm test
+      # Bundle exactly the target's native claude binary (npm installs only
+      # the runner's own; a cross-arch build swaps it).
+      - name: Native claude binary for ${{ matrix.sdk }}
+        run: |
+          v=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
+          for d in node_modules/@anthropic-ai/claude-agent-sdk-*; do [ "$d" = "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || rm -rf "$d"; done
+          [ -d "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || npm install --no-save --force "@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}@$v"
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Smoke (Linux, virtual display)
+        if: matrix.smoke && runner.os == 'Linux'
+        run: xvfb-run -a node scripts/smoke.mjs
+      - name: Smoke
+        if: matrix.smoke && runner.os != 'Linux'
+        run: node scripts/smoke.mjs
+      - name: Upload to the release
+        run: gh release upload "$TAG" ${{ matrix.files }} --clobber

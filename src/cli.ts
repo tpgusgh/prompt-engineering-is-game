@@ -4,7 +4,7 @@ import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { runDungeon, type BattleSummary } from './battle.ts';
 import { runAgentTurn } from './agent.ts';
-import { loadProfile, saveProfile, applyRun, startingStatPoints } from './profile.ts';
+import { loadProfile, saveProfile, finishRun, startingStatPoints } from './profile.ts';
 import { parseDifficulty } from './args.ts';
 import { colorize } from './ui.ts';
 import { formatBattleEvent } from './cli-render.ts';
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
     rl.close();
   }
 
-  const updated = applyRun(profile, summary, undefined);
+  const updated = finishRun(profile, summary, undefined).profile;
   await saveProfile(updated);
 
   console.log(

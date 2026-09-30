@@ -1,8 +1,7 @@
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { isSaveSlot, type SaveSlot } from './saves.ts';
-import { writeJsonAtomic } from './atomic-write.ts';
+import { readStore, writeStore } from './store.ts';
 
 // Per project folder: the Claude session to resume and the chat log shown
 // when the folder is opened again.
@@ -27,7 +26,7 @@ function storePath(homeDir: string): string {
 
 async function loadAll(homeDir: string): Promise<Record<string, unknown>> {
   try {
-    const parsed = JSON.parse(await fs.readFile(storePath(homeDir), 'utf-8'));
+    const parsed = (await readStore(storePath(homeDir), homeDir)) as any;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
@@ -61,7 +60,7 @@ export async function loadFolderSession(cwd: string, homeDir: string = os.homedi
 export async function saveFolderSession(cwd: string, session: FolderSession, homeDir: string = os.homedir()): Promise<void> {
   const all = await loadAll(homeDir);
   all[cwd] = session;
-  await writeJsonAtomic(storePath(homeDir), all);
+  await writeStore(storePath(homeDir), all, homeDir);
 }
 
 export function appendHistory(history: ChatEntry[], entry: ChatEntry): ChatEntry[] {

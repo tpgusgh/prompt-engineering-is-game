@@ -21,9 +21,30 @@ test('hard difficulty deals more HP than easy at the same floor', () => {
   assert.ok(hard.maxHp > easy.maxHp);
 });
 
-test('monster rotation cycles back to the first monster', () => {
+test('chapters cycle through the rosters, then start over', async () => {
+  const { ROSTER_COUNT } = await import('../src/monsters.ts');
   const first = spawnMonster(0, 'normal');
-  const wrapped = spawnMonster(6, 'normal'); // 6 monsters in the list, so floor 6 wraps to index 0
-  assert.equal(wrapped.name, first.name);
-  assert.ok(wrapped.maxHp > first.maxHp, 'wrapped floor still scales HP up even with the same monster');
+  const ch2 = spawnMonster(6, 'normal');
+  assert.notEqual(ch2.name, first.name);
+  assert.equal(ch2.index, 6);
+  assert.equal(spawnMonster(11, 'normal').index, 11, 'chapter 2 boss');
+  const wrap = spawnMonster(ROSTER_COUNT * 6, 'normal');
+  assert.equal(wrap.name, first.name);
+  assert.equal(wrap.index, 0);
+  assert.ok(wrap.maxHp > first.maxHp, 'a later floor still scales HP up even with the same monster');
+});
+
+test('listMonsters covers every monster once, with bosses last in each roster', async () => {
+  const { listMonsters, ROSTER_COUNT } = await import('../src/monsters.ts');
+  const all = listMonsters();
+  assert.equal(all.length, ROSTER_COUNT * 6);
+  assert.deepEqual(all.map((m) => m.index), all.map((_, i) => i));
+  assert.equal(all.filter((m) => m.isBoss).length, ROSTER_COUNT);
+});
+
+test('every roster has 6 monsters with unique names', async () => {
+  const { MONSTER_COUNT, ROSTER_COUNT } = await import('../src/monsters.ts');
+  assert.equal(MONSTER_COUNT, 6);
+  const names = Array.from({ length: MONSTER_COUNT * ROSTER_COUNT }, (_, i) => spawnMonster(Math.floor(i / 6) * 6 + (i % 6), 'normal').name);
+  assert.equal(new Set(names).size, names.length);
 });

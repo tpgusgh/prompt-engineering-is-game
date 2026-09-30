@@ -4,9 +4,13 @@ import { AUTO_SAVE_SLOT, type BattleEvent } from './battle.ts';
 export function formatBattleEvent(event: BattleEvent): string {
   switch (event.type) {
     case 'floorStart':
-      return `\n${colorize(`Floor ${event.floor + 1}: ${event.monsterName} appears!`, 'bold')}\n${event.monsterArt}\n${renderHpBar(event.maxHp, event.maxHp)}\n`;
+      return `\n${colorize(`Floor ${event.floor + 1}: ${event.monsterName} appears!`, 'bold')}\n${event.monsterArt}\n${renderHpBar(event.maxHp, event.maxHp)}\n${event.gimmick ? colorize(`Boss rule: ${event.gimmick.text}`, 'yellow') + '\n' : ''}`;
     case 'monsterWaits':
       return colorize('The AI is asking you something. The monster waits for your answer.', 'yellow') + '\n';
+    case 'gimmickBlocked':
+      return colorize(`The boss's rule held: ${event.text}. No damage this turn.`, 'yellow') + '\n';
+    case 'gimmickHeal':
+      return colorize(`A tool failed — the boss regenerates ${event.amount} HP.`, 'yellow') + '\n';
     case 'hesitate':
       return colorize('You hesitate. No attack this turn.', 'yellow') + '\n';
     case 'turnStart':

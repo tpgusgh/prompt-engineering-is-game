@@ -20,9 +20,6 @@ const startBtn = $('start-btn');
 const profileLineEl = $('profile-line');
 const themeOptionsEl = $('theme-options');
 const weaponOptionsEl = $('weapon-options');
-const continueLabel = $('continue-label');
-const continueCheckbox = $('continue-story');
-const continueText = $('continue-text');
 const chapterBanner = $('chapter-banner');
 const monsterPanel = $('monster-panel');
 const monsterNameEl = $('monster-name');
@@ -163,16 +160,6 @@ function renderClassOptions() {
 const savedFloor = (themeId) => profile?.storyFloors?.[themeId] ?? 0;
 const floorText = (floor) => `챕터 ${Math.floor(floor / 6) + 1} ${(floor % 6) + 1}/6층`;
 
-function refreshContinueOption() {
-  const floor = savedFloor(chosenThemeId);
-  const theme = THEMES.find((t) => t.id === chosenThemeId);
-  if (floor > 0 && theme) {
-    continueLabel.hidden = false;
-    continueText.textContent = `이어하기: ${floorText(floor)} "${chapterInfo(theme, Math.floor(floor / 6) + 1).title}"부터`;
-  } else {
-    continueLabel.hidden = true;
-  }
-}
 
 async function loadSetup() {
   const info = await window.promptBattle.getSetupInfo();
@@ -181,6 +168,10 @@ async function loadSetup() {
   heroClasses = info.classes;
   xpPerLevel = info.xpPerLevel ?? xpPerLevel;
   titles = info.titles ?? titles;
+  achievementDefs = info.achievements ?? [];
+  dailyQuestDefs = info.dailyQuests ?? [];
+  bestiaryDefs = info.bestiary ?? [];
+  renderDailyLine();
   runXp = 0;
   renderXp();
   chosenClass = profile.heroClass ?? chosenClass;
@@ -193,18 +184,15 @@ async function loadSetup() {
 
   themeOptionsEl.textContent = '';
   for (const theme of THEMES) {
-    const floor = savedFloor(theme.id);
     themeOptionsEl.append(
-      choiceCard('theme', theme.id, theme.id === chosenThemeId, theme.title, floor > 0 ? `${floorText(floor)}까지 진행` : '처음부터', () => {
+      choiceCard('theme', theme.id, theme.id === chosenThemeId, theme.title, '', () => {
         chosenThemeId = theme.id;
-        refreshContinueOption();
       }),
     );
   }
 
   renderClassOptions();
   renderWeaponOptions();
-  refreshContinueOption();
   renderClaudeSettings();
 }
 loadSetup();
@@ -1008,6 +996,8 @@ function soundFor(event) {
       sfx('hurt');
       break;
     case 'counterBlocked':
+    case 'gimmickBlocked':
+    case 'gimmickHeal':
       sfx('block');
       break;
     case 'floorCleared':
@@ -1093,8 +1083,19 @@ function renderBattleEvent(event) {
       monsterArtEl.innerHTML = monsterSvg(event.monsterIndex, event.isBoss);
       setBar(hpBarFillEl, hpLabelEl, event.maxHp, event.maxHp, ' HP');
       appendLog(event.isBoss ? `보스 ${currentMonsterName}이(가) 모습을 드러냈다!` : `${currentMonsterName}이(가) 나타났다!`, event.isBoss ? 'crit' : undefined);
+      $('boss-rule').hidden = !event.gimmick;
+      if (event.gimmick) {
+        $('boss-rule').textContent = `보스 규칙 — ${event.gimmick.text}`;
+        appendLog(`⚠️ 보스 규칙: ${event.gimmick.text}`, 'boss-rule-line');
+      }
       break;
     }
+    case 'gimmickBlocked':
+      appendLog(`🛡 보스 규칙에 막혔다! ${event.text} — 이번 턴 피해가 없던 일이 됐다.`, 'error');
+      break;
+    case 'gimmickHeal':
+      appendLog(`🩹 도구가 실패하자 ${currentMonsterName}이(가) 체력을 ${event.amount} 회복했다!`, 'error');
+      break;
     case 'monsterWaits':
       appendLog(`❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
       break;
@@ -1493,14 +1494,19 @@ $('session-close').addEventListener('click', () => ($('session-overlay').hidden 
 // ---------------------------------------------------------------------------
 // Save slots: saving is a free action in battle; loading starts a run from
 // the setup screen with the slot's folder, theme, weapon and state.
+// Short: "챕터 1 · 5층"; everything else goes in the card's tooltip.
+const slotPlace = (slot) => `챕터 ${Math.floor(slot.floor / 6) + 1} · ${(slot.floor % 6) + 1}층`;
+const slotTheme = (slot) => THEMES.find((t) => t.id === slot.themeId)?.title ?? slot.themeId;
+const slotFolder = (slot) => slot.cwd.split(/[\\/]/).filter(Boolean).pop();
 function slotSummary(slot) {
-  const theme = THEMES.find((t) => t.id === slot.themeId);
-  const folderName = slot.cwd.split(/[\\/]/).filter(Boolean).pop();
-  return `${theme?.title ?? slot.themeId} · ${floorText(slot.floor)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''} · HP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 무기 +${slot.swordLevel} · 📁 ${folderName} · ${shortTime(slot.savedAt)}`;
+  return `${slotTheme(slot)} · ${slotPlace(slot)}`;
+}
+function slotDetails(slot) {
+  return `${slotTheme(slot)} · ${slotPlace(slot)}${slot.monsterHp ? ` (몬스터 HP ${slot.monsterHp})` : ''}\nHP ${slot.playerHp}/${slot.playerMaxHp} · 🪙 ${slot.coins} · 무기 +${slot.swordLevel}\n📁 ${slot.cwd}\n${shortTime(slot.savedAt)} 저장`;
 }
 
 const AUTO_SLOT_INDEX = 3; // slot 4: the per-floor autosave
-function renderSlotRows(container, onPick, allowEmpty, includeAuto) {
+function renderSlotRows(container, onPick, allowEmpty, includeAuto, onDelete) {
   container.textContent = '';
   slots.forEach((slot, i) => {
     if (i === AUTO_SLOT_INDEX && !includeAuto) return;
@@ -1509,18 +1515,48 @@ function renderSlotRows(container, onPick, allowEmpty, includeAuto) {
     btn.className = 'slot-row';
     const strong = document.createElement('strong');
     strong.textContent = i === AUTO_SLOT_INDEX ? '🔄 자동 저장 (층마다)' : `슬롯 ${i + 1}`;
-    const span = document.createElement('span');
-    span.textContent = slot ? slotSummary(slot) : '비어 있음';
-    btn.append(strong, span);
+    btn.append(strong);
+    if (slot) {
+      const place = document.createElement('span');
+      place.className = 'slot-place';
+      place.textContent = slotPlace(slot);
+      const meta = document.createElement('small');
+      meta.textContent = `${slotTheme(slot)} · 📁 ${slotFolder(slot)} · ${shortTime(slot.savedAt)}`;
+      btn.append(place, meta);
+      btn.title = slotDetails(slot);
+    } else {
+      const empty = document.createElement('span');
+      empty.textContent = '비어 있음';
+      btn.append(empty);
+    }
     btn.disabled = !slot && !allowEmpty;
     btn.addEventListener('click', () => onPick(i + 1, slot));
-    container.append(btn);
+    if (!(onDelete && slot)) {
+      container.append(btn);
+      return;
+    }
+    // A delete button beside the card (not inside it: no nested buttons).
+    const cell = document.createElement('div');
+    cell.className = 'slot-cell';
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'slot-delete';
+    del.title = '이 저장 삭제';
+    del.setAttribute('aria-label', `${strong.textContent} 삭제`);
+    del.textContent = '🗑';
+    del.addEventListener('click', () => onDelete(i + 1, strong.textContent));
+    cell.append(btn, del);
+    container.append(cell);
   });
 }
 
 async function refreshSlots() {
   slots = await window.promptBattle.listSlots();
-  renderSlotRows($('slot-list'), (n, slot) => slot && startGame({ loadSlot: n, slot }), false, true);
+  renderSlotRows($('slot-list'), (n, slot) => slot && startGame({ loadSlot: n, slot }), false, true, async (n, name) => {
+    if (!confirm(`${name}을(를) 삭제할까요? 되돌릴 수 없어요.`)) return;
+    await window.promptBattle.deleteSlot(n);
+    await refreshSlots();
+  });
 }
 refreshSlots();
 
@@ -1551,8 +1587,8 @@ async function startGame({ loadSlot, slot }) {
   if (!chosenFolder) return;
   const difficulty = slot ? slot.difficulty : document.querySelector('input[name="difficulty"]:checked').value;
   activeTheme = THEMES.find((t) => t.id === chosenThemeId) || THEMES[0];
-  const floor = savedFloor(activeTheme.id);
-  const startFloor = floor > 0 && continueCheckbox.checked ? floor : 0;
+  // A new adventure starts at the beginning; continuing is the slots' job.
+  const startFloor = 0;
   const sessionId = slot ? slot.sessionId : sessionPicker.hidden ? undefined : sessionSelect.value || undefined;
   currentSessionId = sessionId ?? null;
   weaponSelect.value = chosenWeapon;
@@ -1600,17 +1636,14 @@ async function startGame({ loadSlot, slot }) {
     const heroClassId = chosenClass;
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId });
     setTimeout(refreshTree, 300);
-    const { summary, profile: updated } = await runPromise;
+    const { summary, profile: updated, progress } = await runPromise;
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;
     summaryTitleEl.textContent = summary.defeated ? '패배...' : '런 종료';
     summaryTextEl.textContent = `${summary.floorsCleared}층 클리어, +${summary.xpGained} XP 획득, 보유 코인 ${summary.coins}. 현재 레벨 ${updated.level} (총 ${updated.xp} XP).`;
-    const resumeFloor = savedFloor(activeTheme.id);
-    summaryStoryEl.textContent =
-      resumeFloor > 0
-        ? `${activeTheme.title}: 다음엔 ${floorText(resumeFloor)} "${chapterInfo(activeTheme, Math.floor(resumeFloor / 6) + 1).title}"부터 이어할 수 있다. 이 폴더의 세션도 이어갈 수 있다.`
-        : '';
+    summaryStoryEl.textContent = '💾 시작 화면의 이어하기에서 층마다 자동 저장으로 이어갈 수 있다.';
+    renderRunRewards(progress);
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
     // call). Without this, the player would be stuck on the dungeon screen.
@@ -1619,6 +1652,22 @@ async function startGame({ loadSlot, slot }) {
     setupErrorEl.textContent = `문제가 발생했습니다: ${err && err.message ? err.message : String(err)}`;
     setupErrorEl.hidden = false;
   }
+}
+
+// Summary screen: achievements unlocked and the daily quest, if done this run.
+function renderRunRewards(progress) {
+  const el = $('summary-rewards');
+  el.textContent = '';
+  if (!progress) return;
+  const add = (text, cls) => {
+    const row = document.createElement('div');
+    row.className = cls;
+    row.textContent = text;
+    el.append(row);
+  };
+  for (const a of progress.unlocked) add(`🏆 업적 달성: ${a.icon} ${a.title} — ${a.description} (+${a.coins} 코인)`, 'reward-achievement');
+  if (progress.dailyCompleted) add(`📅 오늘의 퀘스트 완료: ${progress.dailyCompleted.icon} ${progress.dailyCompleted.title} (+${progress.dailyCompleted.coins} 코인)`, 'reward-daily');
+  if (progress.unlocked.length || progress.dailyCompleted) sfx('fanfare');
 }
 
 attackForm.addEventListener('submit', (e) => {
@@ -2183,3 +2232,148 @@ setInterval(() => {
 }, 1000);
 
 
+
+// ---------------------------------------------------------------------------
+// Records window: today's quest, lifetime stats, per-model win rate, achievements.
+let achievementDefs = [];
+let dailyQuestDefs = [];
+const fmtNum = (n) => Number(n || 0).toLocaleString('ko-KR');
+const fmtDuration = (ms) => {
+  const s = Math.round((ms || 0) / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)}분 ${s % 60}초` : `${s}초`;
+};
+async function renderDailyLine() {
+  const daily = await window.promptBattle.getDaily();
+  const quest = dailyQuestDefs.find((q) => q.id === daily.questId);
+  $('daily-line').textContent = quest
+    ? `📅 오늘의 퀘스트: ${quest.icon} ${quest.title} (${daily.progress}/${quest.target})${daily.done ? ' ✓ 완료' : ` · 보상 ${quest.coins} 코인`}`
+    : '';
+  return { daily, quest };
+}
+async function openRecords() {
+  const { daily, quest } = await renderDailyLine();
+  const r = profile?.records ?? {};
+  $('records-daily').textContent = quest ? `${quest.icon} ${quest.title} — ${daily.progress}/${quest.target}${daily.done ? ' ✓ 완료!' : ` (보상 ${quest.coins} 코인)`}` : '';
+  const stats = [
+    ['모험 횟수', `${fmtNum(r.runs)}판`],
+    ['공격 명령', `${fmtNum(r.turns)}번`],
+    ['처리한 토큰', fmtNum(r.tokens)],
+    ['최고 한 방', fmtNum(r.bestHit)],
+    ['가장 긴 턴', fmtDuration(r.longestTurnMs)],
+    ['크리티컬', `${fmtNum(r.crits)}번`],
+    ['처치한 몬스터', `${fmtNum(r.floorsCleared)}마리`],
+    ['처치한 보스', `${fmtNum(r.bossesDefeated)}마리`],
+    ['테스트 통과', `${fmtNum(r.testsPassed)}번`],
+    ['파일 수정', `${fmtNum(r.filesEdited)}번`],
+    ['코딩 타자', `${fmtNum(r.typingLines)}줄`],
+    ['홀짝 승리', `${fmtNum(r.betsWon)}번`],
+    ['최고 무기 강화', `+${fmtNum(r.maxSwordLevel)}`],
+  ];
+  const grid = $('records-stats');
+  grid.textContent = '';
+  for (const [label, value] of stats) {
+    const cell = document.createElement('div');
+    const v = document.createElement('strong');
+    v.textContent = value;
+    const l = document.createElement('small');
+    l.textContent = label;
+    cell.append(v, l);
+    grid.append(cell);
+  }
+  const models = $('records-models');
+  models.textContent = '';
+  const entries = Object.entries(r.byModel ?? {}).filter(([, m]) => m.engaged > 0);
+  if (!entries.length) models.textContent = '아직 기록이 없어요. 한 판 싸우면 채워진다.';
+  for (const [model, m] of entries.sort((a, b) => b[1].engaged - a[1].engaged)) {
+    const known = weapons.find((w) => w.model === model);
+    const row = document.createElement('div');
+    row.className = 'model-row';
+    const name = document.createElement('span');
+    name.textContent = known ? classWeapon(model).name : model;
+    name.title = model;
+    const bar = document.createElement('div');
+    bar.className = 'hp-bar-track xp';
+    const fill = document.createElement('div');
+    fill.className = 'xp-fill';
+    const rate = m.cleared / m.engaged;
+    fill.style.width = `${Math.round(rate * 100)}%`;
+    bar.append(fill);
+    const text = document.createElement('small');
+    text.textContent = `${Math.round(rate * 100)}% (${m.cleared}/${m.engaged}층)`;
+    row.append(name, bar, text);
+    models.append(row);
+  }
+  const got = new Set(profile?.achievements ?? []);
+  $('records-ach-count').textContent = `${got.size}/${achievementDefs.length}`;
+  const ach = $('records-achievements');
+  ach.textContent = '';
+  for (const a of achievementDefs) {
+    const card = document.createElement('div');
+    card.className = `ach-card${got.has(a.id) ? ' got' : ''}`;
+    const t = document.createElement('strong');
+    t.textContent = `${got.has(a.id) ? a.icon : '🔒'} ${a.title}`;
+    const d = document.createElement('small');
+    d.textContent = `${a.description} · ${a.coins} 코인`;
+    card.append(t, d);
+    ach.append(card);
+  }
+  $('records-overlay').hidden = false;
+}
+$('records-btn').addEventListener('click', openRecords);
+$('records-close').addEventListener('click', () => ($('records-overlay').hidden = true));
+$('records-overlay').addEventListener('click', (e) => {
+  if (e.target === $('records-overlay')) $('records-overlay').hidden = true;
+});
+
+// ---------------------------------------------------------------------------
+// Bestiary: every monster as first met — art, name, HP, counterattack, boss
+// rule — and how many you've defeated. Unmet ones are silhouettes.
+let bestiaryDefs = [];
+function openBestiary() {
+  const seen = new Set(profile?.records?.seen ?? []);
+  const kills = profile?.records?.kills ?? {};
+  $('bestiary-count').textContent = `발견 ${seen.size}/${bestiaryDefs.length} · 처치 ${Object.keys(kills).length}/${bestiaryDefs.length}`;
+  const list = $('bestiary-list');
+  list.textContent = '';
+  let chapter = 0;
+  for (const m of bestiaryDefs) {
+    if (m.chapter !== chapter) {
+      chapter = m.chapter;
+      const h = document.createElement('h3');
+      h.textContent = `챕터 ${chapter}`;
+      h.className = 'bestiary-chapter';
+      list.append(h);
+    }
+    const known = seen.has(m.index);
+    const card = document.createElement('div');
+    card.className = `bestiary-card${known ? '' : ' unknown'}${m.isBoss ? ' boss' : ''}`;
+    const art = document.createElement('div');
+    art.className = 'bestiary-art';
+    art.innerHTML = monsterSvg(m.index, m.isBoss && known); // static, trusted markup
+    const info = document.createElement('div');
+    info.className = 'bestiary-info';
+    const name = document.createElement('strong');
+    name.textContent = known ? `${m.isBoss ? '👑 ' : ''}${m.name}` : '???';
+    const stats = document.createElement('small');
+    stats.textContent = known ? `❤️ HP ${m.maxHp} · 🗡 반격 ${m.counter} · ${m.firstFloor + 1}층부터` : `${m.firstFloor + 1}층 근처에 산다는데...`;
+    info.append(name, stats);
+    if (known && m.gimmick) {
+      const rule = document.createElement('small');
+      rule.className = 'bestiary-rule';
+      rule.textContent = m.gimmick.text;
+      info.append(rule);
+    }
+    const count = document.createElement('small');
+    count.className = 'bestiary-kills';
+    count.textContent = kills[m.index] ? `처치 ${kills[m.index]}회` : known ? '아직 못 쓰러뜨렸다' : '';
+    info.append(count);
+    card.append(art, info);
+    list.append(card);
+  }
+  $('bestiary-overlay').hidden = false;
+}
+$('bestiary-btn').addEventListener('click', openBestiary);
+$('bestiary-close').addEventListener('click', () => ($('bestiary-overlay').hidden = true));
+$('bestiary-overlay').addEventListener('click', (e) => {
+  if (e.target === $('bestiary-overlay')) $('bestiary-overlay').hidden = true;
+});

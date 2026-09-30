@@ -15,7 +15,7 @@ export const ITEMS: Item[] = [
   { id: 'whetstone', name: '숫돌', price: 40, description: '다음 공격 피해 2배' },
   { id: 'amulet', name: '수호의 부적', price: 35, description: '몬스터의 다음 반격 1회 무효' },
   { id: 'smoke', name: '연막탄', price: 25, description: '도망 100% 성공 (보스 제외)' },
-  { id: 'crystal', name: '생명의 결정', price: 80, description: '최대 HP +10 (영구, 즉시 적용)' },
+  { id: 'crystal', name: '생명의 결정', price: 80, description: '최대 HP +10 (이번 판 동안, 즉시 적용)' },
 ];
 
 export const POTION_HEAL = 40;

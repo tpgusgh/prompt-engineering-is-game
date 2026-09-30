@@ -80,6 +80,13 @@
         "owner": "tpgusgh",
         "repo": "prompt-engineering-is-game"
       }
-    ]
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true
+    },
+    "afterSign": "scripts/after-sign.cjs"
   }
 }

@@ -1,8 +1,7 @@
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { SAVE_SLOTS, AUTO_SAVE_SLOT, type RunState } from './battle.ts';
-import { writeJsonAtomic } from './atomic-write.ts';
+import { readStore, writeStore } from './store.ts';
 
 export const SLOT_COUNT = SAVE_SLOTS;
 
@@ -42,7 +41,7 @@ export function isSaveSlot(v: any): v is SaveSlot {
 
 async function loadRaw(homeDir: string): Promise<Record<string, unknown>> {
   try {
-    const parsed = JSON.parse(await fs.readFile(storePath(homeDir), 'utf-8'));
+    const parsed = (await readStore(storePath(homeDir), homeDir)) as any;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
@@ -62,5 +61,11 @@ export async function loadSlots(homeDir: string = os.homedir()): Promise<(SaveSl
 export async function writeSlot(slot: number, data: SaveSlot, homeDir: string = os.homedir()): Promise<void> {
   const raw = await loadRaw(homeDir);
   raw[String(slot)] = data;
-  await writeJsonAtomic(storePath(homeDir), raw);
+  await writeStore(storePath(homeDir), raw, homeDir);
+}
+
+export async function deleteSlot(slot: number, homeDir: string = os.homedir()): Promise<void> {
+  const raw = await loadRaw(homeDir);
+  delete raw[String(slot)];
+  await writeStore(storePath(homeDir), raw, homeDir);
 }

@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { MONSTER_COUNT } from './monsters.ts';
+import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
 import type { BattleSummary } from './battle.ts';
-import { VITALITY_HP } from './stats.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
-import { writeJsonAtomic } from './atomic-write.ts';
+import { readStore, writeStore } from './store.ts';
+import { applyProgress, coerceDaily, coerceRecords, emptyRecords, emptyRunStats, localDate, type DailyState, type ProgressResult, type Records } from './progress.ts';
 
 export interface Profile {
   level: number;
@@ -25,10 +25,14 @@ export interface Profile {
   heroClass: HeroClassId;
   // Settings-tab controls for the game's Claude sessions.
   claude: ClaudeSettings;
+  // Lifetime records (stats screen), unlocked achievement ids, today's quest.
+  records: Records;
+  achievements: string[];
+  daily?: DailyState;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS, records: emptyRecords(), achievements: [] };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -56,6 +60,28 @@ function coerceStoryFloors(p: Record<string, unknown> | null | undefined): Recor
   return { ...out, ...coerceCounts(p?.storyFloors, 0) };
 }
 
+// Profiles from before records existed: what they already show — wins,
+// level, sword, and the story floors reached count as monsters met (and the
+// ones before it as defeated) in the bestiary.
+function legacyRecords(p: Record<string, unknown> | null | undefined): Records {
+  const floors = Object.values(coerceStoryFloors(p));
+  const reached = floors.length ? Math.max(...floors) : 0;
+  const seen = Array.from({ length: reached + 1 }, (_, floor) => spawnMonster(floor, 'normal').index);
+  const kills: Record<string, number> = {};
+  for (let floor = 0; floor < reached; floor++) {
+    const index = spawnMonster(floor, 'normal').index;
+    kills[index] = (kills[index] ?? 0) + 1;
+  }
+  return {
+    ...emptyRecords(),
+    floorsCleared: isValidCount(p?.totalWins, 0) ? p.totalWins : 0,
+    maxLevel: isValidCount(p?.level, 1) ? p.level : 1,
+    maxSwordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
+    seen: [...new Set(seen)].sort((x, y) => x - y),
+    kills,
+  };
+}
+
 function coerceProfile(parsed: unknown): Profile {
   const p = parsed as Record<string, unknown> | null | undefined;
   return {
@@ -70,25 +96,27 @@ function coerceProfile(parsed: unknown): Profile {
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
     heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
     claude: coerceClaudeSettings(p?.claude),
+    // Profiles from before records existed start from what they already show.
+    records: p?.records ? coerceRecords(p.records) : legacyRecords(p),
+    achievements: Array.isArray(p?.achievements) ? p.achievements.filter((a): a is string => typeof a === 'string') : [],
+    ...(coerceDaily(p?.daily) ? { daily: coerceDaily(p?.daily) } : {}),
   };
 }
 
 export async function loadProfile(homeDir: string = os.homedir()): Promise<Profile> {
   try {
-    const raw = await fs.readFile(profilePath(homeDir), 'utf-8');
-    const parsed = JSON.parse(raw);
-    return coerceProfile(parsed);
+    return coerceProfile(await readStore(profilePath(homeDir), homeDir));
   } catch (err) {
     // Unreadable (not just missing): keep a copy before the next save replaces it.
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       await fs.copyFile(profilePath(homeDir), `${profilePath(homeDir)}.broken-${Date.now()}`).catch(() => {});
     }
-    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {} };
+    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, records: emptyRecords(), achievements: [] };
   }
 }
 
 export async function saveProfile(profile: Profile, homeDir: string = os.homedir()): Promise<void> {
-  await writeJsonAtomic(profilePath(homeDir), profile);
+  await writeStore(profilePath(homeDir), profile, homeDir);
 }
 
 // Flat curve: every XP_PER_LEVEL XP is a level (the UI's XP bar fills toward it).
@@ -134,13 +162,28 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.totalBattles += summary.floorsEngaged;
   updated.coins = summary.coins;
   updated.bag = { ...summary.bag };
-  // Vitality is a per-run stat: strip its bonus so only permanent max HP
-  // (life crystals) carries over.
-  updated.maxHp = Math.max(BASE_MAX_HP, summary.playerMaxHp - summary.stats.vitality * VITALITY_HP);
+  // Max HP bonuses (vitality, life crystals) last one run: the next starts at base.
+  updated.maxHp = BASE_MAX_HP;
   updated.swordLevel = summary.swordLevel;
   if (themeId) {
     const reached = summary.defeated ? summary.chaptersCleared * MONSTER_COUNT : summary.nextFloor;
     updated.storyFloors = { ...profile.storyFloors, [themeId]: Math.max(profile.storyFloors[themeId] ?? 0, reached) };
   }
   return updated;
+}
+
+// applyRun plus long-term progress: records, achievements and the daily
+// quest, whose coin rewards are added to the profile.
+export function finishRun(profile: Profile, summary: BattleSummary, themeId: string | undefined, date: string = localDate()): { profile: Profile; progress: ProgressResult } {
+  const base = applyRun(profile, summary, themeId);
+  const progress = applyProgress(
+    { records: base.records, achievements: base.achievements, daily: base.daily },
+    summary.runStats ?? emptyRunStats(),
+    { swordLevel: base.swordLevel, level: base.level },
+    date,
+  );
+  return {
+    profile: { ...base, records: progress.records, achievements: progress.achievements, daily: progress.daily, coins: base.coins + progress.rewardCoins },
+    progress,
+  };
 }

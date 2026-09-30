@@ -13,6 +13,8 @@ export interface TurnResult {
   sessionId?: string;
   contextTokens?: number;
   contextWindow?: number;
+  // Tokens this turn processed (input + output + cache), from the result usage.
+  tokensUsed?: number;
 }
 
 // Live events from a turn. command/file land hits; agentId marks ones done
@@ -182,6 +184,12 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
     contextTokens =
       usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
   }
+  let tokensUsed: number | undefined;
+  if (m?.type === 'result' && m.usage && typeof m.usage === 'object') {
+    const u = m.usage;
+    tokensUsed = [u.input_tokens, u.output_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens]
+      .reduce((sum: number, n: unknown) => sum + (typeof n === 'number' && n > 0 ? n : 0), 0);
+  }
   let contextWindow: number | undefined;
   if (m?.type === 'result' && m.modelUsage && typeof m.modelUsage === 'object') {
     const windows = Object.values(m.modelUsage as Record<string, any>)
@@ -191,7 +199,7 @@ export function extractToolInfo(message: unknown): ExtractedInfo {
   }
 
   return {
-    filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow,
+    filesChanged, commandsRun, text, finalResult, error, sessionId, contextTokens, contextWindow, tokensUsed,
     agentStarts, readsRun, toolCalls, toolOutputs, toolResultIds, textDelta, parentToolUseId,
     messageStart, tasksStarted, tasksFinished, taskReports,
   };
@@ -375,6 +383,7 @@ export async function runAgentTurn(
   let latestSessionId: string | undefined;
   let contextTokens: number | undefined;
   let contextWindow: number | undefined;
+  let tokensUsed = 0;
   const runningAgents = new Set<string>();
   const backgroundAgents = new Set<string>();
   const agentReports = new Map<string, string>();
@@ -491,6 +500,7 @@ export async function runAgentTurn(
       if (info.sessionId) latestSessionId = info.sessionId;
       if (info.contextTokens !== undefined) contextTokens = info.contextTokens;
       if (info.contextWindow !== undefined) contextWindow = info.contextWindow;
+      tokensUsed += info.tokensUsed ?? 0;
     }
     closeInput();
     for (const id of runningAgents) onEvent?.({ type: 'agentEnd', id });
@@ -505,6 +515,7 @@ export async function runAgentTurn(
       sessionId: latestSessionId,
       contextTokens,
       contextWindow,
+      tokensUsed,
     };
   } catch (err) {
     closeInput();
