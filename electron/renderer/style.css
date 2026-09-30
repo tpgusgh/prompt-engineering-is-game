@@ -2724,3 +2724,13 @@ body {
   border-radius: 6px;
   font: inherit;
 }
+
+/* Folded typing drill: only its title bar */
+.typing-game.collapsed > :not(.typing-head) {
+  display: none !important;
+}
+.typing-game.collapsed .typing-stats,
+.typing-game.collapsed .typing-lang,
+.typing-game.collapsed #typing-settings {
+  display: none;
+}

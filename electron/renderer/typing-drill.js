@@ -105,8 +105,30 @@ function nextSnippet() {
 
 // Don't pull focus away from the next-prompt memo while it's being written.
 function focusTyping() {
-  if (document.activeElement?.id !== 'next-memo') typingInput.focus();
+  if (collapsed || document.activeElement?.id === 'next-memo') return;
+  typingInput.focus();
 }
+
+// Folding the drill away: just the title bar stays (remembered).
+const COLLAPSE_KEY = 'pb-typing-collapsed';
+let collapsed = false;
+try {
+  collapsed = localStorage.getItem(COLLAPSE_KEY) === '1';
+} catch {}
+function renderCollapse() {
+  $('typing-game').classList.toggle('collapsed', collapsed);
+  $('typing-collapse').textContent = collapsed ? '▾ 펼치기' : '▴ 접기';
+  $('typing-collapse').setAttribute('aria-expanded', String(!collapsed));
+}
+$('typing-collapse').addEventListener('click', () => {
+  collapsed = !collapsed;
+  try {
+    localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+  } catch {}
+  renderCollapse();
+  if (!collapsed) focusTyping();
+});
+renderCollapse();
 
 export function startTyping() {
   typingActive = true;
