@@ -665,13 +665,12 @@ test('/use bandage heals a little (a cheaper potion)', async () => {
   assert.deepEqual(summary.bag, { bandage: 1 });
 });
 
-test('every floor start autosaves to the auto slot (4) with a fresh monster', async () => {
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+test('the auto slot (4) always holds the latest state, including a wounded monster', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']); // 10 damage: goblin 60 → 50
   await runDungeon({ ...deps, coins: 3 });
   const autos = events.filter((e) => e.type === 'snapshot' && e.slot === AUTO_SAVE_SLOT);
-  assert.equal(autos.length, 2, 'floor 0 and floor 1');
-  const second = autos[1];
-  assert.ok(second.type === 'snapshot' && second.state.floor === 1 && second.state.coins === 13 && second.state.monsterHp === undefined);
+  const last = autos.at(-1);
+  assert.ok(last && last.type === 'snapshot' && last.state.floor === 0 && last.state.monsterHp === 50, 'saved after the 10-damage hit (60 → 50)');
 });
 
 test('the auto slot cannot be written by /save', async () => {

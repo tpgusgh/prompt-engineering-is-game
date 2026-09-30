@@ -39,3 +39,9 @@ test('deleteSlot empties just that slot', async () => {
   await deleteSlot(1, dir);
   assert.deepEqual(await loadSlots(dir), [null, slot, null, null]);
 });
+
+test('slot writes at the same moment all land (no lost update)', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  await Promise.all([writeSlot(1, slot, dir), writeSlot(2, slot, dir), writeSlot(4, slot, dir), writeSlot(3, slot, dir)]);
+  assert.deepEqual(await loadSlots(dir), [slot, slot, slot, slot]);
+});

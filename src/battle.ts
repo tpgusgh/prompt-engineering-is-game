@@ -138,7 +138,7 @@ export function chestFor(overkill: number): ChestGrade {
 }
 
 export const SAVE_SLOTS = 3;
-// Slot written automatically at the start of every floor (not by /save).
+// Slot written automatically with the latest state (not by /save).
 export const AUTO_SAVE_SLOT = SAVE_SLOTS + 1;
 
 export interface BattleDeps {
@@ -464,7 +464,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     ...(sessionId ? { sessionId } : {}),
     ...(hp > 0 ? { monsterHp: hp } : {}),
   });
-  const autosave = () => deps.onBattleEvent({ type: 'snapshot', slot: 0, state: currentState() });
+  // Every wait for input: the per-session autosave (slot 0) and the auto slot
+  // (4), both with the live state — a wounded monster stays wounded on load.
+  const autosave = () => {
+    const state = currentState();
+    deps.onBattleEvent({ type: 'snapshot', slot: 0, state });
+    deps.onBattleEvent({ type: 'snapshot', slot: AUTO_SAVE_SLOT, state });
+  };
 
   // `/save N` and `/session <id>` — free actions allowed anywhere, like /stat.
   const freeCommand = (input: string): boolean => {
@@ -639,8 +645,6 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       trait: { id: trait, ...TRAITS[trait] },
     });
     if (hp < maxHp) deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
-    // Floor autosave: this floor, from the start of the fight.
-    deps.onBattleEvent({ type: 'snapshot', slot: AUTO_SAVE_SLOT, state: { ...currentState(), monsterHp: undefined } });
 
     let left = false;
     let fled = false;

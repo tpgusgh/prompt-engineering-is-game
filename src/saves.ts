@@ -58,14 +58,28 @@ export async function loadSlots(homeDir: string = dataHome()): Promise<(SaveSlot
   });
 }
 
-export async function writeSlot(slot: number, data: SaveSlot, homeDir: string = dataHome()): Promise<void> {
-  const raw = await loadRaw(homeDir);
-  raw[String(slot)] = data;
-  await writeStore(storePath(homeDir), raw, homeDir);
+// All slots share one file (read-modify-write), so changes run one after
+// another — the auto slot is written on every input and must not clobber a
+// manual save made at the same moment.
+let queue: Promise<unknown> = Promise.resolve();
+function serial<T>(task: () => Promise<T>): Promise<T> {
+  const next = queue.then(task, task);
+  queue = next.catch(() => {});
+  return next;
 }
 
-export async function deleteSlot(slot: number, homeDir: string = dataHome()): Promise<void> {
-  const raw = await loadRaw(homeDir);
-  delete raw[String(slot)];
-  await writeStore(storePath(homeDir), raw, homeDir);
+export function writeSlot(slot: number, data: SaveSlot, homeDir: string = dataHome()): Promise<void> {
+  return serial(async () => {
+    const raw = await loadRaw(homeDir);
+    raw[String(slot)] = data;
+    await writeStore(storePath(homeDir), raw, homeDir);
+  });
+}
+
+export function deleteSlot(slot: number, homeDir: string = dataHome()): Promise<void> {
+  return serial(async () => {
+    const raw = await loadRaw(homeDir);
+    delete raw[String(slot)];
+    await writeStore(storePath(homeDir), raw, homeDir);
+  });
 }

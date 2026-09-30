@@ -510,7 +510,7 @@ ipcMain.handle(
           return;
         }
         if (event.slot === AUTO_SAVE_SLOT) {
-          writeSlot(event.slot, data).catch(() => {}); // quiet: every floor
+          writeSlot(event.slot, data).catch(() => {}); // quiet: every input wait
           return;
         }
         send(event);

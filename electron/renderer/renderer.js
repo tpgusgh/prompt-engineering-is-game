@@ -1653,7 +1653,7 @@ function renderSlotRows(container, onPick, allowEmpty, includeAuto, onDelete) {
     btn.type = 'button';
     btn.className = 'slot-row';
     const strong = document.createElement('strong');
-    strong.textContent = i === AUTO_SLOT_INDEX ? '🔄 자동 저장 (층마다)' : `슬롯 ${i + 1}`;
+    strong.textContent = i === AUTO_SLOT_INDEX ? '🔄 자동 저장 (최근)' : `슬롯 ${i + 1}`;
     btn.append(strong);
     if (slot) {
       const place = document.createElement('span');
@@ -1830,8 +1830,8 @@ function renderSummary(summary, updated, progress, { difficulty, startCoins }) {
   renderXp();
   renderRunRewards(progress);
   summaryStoryEl.textContent = summary.defeated
-    ? '💾 층마다 자동 저장된다. 시작 화면의 이어하기에서 다시 도전하자.'
-    : '💾 시작 화면의 이어하기(층마다 자동 저장)에서 이어갈 수 있다.';
+    ? '💾 자동 저장에 마지막 상태가 남아 있다. 시작 화면의 이어하기에서 다시 도전하자.'
+    : '💾 시작 화면의 이어하기(자동 저장)에서 방금 상태 그대로 이어갈 수 있다.';
 }
 
 // Summary screen: achievements unlocked and the daily quest, if done this run.
