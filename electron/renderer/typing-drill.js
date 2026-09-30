@@ -100,7 +100,12 @@ function nextSnippet() {
   $('typing-lang').textContent = typingSnippet.lang;
   $('typing-explain').hidden = true;
   renderTypingTarget();
-  if (typingActive) typingInput.focus();
+  if (typingActive) focusTyping();
+}
+
+// Don't pull focus away from the next-prompt memo while it's being written.
+function focusTyping() {
+  if (document.activeElement?.id !== 'next-memo') typingInput.focus();
 }
 
 export function startTyping() {

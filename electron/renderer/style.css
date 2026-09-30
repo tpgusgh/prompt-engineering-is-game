@@ -2659,3 +2659,68 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 3px 4px 3px 8px;
+  border-radius: 12px;
+  background: #22303c;
+  border: 1px solid #5e81ac;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-chip button {
+  padding: 0 5px;
+  background: none;
+  border: none;
+  color: #7b88a1;
+  cursor: pointer;
+}
+.attachment-chip button:hover {
+  color: #bf616a;
+}
+.attach-btn {
+  align-self: stretch;
+  padding: 0 10px;
+  background: #2e3440;
+  color: #d8dee9;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+#attack-form.drop-target {
+  outline: 2px dashed #88c0d0;
+  outline-offset: 2px;
+}
+
+.next-memo {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.next-memo textarea {
+  resize: vertical;
+  padding: 6px 8px;
+  background: #1d222d;
+  color: #eceff4;
+  border: 1px dashed #5e81ac;
+  border-radius: 6px;
+  font: inherit;
+}

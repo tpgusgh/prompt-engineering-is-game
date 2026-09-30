@@ -203,6 +203,10 @@
             <div id="typing-hint" class="typing-hint" hidden>한/영 키로 영문 입력으로 바꿔줘</div>
             <div id="typing-explain" class="typing-explain" hidden></div>
           </div>
+          <div class="next-memo">
+            <label for="next-memo">📝 다음 명령 메모 <span class="option-sub">AI가 싸우는 동안 적어 두면, 턴이 끝날 때 입력창에 넣어 준다</span></label>
+            <textarea id="next-memo" rows="2" placeholder="다음에 시킬 일을 적어 두자..."></textarea>
+          </div>
         </div>
         <div id="session-banner" class="session-banner" hidden>
           <p id="session-banner-text"></p>
@@ -210,7 +214,9 @@
           <button type="button" id="session-banner-use">입력창에 넣기</button>
         </div>
         <div id="log"></div>
+        <div id="attachments" class="attachments" hidden></div>
         <form id="attack-form">
+          <button type="button" id="attach-btn" class="attach-btn" title="파일·사진 첨부 (끌어다 놓기, 이미지 붙여넣기도 된다)">📎</button>
           <textarea id="prompt-input" rows="1" placeholder="공격 프롬프트를 입력하세요... (Enter 공격 · Shift+Enter 줄바꿈 · /new 새 세션)" autocomplete="off"></textarea>
           <button type="submit">공격</button>
           <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>

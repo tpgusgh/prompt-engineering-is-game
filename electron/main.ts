@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
+import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachments.ts';
 import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
@@ -244,6 +245,49 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Files and pictures attached to the next prompt (📎, drop, paste). The next
+// AI turn takes them and the list empties.
+let attachments: (Attachment & { id: string; size: number })[] = [];
+let attachmentSeq = 0;
+const attachmentList = () => attachments.map(({ id, name, kind, size }) => ({ id, name, kind, size }));
+function addAttachment(name: string, bytes: Buffer): string | null {
+  if (attachments.length >= MAX_ATTACHMENTS) return `${name}: 한 번에 ${MAX_ATTACHMENTS}개까지 첨부할 수 있다`;
+  const a = toAttachment(name, bytes);
+  if ('error' in a) return a.error;
+  attachments.push({ ...a, id: `a${++attachmentSeq}`, size: bytes.length });
+  return null;
+}
+async function attachPaths(paths: unknown): Promise<{ list: ReturnType<typeof attachmentList>; errors: string[] }> {
+  const errors: string[] = [];
+  for (const p of Array.isArray(paths) ? paths : []) {
+    if (typeof p !== 'string') continue;
+    try {
+      const stat = await fs.stat(p);
+      if (!stat.isFile()) throw new Error('폴더는 첨부할 수 없다');
+      if (stat.size > 31 * 1024 * 1024) throw new Error('파일이 너무 크다');
+      const error = addAttachment(path.basename(p), await fs.readFile(p));
+      if (error) errors.push(error);
+    } catch (err) {
+      errors.push(`${path.basename(String(p))}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  return { list: attachmentList(), errors };
+}
+ipcMain.handle('attach-pick', async () => {
+  if (!mainWindow) return { list: attachmentList(), errors: [] };
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile', 'multiSelections'], defaultPath: currentCwd ?? undefined });
+  return result.canceled ? { list: attachmentList(), errors: [] } : attachPaths(result.filePaths);
+});
+ipcMain.handle('attach-paths', (_event, paths: unknown) => attachPaths(paths));
+ipcMain.handle('attach-data', (_event, name: unknown, base64: unknown) => {
+  const error = typeof base64 === 'string' ? addAttachment(String(name || 'image.png').slice(0, 80), Buffer.from(base64, 'base64')) : '잘못된 첨부';
+  return { list: attachmentList(), errors: error ? [error] : [] };
+});
+ipcMain.handle('attach-remove', (_event, id: unknown) => {
+  attachments = attachments.filter((a) => a.id !== id);
+  return { list: attachmentList(), errors: [] };
+});
+
 // Switching the project folder mid-run: set by start-run while a run is on.
 let switchRunFolder: ((dir: string) => Promise<void>) | null = null;
 ipcMain.handle('change-folder', async () => {
@@ -464,8 +508,10 @@ ipcMain.handle(
         currentTurnStop = stop;
         try {
           // The folder picked now (it may have changed since the run began).
+          const sent = attachments;
+          attachments = [];
           return await runAgentTurn(prompt, cwd, sessionId, onEvent, {
-            model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal,
+            model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
           });
         } finally {
           if (currentTurnStop === stop) currentTurnStop = null;

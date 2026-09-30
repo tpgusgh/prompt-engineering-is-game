@@ -351,6 +351,7 @@ function setInputEnabled(enabled) {
   $('save-btn').disabled = !enabled;
   $('session-btn').disabled = !enabled;
   $('change-folder').disabled = !enabled;
+  $('attach-btn').disabled = !enabled;
   for (const btn of document.querySelectorAll('.bag-list button, .merchant-panel button')) btn.disabled = !enabled;
   if (statDefs.length) renderStatPanel();
 }
@@ -370,6 +371,7 @@ function turnConcluded(notify) {
   $('turn-panel').hidden = true;
   refreshTree();
   if (pendingQuest) showQuest(pendingQuest);
+  useNextMemo();
 }
 
 // ---------------------------------------------------------------------------
@@ -1151,6 +1153,10 @@ function renderBattleEvent(event) {
       turnConcluded();
       break;
     case 'turnStart':
+      if (attachedNow.length) {
+        appendLog(`📎 첨부: ${attachedNow.map((a) => a.name).join(', ')}`, 'story-line');
+        renderAttachments([]); // the turn took them
+      }
       $('turn-panel').hidden = false;
       turnStatusEl.textContent = `AI가 ${weaponName()}(으)로 『${skillName()}』 시전 중...`;
       streamedThisTurn = false;
@@ -2873,3 +2879,88 @@ $('change-folder').addEventListener('click', async () => {
   appendLog(`📁 작업 폴더를 바꿨다: ${res.folder} — 여기서부터 새 Claude 세션으로 이어간다.`, 'story-line');
   window.promptBattle.submitPrompt('/new');
 });
+
+// ---------------------------------------------------------------------------
+// Attachments for the next prompt: 📎, drag & drop onto the input, or paste
+// an image. Main keeps the files; the next AI turn sends and clears them.
+let attachedNow = [];
+const KIND_ICON = { image: '🖼', pdf: '📄', text: '📝' };
+function renderAttachments(list) {
+  attachedNow = list;
+  const box = $('attachments');
+  box.textContent = '';
+  box.hidden = !list.length;
+  for (const a of list) {
+    const chip = document.createElement('span');
+    chip.className = 'attachment-chip';
+    chip.textContent = `${KIND_ICON[a.kind] ?? '📎'} ${a.name}`;
+    chip.title = `${a.name} · ${Math.max(1, Math.round(a.size / 1024))}KB`;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '✕';
+    x.setAttribute('aria-label', `${a.name} 빼기`);
+    x.addEventListener('click', async () => applyAttachResult(await window.promptBattle.attachRemove(a.id)));
+    chip.append(x);
+    box.append(chip);
+  }
+}
+function applyAttachResult(res) {
+  renderAttachments(res.list);
+  for (const e of res.errors) appendLog(`📎 ${e}`, 'error');
+}
+$('attach-btn').addEventListener('click', async () => applyAttachResult(await window.promptBattle.attachPick()));
+for (const el of [promptInput, attackForm]) {
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    attackForm.classList.add('drop-target');
+  });
+  el.addEventListener('dragleave', () => attackForm.classList.remove('drop-target'));
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    attackForm.classList.remove('drop-target');
+    const paths = [...(e.dataTransfer?.files ?? [])].map((f) => window.promptBattle.pathForFile(f)).filter(Boolean);
+    if (paths.length) applyAttachResult(await window.promptBattle.attachPaths(paths));
+  });
+}
+let pastedCount = 0;
+promptInput.addEventListener('paste', async (e) => {
+  const images = [...(e.clipboardData?.items ?? [])].filter((i) => i.type.startsWith('image/'));
+  if (!images.length) return;
+  e.preventDefault();
+  for (const item of images) {
+    const blob = item.getAsFile();
+    if (!blob) continue;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const ext = item.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+    applyAttachResult(await window.promptBattle.attachData(`붙여넣은 이미지 ${++pastedCount}.${ext}`, btoa(binary)));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Next-prompt memo: jot down the next command while the AI works; when the
+// turn ends it moves into the (empty) prompt box. Kept across restarts.
+const MEMO_KEY = 'pb-next-memo';
+const memoEl = $('next-memo');
+try {
+  memoEl.value = localStorage.getItem(MEMO_KEY) ?? '';
+} catch {}
+memoEl.addEventListener('input', () => {
+  try {
+    localStorage.setItem(MEMO_KEY, memoEl.value);
+  } catch {}
+});
+function useNextMemo() {
+  const memo = memoEl.value.trim();
+  if (!memo || promptInput.value.trim()) return;
+  promptInput.value = memo;
+  promptInput.dispatchEvent(new Event('input')); // grow the textarea
+  memoEl.value = '';
+  try {
+    localStorage.removeItem(MEMO_KEY);
+  } catch {}
+  appendLog('📝 메모해 둔 다음 명령을 입력창에 넣었다. Enter로 바로 공격!', 'story-line');
+  promptInput.focus();
+}

@@ -1,4 +1,5 @@
 import { query, listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { buildUserContent, type Attachment } from './attachments.ts';
 import { agentsFor, systemPromptFor } from './party.ts';
 import { relabelForListing } from './transcripts.ts';
 import { toQueryOptions, createTurnCloser, type ClaudeSettings } from './claude-settings.ts';
@@ -362,6 +363,7 @@ export async function runAgentTurn(
     claude,
     env,
     signal,
+    attachments = [],
   }: {
     model?: string;
     // Let the main agent send out the wizard/swordsman/archer subagents
@@ -373,6 +375,8 @@ export async function runAgentTurn(
     env?: Record<string, string | undefined>;
     // Aborting it stops the turn (⏹ 멈추기): the result is `interrupted`.
     signal?: AbortSignal;
+    // Files and pictures sent along with the prompt (src/attachments.ts).
+    attachments?: Attachment[];
   } = {},
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
@@ -396,7 +400,9 @@ export async function runAgentTurn(
   let closeInput = () => {};
   const inputClosed = new Promise<void>((r) => (closeInput = r));
   const input = (async function* () {
-    yield { type: 'user' as const, message: { role: 'user' as const, content: prompt }, parent_tool_use_id: null };
+    // The SDK accepts API content blocks here; the cast keeps its narrower type happy.
+    const content = buildUserContent(prompt, attachments) as string;
+    yield { type: 'user' as const, message: { role: 'user' as const, content }, parent_tool_use_id: null };
     await inputClosed;
   })();
   let interrupted = false;
