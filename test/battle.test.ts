@@ -1060,6 +1060,15 @@ test('the bomb scales with the monster: 20% of its max HP, never below 30', asyn
   assert.ok(bomb.damage > 30, 'deep floors get a bigger boom');
 });
 
+test('the bomb only does 5% of a boss max HP (still at least 30)', async () => {
+  const { deps, events } = makeFakeDeps(['/use bomb', '/quit']);
+  await runDungeon({ ...deps, startFloor: 11, bag: { bomb: 1 } });
+  const start = events.find((e) => e.type === 'floorStart');
+  const bomb = events.find((e) => e.type === 'bombHit');
+  assert.ok(start?.type === 'floorStart' && start.isBoss && bomb?.type === 'bombHit');
+  assert.equal(bomb.damage, Math.max(30, Math.round(start.maxHp * 0.05)));
+});
+
 test('items: the bomb hits the monster for 30, the scroll gives 30 XP, the elixir fully heals', async () => {
   const { deps, events } = makeFakeDeps(['x', '/use bomb', '/use scroll', '/use elixir', '/quit']);
   const summary = await runDungeon({ ...deps, bag: { bomb: 1, scroll: 1, elixir: 1 } });

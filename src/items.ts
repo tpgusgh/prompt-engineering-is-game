@@ -20,7 +20,7 @@ export const ITEMS: Item[] = [
   { id: 'smoke', name: '연막탄', price: 25, description: '도망 100% 성공 (보스 제외)' },
   { id: 'crystal', name: '생명의 결정', price: 80, description: '최대 HP +10 (이번 판 동안, 즉시 적용)' },
   { id: 'elixir', name: '엘릭서', price: 70, description: 'HP 완전 회복' },
-  { id: 'bomb', name: '폭탄', price: 45, description: '몬스터 최대 HP의 20% 피해 (최소 30)' },
+  { id: 'bomb', name: '폭탄', price: 45, description: '몬스터 최대 HP의 20% 피해 (보스는 5%, 최소 30)' },
   { id: 'scroll', name: '지혜의 두루마리', price: 50, description: '경험치 +30' },
   { id: 'contract', name: '계약서', price: 120, description: '6원소신 중 하나와 무작위 계약 — 모든 타격 +1과 신의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
   { id: 'devilContract', name: '악마의 계약서', price: 90, description: '7대 악마 중 하나와 무작위 계약 — 서명에 최대 HP 일부를 바치고 악마의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
@@ -34,7 +34,9 @@ export const sellPrice = (item: Item) => Math.floor(item.price / 2);
 export const COIN_CHARM_BONUS = 1.25;
 export const BOMB_DAMAGE = 30; // the floor: early monsters
 export const BOMB_RATIO = 0.2; // of the monster's max HP, so bombs keep up with deep floors
-export const bombDamage = (monsterMaxHp: number) => Math.max(BOMB_DAMAGE, Math.round(monsterMaxHp * BOMB_RATIO));
+export const BOMB_BOSS_RATIO = 0.05; // bosses shrug most of it off
+export const bombDamage = (monsterMaxHp: number, isBoss = false) =>
+  Math.max(BOMB_DAMAGE, Math.round(monsterMaxHp * (isBoss ? BOMB_BOSS_RATIO : BOMB_RATIO)));
 export const SCROLL_XP = 30;
 
 // The merchant's shelf on a visit: SHOP_SIZE items, rotating through the

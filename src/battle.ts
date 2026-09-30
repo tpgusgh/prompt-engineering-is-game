@@ -319,6 +319,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // The current monster's HP: -1 while at a shop / between floors.
   let hp = -1;
   let currentMaxHp = 0;
+  let currentIsBoss = false;
   let pendingMonsterHp = deps.monsterHp;
   let turnRunning = false;
   let sharpened = false; // whetstone: next attack x2
@@ -411,7 +412,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       shielded = true;
     } else if (id === 'bomb') {
       const before = hp;
-      const damage = bombDamage(currentMaxHp);
+      const damage = bombDamage(currentMaxHp, currentIsBoss);
       hp = Math.max(0, hp - damage);
       if (chests && hp === 0) overkill = damage - before;
       deps.onBattleEvent({ type: 'bombHit', damage });
@@ -677,6 +678,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const counter = (punished: boolean) =>
       Math.round(counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1));
     currentMaxHp = maxHp;
+    currentIsBoss = isBoss;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
     deps.onBattleEvent({
