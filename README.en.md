@@ -11,6 +11,9 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Prompts are attacks** — longer prompts and keywords ("step by step", "test", "edge case", "refactor", "why", "example") deal more damage; 2+ different keywords is a critical hit. Korean equivalents count too (단계별, 테스트, 엣지 케이스, 리팩토링, 왜, 예시, ...).
 - **Real-time hits (work = damage)** — every successful command/edit lands its own hit as it completes (25% of the prompt damage, 1–12) and the full prompt damage closes the turn; failed actions don't hit. **⏹ Stop** ends a turn right away, and **your latest message** is shown beside the monster; touched files fly at the monster as their real OS icon.
 - **XP bar, level rewards, titles** — shows how far you are toward the next level (every 100 XP), like an HP bar; each new run starts with **one stat point per hero level**, and your title changes with level (견습 용사 apprentice … 전설의 프롬프터 legendary prompter); it fills as you defeat monsters mid-run, with a level-up message.
+- **30 monsters & a bestiary** — each chapter brings 6 monsters (the last is the boss), cycling through 5 rosters: bug goblin, memory-leak jelly, SQL-injection vampire, floating-point ghost, AI-hallucination chimera and more. The **📖 bestiary** shows every monster you've met — art, HP, counterattack, boss rule, kills; unmet ones are silhouettes, and defeated ones open a detail page with their trait, personality and lines. Every monster has a **trait**: armor (work hits halved), regen (heals every turn), fierce (+30% counter), thorns (failed tool calls hurt you), frail (+25% closing blow), keyword-weak (+30% crits), test-weak (x1.5 closing blow on a turn whose tests passed).
+- **Boss rules** — every chapter boss has one: it heals when a tool fails / only takes damage from a turn whose tests passed / needs 3+ file edits in a turn / needs a prompt of 120 characters or fewer.
+- **Achievements, daily quest, records** — 16 achievements (first boss, 10 crits, sword +5, full bestiary…) that pay coins, a daily quest ("pass tests 3 times"…), and **📊 records**: tokens processed, best hit, longest turn, win rate per weapon (model).
 - **Monster speech bubbles** — monsters talk: idle chatter that keeps changing, plus their own lines when hit, attacking, dying and more; the merchant and blacksmith chat too.
 - **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors) — unless the AI ends its reply with a question for you; then the monster waits for your answer. 0 HP = defeat. Clearing a floor heals you.
 - **Classes & weapons = Claude models** — pick a class on the setup screen (🗡 swordsman / 🧙 wizard / 🏹 archer); each names the model-weapons differently and attacks with its own lines. Stronger models hit harder (x0.8 – x1.5); switch any time mid-run.
@@ -57,6 +60,11 @@ Everything fits on one screen: pick a 📁 project folder, then in the **New adv
 
 These apply only to the game's sessions; your Claude Code settings are untouched.
 
+### Bestiary
+![Bestiary](docs/screenshots/bestiary.png)
+
+Every monster you've met: art, HP, counterattack, boss rule and kills. **📖 Bestiary** at the top right of the start screen.
+
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)
 
@@ -95,7 +103,7 @@ Enhance your weapon with coins (up to +10). Success gets less likely as it climb
 
 ## Desktop App (Mac · Linux · Windows)
 
-Grab the file for your OS from [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases): `.dmg` for Mac (Apple Silicon), `.AppImage` for Linux x64 (`chmod +x`, then run), the installer `.exe` for Windows x64. To build it yourself:
+Grab the file for your OS from [GitHub Releases](https://github.com/tpgusgh/prompt-engineering-is-game/releases): `.dmg` for Mac (Apple Silicon `mac-arm64` / Intel `mac-x64`), `.AppImage` for Linux (x64 / arm64; `chmod +x`, then run), the installer `.exe` for Windows x64. The **Update** button at the top right of the start screen checks for a new version. To build it yourself:
 
 ```bash
 git clone https://github.com/tpgusgh/prompt-engineering-is-game.git
@@ -127,7 +135,7 @@ Versions are published as [GitHub Releases](https://github.com/tpgusgh/prompt-en
 Cutting a release (maintainers):
 ```bash
 npm version minor        # bump package.json and create the vX.Y.Z tag
-npm run release          # test → Mac/Linux/Windows builds → push the tag → GitHub release with all three
+npm run release          # test → push the tag → GitHub Actions builds Mac/Linux/Windows into the release
 ```
 
 ## Setup

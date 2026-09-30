@@ -9,6 +9,10 @@ export function formatBattleEvent(event: BattleEvent): string {
       return colorize('The AI is asking you something. The monster waits for your answer.', 'yellow') + '\n';
     case 'gimmickBlocked':
       return colorize(`The boss's rule held: ${event.text}. No damage this turn.`, 'yellow') + '\n';
+    case 'traitThorns':
+      return colorize(`A failed tool pricks you on the monster's thorns: -${event.damage} HP.`, 'red') + '\n';
+    case 'traitRegen':
+      return colorize(`The monster regenerates ${event.amount} HP.`, 'yellow') + '\n';
     case 'gimmickHeal':
       return colorize(`A tool failed — the boss regenerates ${event.amount} HP.`, 'yellow') + '\n';
     case 'hesitate':

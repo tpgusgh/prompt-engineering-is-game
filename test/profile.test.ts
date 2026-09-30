@@ -17,9 +17,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7 }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7 }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 120, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false } });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -167,4 +167,14 @@ test('finishRun folds run stats into records and pays achievement coins', async 
 test('applyRun: life crystals only last for the run they were bought in', () => {
   const p = applyRun(base, summary({ playerMaxHp: 120, stats: { attack: 0, defense: 0, vitality: 0 } }), 'adventure');
   assert.equal(p.maxHp, 100);
+});
+
+test('older profiles fill the bestiary from the story floors already reached', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
+  await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
+  await writeFile(path.join(dir, '.promptbattle', 'profile.json'), JSON.stringify({ level: 2, storyFloors: { adventure: 5 }, records: { turns: 3 } }));
+  const profile = await loadProfile(dir);
+  assert.deepEqual(profile.records.seen, [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(profile.records.kills, { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1 });
+  assert.equal(profile.records.turns, 3);
 });

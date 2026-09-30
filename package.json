@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "electron": "^44.4.5",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "lucide-static": "^1.49.0"
   },
   "build": {
     "appId": "com.promptbattle.app",

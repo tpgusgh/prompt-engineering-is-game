@@ -1,5 +1,5 @@
 import { calculateDamage } from './damage.ts';
-import { spawnMonster, listMonsters, MONSTER_COUNT, type Difficulty } from './monsters.ts';
+import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, type Difficulty, type TraitId } from './monsters.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
@@ -19,7 +19,10 @@ export type BattleEvent =
       maxHp: number;
       // Chapter bosses fight with a special rule.
       gimmick?: BossGimmick;
+      trait?: { id: TraitId; name: string; text: string };
     }
+  | { type: 'traitThorns'; damage: number }
+  | { type: 'traitRegen'; amount: number }
   | { type: 'gimmickBlocked'; text: string }
   | { type: 'gimmickHeal'; amount: number }
   | { type: 'hesitate' }
@@ -158,6 +161,10 @@ export interface BattleSummary {
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
+// Monster traits (src/monsters.ts TRAITS).
+const FIERCE = 1.3;
+const THORNS_DAMAGE = 2;
+const REGEN_RATIO = 0.05;
 const FLOOR_CLEAR_HEAL = 25;
 const SESSION_WARN_RATIO = 0.8;
 const FLEE_CHANCE = 0.5;
@@ -205,7 +212,8 @@ export function bestiary() {
     const spawned = spawnMonster(m.firstFloor, 'normal');
     const maxHp = m.isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
     const chapter = Math.floor(m.firstFloor / MONSTER_COUNT) + 1;
-    return { ...m, chapter, maxHp, counter: counterDamage(maxHp, false), gimmick: m.isBoss ? gimmickFor(chapter) : undefined };
+    const counter = Math.round(counterDamage(maxHp, false) * (m.trait === 'fierce' ? FIERCE : 1));
+    return { ...m, chapter, maxHp, counter, trait: { id: m.trait, ...TRAITS[m.trait] }, gimmick: m.isBoss ? gimmickFor(chapter) : undefined };
   });
 }
 
@@ -467,6 +475,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const maxHp = isBoss ? Math.round(spawned.maxHp * BOSS_HP_MULTIPLIER) : spawned.maxHp;
     const gimmick = isBoss ? gimmickFor(chapter) : undefined;
     if (!runStats.seen.includes(monsterIndex)) runStats.seen.push(monsterIndex);
+    const trait = spawned.trait;
+    const counter = (punished: boolean) => Math.round(counterDamage(maxHp, punished) * (trait === 'fierce' ? FIERCE : 1));
     currentMaxHp = maxHp;
     hp = Math.min(maxHp, pendingMonsterHp ?? maxHp);
     pendingMonsterHp = undefined;
@@ -480,6 +490,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       monsterArt: spawned.art,
       maxHp,
       ...(gimmick ? { gimmick } : {}),
+      trait: { id: trait, ...TRAITS[trait] },
     });
     if (hp < maxHp) deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
     // Floor autosave: this floor, from the start of the fight.
@@ -516,7 +527,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           break;
         }
         // A failed escape wastes the turn: the monster gets a free hit.
-        takeHit(counterDamage(maxHp, false));
+        takeHit(counter(false));
         if (playerHp <= 0) break;
         continue;
       }
@@ -534,7 +545,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
       if (prompt.length === 0) {
         deps.onBattleEvent({ type: 'hesitate' });
-        takeHit(counterDamage(maxHp, true));
+        takeHit(counter(true));
         if (playerHp <= 0) break;
         continue;
       }
@@ -563,7 +574,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       // ones don't — and the prompt's full damage lands as the closing blow
       // when the turn ends normally (not on error or stop). So a short
       // prompt that makes the AI do a lot still hits hard.
-      const actionHit = actionDamage(damage);
+      const actionHit = trait === 'armor' ? Math.max(1, Math.round(actionDamage(damage) / 2)) : actionDamage(damage);
       const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
         deps.onBattleEvent({ type: 'agentEvent', agentEvent: event });
@@ -574,6 +585,11 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           if (!call) return;
           if (event.isError) {
             turnFailures += 1;
+            if (trait === 'thorns' && playerHp > 0) {
+              playerHp = Math.max(0, playerHp - THORNS_DAMAGE);
+              deps.onBattleEvent({ type: 'traitThorns', damage: THORNS_DAMAGE });
+              emitPlayerHp();
+            }
             return;
           }
           if (call.type === 'file') {
@@ -634,6 +650,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'turnInterrupted' });
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       } else if (gimmickMet) {
+        if (trait === 'frail') damage = Math.round(damage * 1.25);
+        if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
+        if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
         if (crit) runStats.crits += 1;
@@ -657,11 +676,18 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'sessionNearlyFull', usedTokens: turn.contextTokens, contextWindow: turn.contextWindow });
       }
 
+      if (playerHp <= 0) break; // thorns finished the hero mid-turn
       if (hp > 0 && !turn.error && endsWithQuestion(turn.summary)) {
         deps.onBattleEvent({ type: 'monsterWaits' });
       } else if (hp > 0) {
-        takeHit(counterDamage(maxHp, Boolean(turn.error)));
+        takeHit(counter(Boolean(turn.error)));
         if (playerHp <= 0) break;
+      }
+      if (trait === 'regen' && hp > 0 && hp < maxHp) {
+        const amount = Math.min(maxHp - hp, Math.max(1, Math.round(maxHp * REGEN_RATIO)));
+        hp += amount;
+        deps.onBattleEvent({ type: 'traitRegen', amount });
+        deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
       }
     }
 

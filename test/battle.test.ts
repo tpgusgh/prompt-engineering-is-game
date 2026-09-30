@@ -845,3 +845,48 @@ test('bestiary lists every monster with its first-meeting HP, counter damage and
   assert.equal(boss.gimmick?.id, 'clean');
   assert.equal(all[11].gimmick?.id, 'tests');
 });
+
+test('traits: the bug goblin (thorns) hurts the hero for each failed tool result', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'no', isError: true }]);
+  await runDungeon(deps);
+  const start = events.find((e) => e.type === 'floorStart');
+  assert.ok(start && start.type === 'floorStart' && start.trait?.id === 'thorns');
+  assert.ok(events.some((e) => e.type === 'traitThorns' && e.damage === 2));
+});
+
+test('traits: the type-error slime (armor) takes half work hits', async () => {
+  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action, halved
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
+  await runDungeon({ ...deps, startFloor: 1 });
+  assert.deepEqual(events.filter((e) => e.type === 'partialHit').map((e) => (e.type === 'partialHit' ? e.damage : -1)), [5]);
+});
+
+test('traits: the merge-conflict hydra (regen) heals after each turn it survives', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, startFloor: 4 });
+  assert.ok(events.some((e) => e.type === 'traitRegen' && e.amount > 0));
+});
+
+test('traits: the race-condition phantom (fierce) counters 30% harder', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, startFloor: 3 });
+  const start = events.find((e) => e.type === 'floorStart');
+  const counter = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(start && start.type === 'floorStart' && counter && counter.type === 'monsterAttack');
+  assert.equal(counter.damage, Math.round(Math.max(3, Math.round(start.maxHp * 0.1)) * 1.3));
+});
+
+test('traits: the null-pointer wraith (frail) takes a 25% harder closing blow', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, startFloor: 2 });
+  const attack = events.find((e) => e.type === 'attack');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === Math.round(10 * 1.25));
+});
+
+test('traits: thorns that bring the hero to 0 HP end the run as a defeat', async () => {
+  const { deps } = makeFakeDeps(['x', '/quit']);
+  deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'no', isError: true }]);
+  const summary = await runDungeon({ ...deps, playerHp: 2 });
+  assert.equal(summary.defeated, true);
+});

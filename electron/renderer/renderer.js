@@ -1,6 +1,7 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg } from './monster-art.js';
+import './iconize.js';
 import { $ } from './dom.js';
 import { logEl, appendLog, scrollLogToBottom } from './log.js';
 import { THEMES, chapterInfo } from './story.js';
@@ -9,6 +10,8 @@ import { startTyping, stopTyping } from './typing-drill.js';
 import { speechFor } from './speech.js';
 import { openSettings } from './settings-window.js';
 import './updates.js';
+import { MONSTER_LORE } from './monster-lore.js';
+import { MONSTER_LINES } from './monster-lines.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -1083,6 +1086,7 @@ function renderBattleEvent(event) {
       monsterArtEl.innerHTML = monsterSvg(event.monsterIndex, event.isBoss);
       setBar(hpBarFillEl, hpLabelEl, event.maxHp, event.maxHp, ' HP');
       appendLog(event.isBoss ? `보스 ${currentMonsterName}이(가) 모습을 드러냈다!` : `${currentMonsterName}이(가) 나타났다!`, event.isBoss ? 'crit' : undefined);
+      if (event.trait) appendLog(`특성 — ${event.trait.name}: ${event.trait.text}`, 'trait-line');
       $('boss-rule').hidden = !event.gimmick;
       if (event.gimmick) {
         $('boss-rule').textContent = `보스 규칙 — ${event.gimmick.text}`;
@@ -1095,6 +1099,12 @@ function renderBattleEvent(event) {
       break;
     case 'gimmickHeal':
       appendLog(`🩹 도구가 실패하자 ${currentMonsterName}이(가) 체력을 ${event.amount} 회복했다!`, 'error');
+      break;
+    case 'traitThorns':
+      appendLog(`작업이 실패하자 ${currentMonsterName}의 가시에 찔렸다! ${event.damage}의 피해.`, 'error');
+      break;
+    case 'traitRegen':
+      appendLog(`🩹 ${currentMonsterName}이(가) 체력을 ${event.amount} 재생했다.`);
       break;
     case 'monsterWaits':
       appendLog(`❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
@@ -2365,12 +2375,66 @@ function openBestiary() {
     }
     const count = document.createElement('small');
     count.className = 'bestiary-kills';
-    count.textContent = kills[m.index] ? `처치 ${kills[m.index]}회` : known ? '아직 못 쓰러뜨렸다' : '';
+    count.textContent = kills[m.index] ? `처치 ${kills[m.index]}회 · 눌러서 상세보기` : known ? '쓰러뜨리면 특성이 밝혀진다' : '';
     info.append(count);
     card.append(art, info);
+    if (kills[m.index]) {
+      card.classList.add('defeated');
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.addEventListener('click', () => showMonsterDetail(m, kills[m.index]));
+      card.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && showMonsterDetail(m, kills[m.index]));
+    }
     list.append(card);
   }
+  list.hidden = false;
+  $('bestiary-detail').hidden = true;
   $('bestiary-overlay').hidden = false;
+}
+
+// Detail page of a defeated monster: its trait, personality and lines.
+function showMonsterDetail(m, killCount) {
+  const el = $('bestiary-detail');
+  el.textContent = '';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'bestiary-back';
+  back.textContent = '← 도감으로';
+  back.addEventListener('click', () => {
+    el.hidden = true;
+    $('bestiary-list').hidden = false;
+  });
+  const top = document.createElement('div');
+  top.className = 'detail-top';
+  const art = document.createElement('div');
+  art.innerHTML = monsterSvg(m.index, m.isBoss); // static, trusted markup
+  const head = document.createElement('div');
+  const name = document.createElement('h3');
+  name.textContent = `${m.isBoss ? '👑 ' : ''}${m.name}`;
+  const where = document.createElement('p');
+  where.className = 'option-sub';
+  where.textContent = `챕터 ${m.chapter} · ${m.firstFloor + 1}층부터${m.isBoss ? ' · 챕터 보스' : ''} · 처치 ${killCount}회`;
+  const stats = document.createElement('p');
+  stats.textContent = `❤️ HP ${m.maxHp}   🗡 반격 ${m.counter}`;
+  head.append(name, where, stats);
+  top.append(art, head);
+  const section = (title, text, cls) => {
+    const box = document.createElement('div');
+    box.className = `detail-box${cls ? ` ${cls}` : ''}`;
+    const t = document.createElement('strong');
+    t.textContent = title;
+    const p = document.createElement('p');
+    p.textContent = text;
+    box.append(t, p);
+    return box;
+  };
+  el.append(back, top, section(`특성 — ${m.trait.name}`, m.trait.text, 'trait'));
+  if (m.gimmick) el.append(section('보스 규칙', m.gimmick.text, 'rule'));
+  el.append(section('성격', MONSTER_LORE[m.index] ?? ''));
+  const lines = MONSTER_LINES[m.index];
+  if (lines) el.append(section('자주 하는 말', [lines.appear[0], ...lines.idle.slice(0, 2)].map((l) => `“${l}”`).join('\n'), 'quotes'));
+  $('bestiary-list').hidden = true;
+  el.hidden = false;
 }
 $('bestiary-btn').addEventListener('click', openBestiary);
 $('bestiary-close').addEventListener('click', () => ($('bestiary-overlay').hidden = true));

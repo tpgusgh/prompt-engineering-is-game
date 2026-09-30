@@ -23,3 +23,9 @@ test('every monster has its own SVG art', async () => {
   const arts = Array.from({ length: MONSTER_COUNT * ROSTER_COUNT }, (_, i) => monsterSvg(i, false));
   assert.equal(new Set(arts).size, arts.length);
 });
+
+test('every monster has a bestiary personality blurb', async () => {
+  const { MONSTER_LORE } = await import('../electron/renderer/monster-lore.js');
+  assert.equal(MONSTER_LORE.length, MONSTER_COUNT * ROSTER_COUNT);
+  assert.ok(MONSTER_LORE.every((t) => typeof t === 'string' && t.length > 10));
+});

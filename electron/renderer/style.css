@@ -2255,3 +2255,82 @@ body {
   font-size: 12.5px;
   white-space: nowrap;
 }
+
+/* Lucide line icons (replacing emoji, see iconize.js) */
+.ic {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+  margin-right: 0.2em;
+}
+.ic-coins, .ic-star, .ic-trophy, .ic-crown, .ic-medal { color: #ebcb8b; }
+.ic-heart, .ic-flame, .ic-triangle-alert, .ic-circle-x, .ic-circle-stop { color: #bf616a; }
+.ic-circle-check, .ic-check, .ic-bandage { color: #a3be8c; }
+.ic-zap, .ic-sparkles, .ic-wand-sparkles { color: #b48ead; }
+.ic-shield, .ic-shield-check, .ic-flask-conical, .ic-bot, .ic-bird { color: #88c0d0; }
+.ic-sword, .ic-swords, .ic-bow-arrow, .ic-hammer { color: #d8dee9; }
+
+.trait-line {
+  color: #b48ead;
+  font-size: 12.5px;
+}
+
+.bestiary-card.defeated {
+  cursor: pointer;
+}
+.bestiary-card.defeated:hover,
+.bestiary-card.defeated:focus-visible {
+  border-color: #88c0d0;
+  outline: none;
+}
+.bestiary-detail {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-panel .bestiary-back {
+  align-self: flex-start;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.detail-top {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.detail-top h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.detail-top p {
+  margin: 2px 0;
+}
+.detail-box {
+  padding: 10px 12px;
+  background: #1d222d;
+  border: 1px solid #2e3440;
+  border-radius: 8px;
+}
+.detail-box strong {
+  font-size: 13px;
+}
+.detail-box p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #d8dee9;
+  white-space: pre-line;
+}
+.detail-box.trait {
+  border-color: #b48ead;
+}
+.detail-box.rule {
+  border-color: #ebcb8b;
+}
+.detail-box.quotes p {
+  color: #aeb7c7;
+  font-style: italic;
+}

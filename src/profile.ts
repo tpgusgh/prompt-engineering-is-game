@@ -82,6 +82,13 @@ function legacyRecords(p: Record<string, unknown> | null | undefined): Records {
   };
 }
 
+// Records saved before the bestiary existed: fill it from the story reached.
+function withLegacyBestiary(records: Records, p: Record<string, unknown> | null | undefined): Records {
+  if (records.seen.length > 0) return records;
+  const legacy = legacyRecords(p);
+  return { ...records, seen: legacy.seen, kills: legacy.kills };
+}
+
 function coerceProfile(parsed: unknown): Profile {
   const p = parsed as Record<string, unknown> | null | undefined;
   return {
@@ -97,7 +104,7 @@ function coerceProfile(parsed: unknown): Profile {
     heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
     claude: coerceClaudeSettings(p?.claude),
     // Profiles from before records existed start from what they already show.
-    records: p?.records ? coerceRecords(p.records) : legacyRecords(p),
+    records: withLegacyBestiary(p?.records ? coerceRecords(p.records) : legacyRecords(p), p),
     achievements: Array.isArray(p?.achievements) ? p.achievements.filter((a): a is string => typeof a === 'string') : [],
     ...(coerceDaily(p?.daily) ? { daily: coerceDaily(p?.daily) } : {}),
   };
