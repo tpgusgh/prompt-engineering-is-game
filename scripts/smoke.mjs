@@ -68,7 +68,7 @@ let id = 0;
 const pending = new Map();
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
-  if (m.id && pending.has(m.id)) pending.get(m.id)(m.result);
+  if (m.id && pending.has(m.id)) pending.get(m.id)(m);
   if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text);
   if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
 };
@@ -82,11 +82,18 @@ await new Promise((r) => (ws.onopen = r));
 await send('Runtime.enable');
 await send('Page.reload'); // catch errors from the very first script run too
 await sleep(4000);
-const { result } = await send('Runtime.evaluate', {
-  expression: "Boolean(document.getElementById('start-btn') && document.getElementById('setup-screen') && !document.getElementById('setup-screen').hidden)",
-});
+// The page may still be (re)loading: retry, and report CDP errors verbatim.
+let shown = false;
+for (let i = 0; i < 10 && !shown; i++) {
+  const reply = await send('Runtime.evaluate', {
+    expression: "Boolean(document.getElementById('start-btn') && document.getElementById('setup-screen') && !document.getElementById('setup-screen').hidden)",
+  });
+  if (reply.error) console.log('evaluate error:', JSON.stringify(reply.error));
+  shown = reply.result?.result?.value === true;
+  if (!shown) await sleep(1000);
+}
 ws.close();
-if (result.value !== true) {
+if (!shown) {
   console.error('SMOKE FAIL: start screen not shown');
   done(1);
 }
