@@ -1055,3 +1055,12 @@ test('a bare /new at the merchant resets the session without leaving the shop', 
   assert.ok(events.some((e) => e.type === 'sessionReset' && e.reason === 'new'));
   assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'bandage'), 'still shopping');
 });
+
+test('the merchant buys bag items back at half price', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/sell potion', '/sell potion', '/sell crystal', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 0, bag: { potion: 1 }, random: seq(0.1, 0.99) });
+  assert.ok(events.some((e) => e.type === 'sold' && e.itemId === 'potion' && e.gained === 15), 'potion 30 → 15');
+  assert.equal(events.filter((e) => e.type === 'sellFailed').length, 2, 'none left / not in the bag');
+  assert.equal(summary.bag.potion, undefined);
+  assert.equal(summary.coins, 10 + 15);
+});

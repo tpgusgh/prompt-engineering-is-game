@@ -2,7 +2,7 @@ import { calculateDamage } from './damage.ts';
 import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
-import { getItem, shopOffer, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, BOMB_DAMAGE, SCROLL_XP, type Item } from './items.ts';
+import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, BOMB_DAMAGE, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_HP, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
@@ -62,6 +62,8 @@ export type BattleEvent =
   | { type: 'purchased'; itemId: string; coins: number }
   | { type: 'purchaseFailed'; itemId: string; reason: string }
   | { type: 'merchantClosed' }
+  | { type: 'sold'; itemId: string; gained: number; coins: number }
+  | { type: 'sellFailed'; itemId: string; reason: string }
   | { type: 'betResult'; choice: 'odd' | 'even'; roll: number; won: boolean; amount: number; coins: number }
   | { type: 'betFailed'; reason: string }
   | { type: 'bagChanged'; bag: Record<string, number> }
@@ -571,6 +573,20 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
         placeBet(input);
+        return true;
+      }
+      // Selling: the merchant buys bag items back at half price.
+      if (input.startsWith('/sell ')) {
+        const id = input.slice('/sell '.length).trim();
+        const item = getItem(id);
+        if (!item || !takeItem(id)) {
+          deps.onBattleEvent({ type: 'sellFailed', itemId: id, reason: item ? '가방에 없다' : '그런 물건은 없다' });
+          return true;
+        }
+        const gained = sellPrice(item);
+        coins += gained;
+        emitBag();
+        deps.onBattleEvent({ type: 'sold', itemId: id, gained, coins });
         return true;
       }
       if (!input.startsWith('/buy ')) return false;

@@ -28,6 +28,9 @@ export const ITEMS: Item[] = [
 ];
 
 export const SHOP_SIZE = 5;
+
+// What the merchant pays for an item from the bag.
+export const sellPrice = (item: Item) => Math.floor(item.price / 2);
 export const COIN_CHARM_BONUS = 1.25;
 export const BOMB_DAMAGE = 30;
 export const SCROLL_XP = 30;

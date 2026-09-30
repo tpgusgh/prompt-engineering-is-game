@@ -2734,3 +2734,31 @@ body {
 .typing-game.collapsed #typing-settings {
   display: none;
 }
+
+.merchant-sell-box {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px dashed #4c566a;
+  border-radius: 8px;
+}
+.merchant-sell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: #7b88a1;
+}
+.sell-item {
+  padding: 4px 10px;
+  background: #2e3440;
+  color: #e5e9f0;
+  border: 1px solid #4c566a;
+  border-radius: 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sell-item:hover:not(:disabled) {
+  border-color: #ebcb8b;
+}
+.ic-hand-coins { color: #ebcb8b; }

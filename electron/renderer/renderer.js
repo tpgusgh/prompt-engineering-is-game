@@ -371,7 +371,8 @@ function turnConcluded(notify) {
   $('turn-panel').hidden = true;
   refreshTree();
   if (pendingQuest) showQuest(pendingQuest);
-  useNextMemo();
+  // With a quest open the answer goes first; the memo waits for its turn.
+  if ($('quest-overlay').hidden) useNextMemo();
 }
 
 // ---------------------------------------------------------------------------
@@ -585,6 +586,30 @@ function openMerchant(event) {
     btn.append(name, desc, price);
     btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${item.id}`));
     merchantItemsEl.append(btn);
+  }
+  renderSellList();
+}
+
+// The merchant buys back what's in the bag, at half its price.
+function renderSellList() {
+  const el = $('merchant-sell');
+  el.textContent = '';
+  const entries = Object.entries(bag).filter(([, n]) => n > 0);
+  if (!entries.length) {
+    el.textContent = '팔 물건이 없다';
+    return;
+  }
+  for (const [id, count] of entries) {
+    const item = items.find((i) => i.id === id);
+    if (!item) continue;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sell-item';
+    btn.disabled = !inputEnabled;
+    btn.textContent = `${ITEM_ICONS[id] ?? '📦'} ${item.name} ×${count} · 🪙 ${Math.floor(item.price / 2)}`;
+    btn.title = `${item.name} 1개를 ${Math.floor(item.price / 2)} 코인에 판다`;
+    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/sell ${id}`));
+    el.append(btn);
   }
 }
 
@@ -1397,6 +1422,15 @@ function renderBattleEvent(event) {
     case 'bagChanged':
       bag = event.bag;
       renderBag();
+      if (!merchantPanel.hidden) renderSellList();
+      break;
+    case 'sold':
+      coins = event.coins;
+      renderCoins();
+      appendLog(`💰 ${itemName(event.itemId)}을(를) 팔았다! +${event.gained} 코인 (보유 ${event.coins})`, 'coin-line');
+      break;
+    case 'sellFailed':
+      appendLog(`팔 수 없다: ${event.reason}`, 'error');
       break;
     case 'itemUsed': {
       const lines = {
@@ -2217,6 +2251,9 @@ function answerQuest(text) {
   const answer = text.trim();
   if (!answer || !inputEnabled) return;
   closeQuest();
+  // Whatever was in the prompt box isn't thrown away: back to the memo.
+  const draft = promptInput.value.trim();
+  if (draft && draft !== answer) keepInMemo(draft);
   promptInput.value = answer;
   attackForm.requestSubmit();
 }
@@ -2228,6 +2265,7 @@ function closeQuest() {
 }
 $('quest-later').addEventListener('click', () => {
   closeQuest();
+  useNextMemo();
   promptInput.focus();
 });
 $('quest-answer').addEventListener('keydown', (e) => {
@@ -2952,6 +2990,12 @@ memoEl.addEventListener('input', () => {
     localStorage.setItem(MEMO_KEY, memoEl.value);
   } catch {}
 });
+function keepInMemo(text) {
+  memoEl.value = memoEl.value.trim() ? `${memoEl.value.trim()}\n${text}` : text;
+  try {
+    localStorage.setItem(MEMO_KEY, memoEl.value);
+  } catch {}
+}
 function useNextMemo() {
   const memo = memoEl.value.trim();
   if (!memo || promptInput.value.trim()) return;
