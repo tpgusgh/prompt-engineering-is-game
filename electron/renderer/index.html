@@ -54,6 +54,13 @@
           </div>
         </div>
         <div class="choice-row">
+          <span class="choice-label">스킬</span>
+          <div>
+            <div id="hero-skill-options" class="choice-grid hero-skill-grid"></div>
+            <p class="choice-hint">스킬 = Claude가 얼마나 깊게 생각하는지(effort). 상위 스킬일수록 느리지만 세게 때리고 토큰을 더 쓴다. 전투 중에도 무기 옆에서 바꿀 수 있다.</p>
+          </div>
+        </div>
+        <div class="choice-row">
           <span class="choice-label">난이도</span>
           <div>
             <div class="choice-grid difficulty-grid">
@@ -129,7 +136,7 @@
           <span id="coin-label" class="coin-label"></span>
           <span class="fatigue" data-fatigue hidden></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
-          <label class="weapon-select" title="effort: 느릴수록 깊게 생각하고 세게 때린다">⚡ <select id="effort-battle"></select></label>
+          <label class="weapon-select" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
         </div>
         <div id="stat-panel" class="stat-panel"></div>
 
@@ -374,8 +381,6 @@
           <button type="button" id="api-key-clear">삭제</button>
           <span id="api-key-info" class="option-sub"></span>
         </div>
-        <label class="setting-row">⚡ 공격 속도 (effort) <select id="effort-select"></select></label>
-        <p class="option-sub">느릴수록 깊게 생각해서 세게 때리지만 토큰 ●가 많이 든다.</p>
         <div class="setting-row">
           🧩 스킬
           <label><input type="radio" name="skills-mode" value="all" /> 전부 켜기</label>

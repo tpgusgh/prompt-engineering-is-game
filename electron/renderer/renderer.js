@@ -156,6 +156,7 @@ function renderClassOptions() {
     const card = choiceCard('hero-class', c.id, c.id === chosenClass, `${c.icon} ${c.name}`, Object.values(c.weapons).map((w) => w.name).join(' · '), () => {
       chosenClass = c.id;
       renderWeaponOptions();
+      renderEffortSelects();
     });
     el.append(card);
   }
@@ -375,7 +376,7 @@ function startTurnTimer() {
   const tick = () => {
     const elapsed = fmtElapsed(Date.now() - turnStartedAt);
     $('turn-timer').textContent = `⏱ ${elapsed}`;
-    turnStatusEl.textContent = `🤖 AI가 ${weaponName()}을(를) 들고 작업 중 · ${elapsed}째`;
+    turnStatusEl.textContent = `🤖 AI가 ${weaponName()}(으)로 『${skillName()}』 시전 중 · ${elapsed}째`;
     promptInput.placeholder = `🤖 AI 작업 중... ⏱ ${elapsed}`;
   };
   tick();
@@ -1137,7 +1138,7 @@ function renderBattleEvent(event) {
       break;
     case 'turnStart':
       $('turn-panel').hidden = false;
-      turnStatusEl.textContent = `AI가 ${weaponName()}을(를) 들고 작업 중...`;
+      turnStatusEl.textContent = `AI가 ${weaponName()}(으)로 『${skillName()}』 시전 중...`;
       streamedThisTurn = false;
       backgroundRunning = 0;
       activeAgents.clear();
@@ -1217,7 +1218,7 @@ function renderBattleEvent(event) {
         appendLog(pick(DODGE_LINES), 'dodge');
       } else {
         const label = event.crit ? ' 크리티컬 히트!' : '';
-        appendLog(`${pick(ATTACK_LINES[chosenClass] ?? ATTACK_LINES.swordsman)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
+        appendLog(`『${skillName()}』 ${pick(ATTACK_LINES[chosenClass] ?? ATTACK_LINES.swordsman)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
         flashMonster();
       }
       if (event.matchedKeywords.length > 0) appendLog(`(키워드: ${event.matchedKeywords.join(', ')})`);
@@ -1908,30 +1909,34 @@ async function saveClaude(patch) {
   renderClaudeSettings();
 }
 
+// Effort is picked as the hero class's skill: low → max = weakest → strongest.
+const skillOf = (level) => heroClass()?.skills?.[level] ?? { name: level, text: '' };
+const skillName = () => skillOf(claudeSettings.effort).name;
 function renderEffortSelects() {
   if (!speedInfo) return;
-  for (const select of [$('effort-select'), $('effort-battle')]) {
-    select.textContent = '';
-    for (const level of speedInfo.levels) {
-      const { label, multiplier } = speedInfo.attackSpeed[level];
-      const option = document.createElement('option');
-      option.value = level;
-      const cost = costDots(speedInfo.levels.indexOf(level) + 1, speedInfo.levels.length);
-      option.textContent = select.id === 'effort-battle' ? `${label} x${multiplier} · 토큰 ${cost}` : `${label} — ${level} (피해 x${multiplier} · 토큰 ${cost})`;
-      select.append(option);
-    }
-    select.value = claudeSettings.effort;
+  const select = $('effort-battle');
+  select.textContent = '';
+  const grid = $('hero-skill-options');
+  grid.textContent = '';
+  for (const level of speedInfo.levels) {
+    const { multiplier } = speedInfo.attackSpeed[level];
+    const cost = costDots(speedInfo.levels.indexOf(level) + 1, speedInfo.levels.length);
+    const skill = skillOf(level);
+    const option = document.createElement('option');
+    option.value = level;
+    option.textContent = `${skill.name} x${multiplier} · 토큰 ${cost}`;
+    select.append(option);
+    const card = choiceCard('hero-skill', level, level === claudeSettings.effort, skill.name, `${skill.text} · 피해 x${multiplier} · 토큰 ${cost}`, () => saveClaude({ effort: level }));
+    card.title = `effort ${level}`;
+    grid.append(card);
   }
+  select.value = claudeSettings.effort;
 }
-for (const id of ['effort-select', 'effort-battle']) {
-  $(id).addEventListener('change', async (e) => {
-    await saveClaude({ effort: e.target.value });
-    if (id === 'effort-battle') {
-      const s = speedInfo.attackSpeed[claudeSettings.effort];
-      appendLog(`⚡ 공격 속도를 바꿨다: ${s.label} (effort ${claudeSettings.effort}, 피해 x${s.multiplier}) — 다음 공격부터`, 'story-line');
-    }
-  });
-}
+$('effort-battle').addEventListener('change', async (e) => {
+  await saveClaude({ effort: e.target.value });
+  const s = speedInfo.attackSpeed[claudeSettings.effort];
+  appendLog(`⚡ 스킬을 바꿨다: ${skillName()} (effort ${claudeSettings.effort}, 피해 x${s.multiplier}) — 다음 공격부터`, 'story-line');
+});
 
 function renderSkills() {
   for (const radio of document.querySelectorAll('input[name="skills-mode"]')) radio.checked = radio.value === claudeSettings.skillsMode;

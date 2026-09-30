@@ -23,6 +23,10 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Run summary** — at the end of a run: kills, XP, coins, best hit, tests passed, longest turn and more, as tidy cards.
 - **Monster speech bubbles** — monsters talk: idle chatter that keeps changing, plus their own lines when hit, attacking, dying and more; the merchant and blacksmith chat too.
 - **Player HP** — a monster that survives your turn strikes back (harder if you hesitate or your turn errors) — unless the AI ends its reply with a question for you; then the monster waits for your answer. 0 HP = defeat. Clearing a floor heals you.
+- **Class skills = effort** — how hard Claude thinks (effort) is picked as your class's skill: higher skills are slower but hit harder (x0.85 … x1.2) and use more tokens. Pick it under the weapon on the start screen, or beside the weapon mid-battle.
+  - Swordsman: 빠른 베기 → 연속 베기 → 회전 베기 → 검기 폭풍 → 천검
+  - Wizard: 매직 미사일 → 파이어볼 → 체인 라이트닝 → 블리자드 → 메테오 (meteor)
+  - Archer: 속사 → 관통 화살 → 연발 사격 → 화살비 → 천공의 화살
 - **Classes & weapons = Claude models** — pick a class on the setup screen (🗡 swordsman / 🧙 wizard / 🏹 archer); each names the model-weapons differently and attacks with its own lines. Stronger models hit harder (x0.8 – x1.5); switch any time mid-run.
 
   | Model | 🗡 Swordsman | 🧙 Wizard | 🏹 Archer |
@@ -38,7 +42,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **AI party (subagents)** — three Claude subagents: 🧙 wizard (explore/research), 🗡 swordsman (implement), 🏹 archer (test/verify). When the AI splits work and sends several **at once**, the screen shows "N processes running" and what each is doing. The wizard's work strikes as spirits, the archer's as companions, the swordsman's as a blade under the archer's cover fire. Toggle **party mode** in ⚙️ Settings → AI party (it uses more tokens; works mid-run too).
 - **Turn timer & coding typing drills while you wait** — the status line and the input show how long the AI has been working. Meanwhile, type a random line of code (80+ drills across 20+ languages/tools: JavaScript, Python, Go, Rust, SQL, Git, Docker…) exactly to deal 1 damage; a 3-second explanation of that code follows (tap for the long one), then the next line. Speed and accuracy are shown. The **⚙️ language** button in the drill area limits drills to the languages you pick (C, C++, Python…).
 - **BGM & sound effects** — 8 tracks made with Suno: title, a battle track per theme (adventure / demon king / bug sweep), boss, merchant shop, blacksmith, and a quest theme (when the AI asks you something); looped, crossfading between scenes. Short effects (hits, crits, damage taken, coins, enhance success/fail/break, typing) are synthesized. 🔊 button and volume slider.
-- **⚙️ Settings window** — the same window from the start screen and in battle (⚙️ top right). Claude tab: 🔑 connection (Claude Code login or an API key, stored encrypted in the keychain), ⚡ attack speed (= effort, low x0.85 … max x1.2, switchable mid-battle), 🧩 skills all/none/pick (searchable), 🔌 MCP servers on/off each. Game sessions only; your Claude Code settings are untouched. Plus AI party, 🔊 sound (volume/mute) and ⌨️ typing-drill language tabs.
+- **⚙️ Settings window** — the same window from the start screen and in battle (⚙️ top right). Claude tab: 🔑 connection (Claude Code login or an API key, stored encrypted in the keychain), 🧩 Claude skills all/none/pick (searchable), 🔌 MCP servers on/off each. Game sessions only; your Claude Code settings are untouched. Plus AI party, 🔊 sound (volume/mute) and ⌨️ typing-drill language tabs.
 - **Long jobs go to the courier** — builds, full test suites, installs, training and other long work are handed to the 🦅 courier subagent in the background; the turn waits, with no time limit, for Claude's follow-up answer.
 - **Quest window** — when the AI needs an answer from you, it asks in a large quest window; pick a choice or type your own to attack with it.
 - **Game bag** — under the file inventory, a 🎒 bag to use bandages (+15 HP), potions (+40 HP), whetstones, amulets and smoke bombs as free actions.
@@ -61,7 +65,6 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 Everything fits on one screen: pick a 📁 project folder, then in the **New adventure** card a theme, a **class** (🗡 swordsman / 🧙 wizard / 🏹 archer — it renames your weapons), a weapon (Claude model — the **token ●** dots show how fast it uses up your plan limits) and a difficulty, then ▶ enter. **Continue** below loads the 3 save slots and the per-floor autosave. After picking a folder, its Claude sessions are listed too (with 💾 the autosaved floor/HP). In **⚙️ Settings** (top right — the same window in battle), the Claude tab has:
 
 - 🔑 **Connection**: the Claude Code login (CLI) or an **API key** (stored encrypted in the keychain, with a "check connection" button)
-- ⚡ **Attack speed = effort**: very fast (low, x0.85 damage, tokens ●○○○○) … very slow (max, x1.2, tokens ●●●●●)
 - 🧩 **Skills**: all / none / pick (searchable)
 - 🔌 **MCP servers**: on/off per server, with connection status
 
@@ -77,7 +80,7 @@ Every monster you've met: art, HP, counterattack, boss rule and kills. **📖 Be
 
 - **Top left, inventory**: the project's file tree — drag to move, drop files from Finder, `+📄` `+📁` to create, click to view/edit (⌘S saves; closing with unsaved edits asks first).
 - **Bottom left, 🎒 bag**: bandages, potions, whetstones, amulets, smoke bombs — `사용` (use) is a free action.
-- **Middle**: the monster and its HP, your HP, weapon (model) and ⚡ attack speed switchers, ⭐ stat points (+1 per monster defeated).
+- **Middle**: the monster and its HP, your HP, weapon (model) and **class skill** switchers, ⭐ stat points (+1 per monster defeated).
 - **Log**: your bubbles (right), the AI's replies (left — typed live, markdown, important parts colored), and the commands/edits/reads it runs as separate **tool cards** (IN/OUT, done/failed).
 - **Bottom**: a multi-line input (Enter attacks, Shift+Enter newline), `공격` attack · `도망` flee (50%) · `저장` save · `세션` switch session · `나가기` exit, and a small usage line (5-hour/weekly plan limits, context tokens).
 

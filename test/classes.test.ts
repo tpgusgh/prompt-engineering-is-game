@@ -28,3 +28,13 @@ test('unknown classes and models fall back to defaults', () => {
   assert.equal(getHeroClass('nope').id, DEFAULT_CLASS_ID);
   assert.equal(weaponDisplayName('nope', 'nope', 0), '초라한 장검');
 });
+
+test('every class has one skill per effort level, strongest at max', async () => {
+  const { HERO_CLASSES } = await import('../src/classes.ts');
+  const { EFFORT_LEVELS } = await import('../src/claude-settings.ts');
+  for (const c of HERO_CLASSES) {
+    assert.deepEqual(Object.keys(c.skills).sort(), [...EFFORT_LEVELS].sort(), c.id);
+    for (const level of EFFORT_LEVELS) assert.ok(c.skills[level].name && c.skills[level].text, `${c.id} ${level}`);
+  }
+  assert.equal(HERO_CLASSES.find((c) => c.id === 'wizard')?.skills.max.name, '메테오');
+});
