@@ -2,5 +2,8 @@
   "name": "prompt-battle-ranking",
   "private": true,
   "type": "module",
-  "description": "Prompt Battle online ranking (Vercel function + Upstash Redis)"
+  "description": "Prompt Battle online ranking (Vercel function + Upstash Redis)",
+  "dependencies": {
+    "redis": "^4.7.1"
+  }
 }

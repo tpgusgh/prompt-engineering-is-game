@@ -152,11 +152,12 @@ const findEnv = (env, suffixes) => {
   }
   return undefined;
 };
+export const hasUpstash = (env) => Boolean(findEnv(env, ['KV_REST_API_URL', 'UPSTASH_REDIS_REST_URL']));
 export function upstash(env) {
   const url = findEnv(env, ['KV_REST_API_URL', 'UPSTASH_REDIS_REST_URL']);
   const token = findEnv(env, ['KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_TOKEN']);
   return async (commands) => {
-    if (!url || !token) throw new Error('redis not configured (connect Upstash for Redis to the project, then redeploy)');
+    if (!url || !token) throw new Error('redis not configured (connect a Redis database to the project, then redeploy)');
     const res = await fetch(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
