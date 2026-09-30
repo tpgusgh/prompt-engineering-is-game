@@ -71,7 +71,9 @@ export async function startRankedRun(config: RankingConfig): Promise<string | nu
 export interface RankedRun {
   runToken: string;
   name: string;
+  // How far the run got (absolute floor), and where this play started.
   floors: number;
+  startFloor: number;
   bosses: number;
   xp: number;
   difficulty: string;

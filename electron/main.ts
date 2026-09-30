@@ -590,9 +590,12 @@ ipcMain.handle(
     const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
     // A defeat can go on the ranking (if the server issued this run a token).
     const runToken = summary.defeated ? await runTokenPromise : null;
-    const rankStats = { floors: summary.floorsCleared, bosses: summary.runStats.bossesDefeated, xp: summary.xpGained, difficulty: options.difficulty };
+    // Ranked by how far the run got (chapter/floor), not just this sitting's
+    // floors: a run continued from a save still counts from the beginning.
+    const rankStats = { floors: summary.nextFloor, bosses: summary.chaptersCleared, xp: summary.xpGained, difficulty: options.difficulty };
     const rankScore = scoreFor(rankStats);
-    pendingRank = runToken && rankScore > 0 ? { runToken, ...rankStats, theme: options.themeId, heroClass, level: updated.level } : null;
+    const startFloor = Math.min(summary.nextFloor, Math.max(0, Math.floor(options.startFloor || 0)));
+    pendingRank = runToken && rankScore > 0 ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level } : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
     return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };

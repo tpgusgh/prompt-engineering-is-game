@@ -2895,7 +2895,7 @@ async function openRanking() {
   }
   $('ranking-status').textContent = res.entries.length ? '' : '아직 기록이 없다. 첫 번째가 되어 보자!';
   const head = document.createElement('tr');
-  for (const h of ['순위', '이름', '점수', '직업', '테마', '처치', '난이도', '날짜']) {
+  for (const h of ['순위', '이름', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
     const th = document.createElement('th');
     th.textContent = h;
     head.append(th);
@@ -2910,7 +2910,7 @@ async function openRanking() {
       fmtNum(e.score),
       CLASS_NAME[e.heroClass] ?? '',
       THEMES.find((t) => t.id === e.theme)?.title ?? '',
-      `${e.floors ?? 0}층 · 보스 ${e.bosses ?? 0}`,
+      `${Math.floor((e.floors ?? 0) / 6) + 1}챕터 ${((e.floors ?? 0) % 6) + 1}층`,
       DIFFICULTY_LABEL[e.difficulty] ?? '',
       e.at ? new Date(e.at).toLocaleDateString('ko-KR') : '',
     ];

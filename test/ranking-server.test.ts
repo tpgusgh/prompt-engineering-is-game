@@ -89,6 +89,21 @@ test('unsigned, forged, stale and implausible submissions are rejected', async (
   assert.equal((await call(tooFast, { 'x-signature': signBody(tooFast, env.RANKING_APP_SECRET) })).status, 400, 'too many floors for the time');
 });
 
+test('a run continued from a later floor is timed from where it started', async () => {
+  const run = fakeRedis();
+  const t0 = 1_800_000_000_000;
+  const token = await startRun(run, t0);
+  const now = t0 + 2 * 60_000; // 2 minutes: at most 6*2+5 = 17 new floors
+  const stats = { floors: 40, bosses: 6, xp: 50, difficulty: 'normal' };
+  const call = (extra: Record<string, unknown>) => {
+    const body = { ts: now, runToken: token, name: '미르', ...stats, score: scoreFor(stats), ...extra };
+    return handle({ method: 'POST', ip: '3.3.3.3', ...signed(body) }, { run, env, now });
+  };
+  assert.equal((await call({})).status, 400, '40 floors in 2 minutes from the start is impossible');
+  assert.equal((await call({ startFloor: 50 })).status, 400, 'cannot start past where you ended');
+  assert.equal((await call({ startFloor: 30 })).status, 200, 'continued from floor 30: only 10 new floors');
+});
+
 test('only the top 100 are kept', async () => {
   const run = fakeRedis();
   const t0 = 1_800_000_000_000;

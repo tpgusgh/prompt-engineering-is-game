@@ -98,7 +98,11 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
     return { status: 400, body: { error: 'bad stats' } };
   }
   if (bosses > Math.ceil(floors / 6)) return { status: 400, body: { error: 'impossible run' } };
-  if (floors > (age / 60_000) * FLOORS_PER_MINUTE + 5) return { status: 400, body: { error: 'impossible run' } };
+  // floors is how far the run got; a run continued from a save or a later
+  // chapter only had to climb from startFloor during this token's life.
+  const startFloor = body.startFloor === undefined ? 0 : body.startFloor;
+  if (!isCount(startFloor, floors)) return { status: 400, body: { error: 'bad stats' } };
+  if (floors - startFloor > (age / 60_000) * FLOORS_PER_MINUTE + 5) return { status: 400, body: { error: 'impossible run' } };
   const score = scoreFor({ floors, bosses, xp, difficulty });
   if (body.score !== score) return { status: 400, body: { error: 'score mismatch' } };
   if (score <= 0) return { status: 400, body: { error: 'nothing to rank' } };
