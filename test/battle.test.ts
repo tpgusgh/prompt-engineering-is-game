@@ -918,3 +918,16 @@ test('themes: each theme spawns its own roster', async () => {
   const start = events.find((e) => e.type === 'floorStart');
   assert.ok(start && start.type === 'floorStart' && start.monsterIndex === 36);
 });
+
+test('difficulty scales rewards: easy x0.7, hard x1.5 coins and XP', async () => {
+  const run = async (difficulty: 'easy' | 'normal' | 'hard') => {
+    const { deps } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+    return runDungeon({ ...deps, difficulty, getDamageMultiplier: () => 10 });
+  };
+  const [easy, normal, hard] = [await run('easy'), await run('normal'), await run('hard')];
+  assert.equal(normal.xpGained, 20);
+  assert.equal(easy.xpGained, Math.round(20 * 0.7));
+  assert.equal(hard.xpGained, Math.round(20 * 1.5));
+  assert.equal(hard.coins, Math.round(10 * 1.5));
+  assert.equal(easy.coins, Math.round(10 * 0.7));
+});

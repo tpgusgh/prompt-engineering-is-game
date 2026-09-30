@@ -1,5 +1,5 @@
 import { calculateDamage } from './damage.ts';
-import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, type Difficulty, type TraitId } from './monsters.ts';
+import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { ITEMS, getItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, type Item } from './items.ts';
@@ -736,7 +736,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       continue;
     }
 
-    const gained = Math.round(xpForFloor(floor) * theme.rewards);
+    const rewardMult = theme.rewards * (DIFFICULTY_REWARD[deps.difficulty] ?? 1);
+    const gained = Math.round(xpForFloor(floor) * rewardMult);
     xpGained += gained;
     floorsCleared += 1;
     runStats.floorsCleared += 1;
@@ -747,7 +748,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
     playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL);
     emitPlayerHp();
-    const coinsGained = Math.round(coinsForFloor(floor, isBoss) * theme.rewards);
+    const coinsGained = Math.round(coinsForFloor(floor, isBoss) * rewardMult);
     coins += coinsGained;
     deps.onBattleEvent({ type: 'coinsChanged', coins, gained: coinsGained });
     if (!allMaxed(stats)) {

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { runDungeon, bestiary, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
-import { DIFFICULTY_MULTIPLIER } from '../src/monsters.ts';
+import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
@@ -226,6 +226,7 @@ ipcMain.handle('get-setup-info', async () => ({
   bestiary: bestiary(),
   themeRules: THEME_RULES,
   difficulty: DIFFICULTY_MULTIPLIER,
+  difficultyReward: DIFFICULTY_REWARD,
   appVersion: app.getVersion(),
 }));
 

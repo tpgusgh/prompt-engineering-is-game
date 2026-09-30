@@ -93,6 +93,9 @@ export const ROSTER_COUNT = ROSTERS.length;
 // dragon) is the chapter boss.
 export const MONSTER_COUNT = ROSTERS[0].length;
 
+// Coins and XP per difficulty: harder fights pay more.
+export const DIFFICULTY_REWARD: Record<Difficulty, number> = { easy: 0.7, normal: 1, hard: 1.5 };
+
 export const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
   easy: 0.7,
   normal: 1,

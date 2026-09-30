@@ -176,6 +176,7 @@ async function loadSetup() {
   bestiaryDefs = info.bestiary ?? [];
   themeRuleDefs = info.themeRules ?? [];
   difficultyMult = info.difficulty ?? difficultyMult;
+  difficultyReward = info.difficultyReward ?? difficultyReward;
   renderDailyLine();
   runXp = 0;
   renderXp();
@@ -2473,6 +2474,7 @@ $('bestiary-overlay').addEventListener('click', (e) => {
 // Theme and difficulty details on the start screen (shown for the pick).
 let themeRuleDefs = [];
 let difficultyMult = { easy: 0.7, normal: 1, hard: 1.4 };
+let difficultyReward = { easy: 0.7, normal: 1, hard: 1.5 };
 const ruleOf = (id) => themeRuleDefs.find((t) => t.id === id);
 const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));
 function renderThemeInfo() {
@@ -2493,12 +2495,12 @@ function renderThemeInfo() {
   el.append(intro, list);
 }
 const DIFFICULTY_TEXT = {
-  easy: '처음이라면. 반격도 HP에 비례해 약해진다.',
+  easy: '처음이라면. 반격도 약해진다.',
   normal: '기본 밸런스.',
-  hard: '반격도 HP에 비례해 세진다. 보상은 같다.',
+  hard: '반격도 세지지만 그만큼 더 번다.',
 };
 function renderDifficultyInfo() {
   const d = document.querySelector('input[name="difficulty"]:checked')?.value ?? 'normal';
-  $('difficulty-info').textContent = `몬스터 HP x${difficultyMult[d]} · ${DIFFICULTY_TEXT[d]}`;
+  $('difficulty-info').textContent = `몬스터 HP x${difficultyMult[d]} · 코인·경험치 x${difficultyReward[d]} · ${DIFFICULTY_TEXT[d]}`;
 }
 for (const r of document.querySelectorAll('input[name="difficulty"]')) r.addEventListener('change', renderDifficultyInfo);
