@@ -269,7 +269,7 @@ export function endsWithQuestion(text: string): boolean {
   return isQ(lines[i]);
 }
 
-export const COUNTER_CAP = 0.35; // of the hero's max HP, per counterattack
+export const COUNTER_CAP = 0.9; // of the hero's max HP, per counterattack: no one-shot from full
 
 function counterDamage(monsterMaxHp: number, punished: boolean): number {
   const base = Math.max(3, Math.round(monsterMaxHp * 0.1));
@@ -677,7 +677,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     let turnFailedTool = false; // debug-quest: a failed tool call hardens the counter
     // Counters grow with the monster's HP, plus 10% per chapter.
     const chapterPower = 1 + 0.1 * (chapter - 1);
-    // Capped so even a deep boss needs 3+ hits to finish a full-HP hero.
+    // Capped so even a deep boss can't one-shot a full-HP hero.
     const counter = (punished: boolean) =>
       Math.min(
         Math.round(playerMaxHp * COUNTER_CAP),

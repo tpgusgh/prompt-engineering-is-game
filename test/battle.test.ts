@@ -1104,14 +1104,14 @@ test('the merchant buys bag items back at half price', async () => {
   assert.equal(summary.coins, 10 + 15);
 });
 
-test('one counterattack takes at most 35% of the hero max HP (the chapter 2 boss used to two-shot)', async () => {
+test('one counterattack takes at most 90% of the hero max HP: a full-HP hero survives any single hit', async () => {
   const { deps, events } = makeFakeDeps(['x', '/quit']);
-  await runDungeon({ ...deps, startFloor: 11, playerMaxHp: 150 });
+  await runDungeon({ ...deps, startFloor: 11, playerMaxHp: 100 });
   const start = events.find((e) => e.type === 'floorStart');
   const hit = events.find((e) => e.type === 'monsterAttack');
   assert.ok(start?.type === 'floorStart' && start.isBoss && hit?.type === 'monsterAttack');
-  assert.ok(Math.round(start.maxHp * 0.1 * 1.1) > 53, 'uncapped it would be far more');
-  assert.equal(hit.damage, Math.round(150 * 0.35));
+  assert.ok(Math.round(start.maxHp * 0.1 * 1.1) > 90, 'uncapped it would one-shot');
+  assert.equal(hit.damage, 90);
 });
 
 test('counters grow +10% per chapter', async () => {
