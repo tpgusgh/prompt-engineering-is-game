@@ -22,6 +22,8 @@ function pickLine(lines) {
   return line;
 }
 function monsterSay(kind) {
+  // Once it's down, its last words stay until the chest opens.
+  if (speech.dead && kind !== 'death') return;
   const line = pickLine(linesFor(kind));
   if (!line) return;
   speechEl.textContent = line;
@@ -39,6 +41,11 @@ function scheduleIdle() {
     else scheduleIdle();
   }, 6000 + Math.random() * 2000);
 }
+function die() {
+  if (speech.dead) return;
+  monsterSay('death');
+  speech.dead = true;
+}
 export function speechFor(event) {
   switch (event.type) {
     case 'floorStart':
@@ -53,8 +60,12 @@ export function speechFor(event) {
     case 'attack':
       if (!speech.dead) monsterSay(event.crit ? 'crit' : 'hit');
       break;
+    case 'monsterDown':
+      die();
+      break;
     case 'hpChanged':
-      if (!speech.dead && !speech.saidLow && event.hp > 0 && event.hp <= event.maxHp * 0.25) {
+      if (event.hp <= 0) die();
+      else if (!speech.dead && !speech.saidLow && event.hp <= event.maxHp * 0.25) {
         speech.saidLow = true;
         monsterSay('lowHp');
       }
@@ -66,8 +77,10 @@ export function speechFor(event) {
       monsterSay('blocked');
       break;
     case 'floorCleared':
-      speech.dead = true;
-      monsterSay('death');
+      die();
+      break;
+    case 'chestOpened':
+      speechEl.hidden = true; // the chest takes the stage
       break;
     case 'fleeAttempt':
       if (event.success) monsterSay('flee');
