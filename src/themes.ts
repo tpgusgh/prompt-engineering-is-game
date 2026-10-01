@@ -7,8 +7,10 @@ export interface ThemeRules {
   id: string;
   // Roster index per chapter (see ROSTERS in src/monsters.ts).
   rosters: number[];
-  // Merchant / blacksmith appearance multiplier.
-  shopChance: number;
+  // Chances of each stop after a floor clear (see encounterTable in battle.ts).
+  merchant: number;
+  blacksmith: number;
+  spring: number;
   bossHp: number; // extra boss HP multiplier
   rewards: number; // coins and XP multiplier
   testBonus: number; // closing blow multiplier on a turn whose tests passed
@@ -17,16 +19,17 @@ export interface ThemeRules {
   stars: number; // how hard the theme is, 1..3
 }
 
-const BASE = { shopChance: 1, bossHp: 1, rewards: 1, testBonus: 1, failCounter: 1 };
+const BASE = { merchant: 0.35, blacksmith: 0.3, spring: 0.05, bossHp: 1, rewards: 1, testBonus: 1, failCounter: 1 };
 
 export const THEME_RULES: ThemeRules[] = [
   {
     id: 'adventure',
     rosters: [0, 1, 5, 2, 3, 4, 8, 11, 9, 12, 10],
     ...BASE,
-    shopChance: 1.5,
+    merchant: 0.4,
+    spring: 0,
     stars: 1,
-    perks: ['균형 잡힌 모험: 모든 구역을 차례로 돈다', '상인과 대장장이가 1.5배 자주 나타난다', '전용 구역: 고대 신전 · 잊힌 해적섬 · 하늘섬 도서관'],
+    perks: ['균형 잡힌 모험: 모든 구역을 차례로 돈다', '상인 고블린이 자주 나타난다 (40%), 대신 회복의 샘은 없다', '전용 구역: 고대 신전 · 잊힌 해적섬 · 하늘섬 도서관'],
   },
   {
     id: 'demon-king',

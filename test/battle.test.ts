@@ -1139,7 +1139,7 @@ test('night market: a rare stop; each good sells once at its discount', async ()
     if (e.type === 'nightMarketOpen') offerFirst = e.items[0].id;
     orig(e);
   })(deps.onBattleEvent);
-  const summary = await runDungeon({ ...deps, coins: 5000, random: seq(0.78, 0.99) });
+  const summary = await runDungeon({ ...deps, coins: 5000, random: seq(0.7, 0.99) });
   const open = events.find((e) => e.type === 'nightMarketOpen');
   assert.ok(open?.type === 'nightMarketOpen' && open.items.length === 4);
   const bought = events.filter((e) => e.type === 'purchased');
@@ -1149,9 +1149,19 @@ test('night market: a rare stop; each good sells once at its discount', async ()
   assert.ok(events.some((e) => e.type === 'nightMarketClosed'));
 });
 
+test('encounter table after a clear: merchant, blacksmith, night market, spring, shrine (with a pact), else nothing', async () => {
+  const { encounterTable } = await import('../src/battle.ts');
+  const { themeRules } = await import('../src/themes.ts');
+  const odds = (themeId: string | undefined, pact: boolean) => Object.fromEntries(encounterTable(themeRules(themeId), pact).map((e) => [e.kind, Math.round(e.chance * 100)]));
+  assert.deepEqual(odds('demon-king', true), { merchant: 35, blacksmith: 30, nightMarket: 10, spring: 5, shrine: 10, nothing: 10 });
+  assert.deepEqual(odds('demon-king', false), { merchant: 35, blacksmith: 30, nightMarket: 10, spring: 5, nothing: 20 });
+  assert.deepEqual(odds('adventure', true), { merchant: 40, blacksmith: 30, nightMarket: 10, shrine: 10, nothing: 10 });
+  assert.deepEqual(odds('adventure', false), { merchant: 40, blacksmith: 30, nightMarket: 10, nothing: 20 });
+});
+
 test('rest stop: the spring heals half of max HP once', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/drink', '/drink', '/leave', '/quit']);
-  const summary = await runDungeon({ ...deps, playerHp: 20, random: seq(0.84, 0.99) });
+  const summary = await runDungeon({ ...deps, playerHp: 20, random: seq(0.77, 0.99) });
   assert.ok(events.some((e) => e.type === 'springOpen'));
   const drinks = events.filter((e) => e.type === 'springDrank');
   assert.equal(drinks.length, 1, 'only once');
@@ -1162,13 +1172,13 @@ test('rest stop: the spring heals half of max HP once', async () => {
 
 test('rest stop: the shrine lets you renounce your pact with no max-HP penalty; it only appears with a pact', async () => {
   const pact = makeFakeDeps([ONE_SHOT_PROMPT, '/renounce', '/leave', '/quit']);
-  const s1 = await runDungeon({ ...pact.deps, contract: { kind: 'demon', id: 'greed' }, random: seq(0.9, 0.99) });
+  const s1 = await runDungeon({ ...pact.deps, contract: { kind: 'demon', id: 'greed' }, random: seq(0.85, 0.99) });
   assert.ok(pact.events.some((e) => e.type === 'shrineOpen'));
   assert.ok(pact.events.some((e) => e.type === 'contractRenounced'));
   assert.equal(s1.contract, null);
   assert.equal(s1.maxHpPenalty, 0);
   const none = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
-  await runDungeon({ ...none.deps, random: seq(0.9, 0.99) });
+  await runDungeon({ ...none.deps, random: seq(0.85, 0.99) });
   assert.equal(none.events.some((e) => e.type === 'shrineOpen'), false);
 });
 

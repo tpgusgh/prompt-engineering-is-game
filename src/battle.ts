@@ -1,6 +1,6 @@
 import { calculateDamage } from './damage.ts';
 import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
-import { THEME_RULES, themeRules } from './themes.ts';
+import { THEME_RULES, themeRules, type ThemeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { rollPet, PET_HEAL_RATIO, PET_FIRE_RATIO, PET_XP_BONUS, type PetId } from './pets.ts';
 import { merchantLimit, bossItemFor, BOSS_DROP_CHANCE, nightMarketOffer, type NightGood, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
@@ -263,13 +263,30 @@ const REGEN_RATIO = 0.05;
 const FLOOR_CLEAR_HEAL = 25;
 const SESSION_WARN_RATIO = 0.8;
 const FLEE_CHANCE = 0.5;
-const MERCHANT_CHANCE = 0.3;
-const BLACKSMITH_CHANCE = 0.2;
-// Rest stops, on their own band of the encounter roll (above the shops):
-// the healing spring, and the shrine where a pact can be renounced freely.
-const SPRING_BAND = [0.8, 0.88] as const;
-const SHRINE_BAND = [0.88, 0.96] as const; // only while holding a pact
-const NIGHT_MARKET_BAND = [0.76, 0.8] as const; // 야시장, rare
+// What waits after a floor clear: one roll on this table (theme odds, the
+// night market, the shrine only while holding a pact); the rest is nothing.
+export const NIGHT_MARKET_CHANCE = 0.1;
+export const SHRINE_CHANCE = 0.1;
+export type EncounterKind = 'merchant' | 'blacksmith' | 'nightMarket' | 'spring' | 'shrine' | 'nothing';
+export function encounterTable(theme: ThemeRules, hasPact: boolean): { kind: EncounterKind; chance: number }[] {
+  const rows: { kind: EncounterKind; chance: number }[] = [
+    { kind: 'merchant', chance: theme.merchant },
+    { kind: 'blacksmith', chance: theme.blacksmith },
+    { kind: 'nightMarket', chance: NIGHT_MARKET_CHANCE },
+    { kind: 'spring', chance: theme.spring },
+    ...(hasPact ? [{ kind: 'shrine' as const, chance: SHRINE_CHANCE }] : []),
+  ].filter((r) => r.chance > 0);
+  const used = rows.reduce((n, r) => n + r.chance, 0);
+  return [...rows, { kind: 'nothing', chance: Math.max(0, 1 - used) }];
+}
+const pickEncounter = (theme: ThemeRules, hasPact: boolean, roll: number): EncounterKind => {
+  let edge = 0;
+  for (const row of encounterTable(theme, hasPact)) {
+    edge += row.chance;
+    if (roll < edge) return row.kind;
+  }
+  return 'nothing';
+};
 export const SPRING_HEAL = 0.5; // of max HP, once
 const BOSS_COIN_MULTIPLIER = 3;
 
@@ -1186,18 +1203,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'statPointsChanged', points: statPoints, stats: { ...stats } });
     }
     floor += 1;
-    const encounter = random();
-    if (encounter < MERCHANT_CHANCE * theme.shopChance) {
-      if (!(await visitMerchant())) break;
-    } else if (encounter < (MERCHANT_CHANCE + BLACKSMITH_CHANCE) * theme.shopChance) {
-      if (!(await visitBlacksmith())) break;
-    } else if (encounter >= NIGHT_MARKET_BAND[0] && encounter < NIGHT_MARKET_BAND[1]) {
-      if (!(await visitNightMarket())) break;
-    } else if (encounter >= SPRING_BAND[0] && encounter < SPRING_BAND[1]) {
-      if (!(await visitSpring())) break;
-    } else if (contract && encounter >= SHRINE_BAND[0] && encounter < SHRINE_BAND[1]) {
-      if (!(await visitShrine())) break;
-    }
+    const visit = { merchant: visitMerchant, blacksmith: visitBlacksmith, nightMarket: visitNightMarket, spring: visitSpring, shrine: visitShrine, nothing: null }[
+      pickEncounter(theme, Boolean(contract), random())
+    ];
+    if (visit && !(await visit())) break;
   }
 
   const summary: BattleSummary = {
