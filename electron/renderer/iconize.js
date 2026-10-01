@@ -5,6 +5,9 @@
 // verbatim — code, inputs, <option> labels (which can't hold SVG) — is only
 // stripped or left alone.
 import { ICONS, EMOJI_ICONS } from './icons.js';
+// Translation must see the original text (emoji included) first: waiting for
+// i18n.js also registers our observer after its own.
+import './i18n.js';
 
 const EMOJI = /(?:\p{Extended_Pictographic}|[✕✓✗▾▴⚀-⚅])(?:️|‍\p{Extended_Pictographic}️?)*/gu;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'PRE', 'CODE']);

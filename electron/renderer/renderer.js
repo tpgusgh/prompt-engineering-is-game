@@ -1,6 +1,7 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg, chestSvg } from './monster-art.js';
+import { LANGUAGES, currentLang, setLang } from './i18n.js'; // before iconize: it needs the original text
 import './iconize.js';
 import { $ } from './dom.js';
 import { logEl, appendLog, scrollLogToBottom } from './log.js';
@@ -405,7 +406,8 @@ function formatReset(iso, withDate) {
   if (!iso) return '';
   const d = new Date(iso);
   const time = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const date = `${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})`;
+  const weekday = new Intl.DateTimeFormat(currentLang(), { weekday: 'short' }).format(d); // 일 · Sun · 日
+  const date = `${d.getMonth() + 1}/${d.getDate()}(${weekday})`;
   return ` · ${withDate ? `${date} ` : ''}${time} 초기화`;
 }
 
@@ -3615,3 +3617,17 @@ $('skill-form').addEventListener('submit', async (e) => {
   }
   openSkillbook();
 });
+
+// ---------------------------------------------------------------------------
+// UI language (i18n.js): 한국어 · English · 日本語, switched live.
+{
+  const select = $('lang-select');
+  for (const l of LANGUAGES) select.append(new Option(l.name, l.id));
+  select.value = currentLang();
+  select.addEventListener('change', async () => {
+    await setLang(select.value);
+    // Text that icons already split can only be re-read from scratch: on the
+    // start screen (no run to lose) reload; mid-run, new text follows the switch.
+    if (dungeonScreen.hidden && summaryScreen.hidden) location.reload();
+  });
+}

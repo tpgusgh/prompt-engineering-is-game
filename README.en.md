@@ -2,7 +2,7 @@
 
 # Prompt Battle
 
-**English** | [한국어](README.md)
+**English** | [한국어](README.md) | [日本語](README.ja.md)
 
 A turn-based RPG wrapped around real AI coding. Every prompt you type is an attack — longer, more specific prompts hit harder — while the game actually reads/writes files and runs commands in your project via the Claude Agent SDK.
 
@@ -57,6 +57,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **AI party (subagents)** — three Claude subagents: 🧙 wizard (explore/research), 🗡 swordsman (implement), 🏹 archer (test/verify). When the AI splits work and sends several **at once**, the screen shows "N processes running" and what each is doing. The wizard's work strikes as spirits, the archer's as companions, the swordsman's as a blade under the archer's cover fire. Toggle **party mode** in ⚙️ Settings → AI party (it uses more tokens; works mid-run too).
 - **Turn timer & coding typing drills while you wait** — the status line and the input show how long the AI has been working. Meanwhile, type a random line of code (80+ drills across 20+ languages/tools: JavaScript, Python, Go, Rust, SQL, Git, Docker…) exactly to deal 1 damage; a 3-second explanation of that code follows (tap for the long one), then the next line. Speed and accuracy are shown. The **⚙️ language** button in the drill area limits drills to the languages you pick (C, C++, Python…).
 - **BGM & sound effects** — 8 tracks made with Suno: title, a battle track per theme (adventure / demon king / bug sweep), boss, merchant shop, blacksmith, and a quest theme (when the AI asks you something); looped, crossfading between scenes. Short effects (hits, crits, damage taken, coins, enhance success/fail/break, typing) are synthesized. 🔊 button and volume slider.
+- **🌐 Language** — 한국어 · English · 日本語, picked with 🌐 at the top of the settings window and applied right away (the first run follows your system language). Claude answers in the language you write in. Game text is collected by `scripts/i18n-extract.mjs` and translated through `electron/renderer/i18n/<lang>.json`.
 - **⚙️ Settings window** — the same window from the start screen and in battle (⚙️ top right). Claude tab: 🔑 connection (Claude Code login or an API key, stored encrypted in the keychain), 🧩 Claude skills all/none/pick (searchable), 🔌 MCP servers on/off each. Game sessions only; your Claude Code settings are untouched. Plus AI party, 🔊 sound (volume/mute) and ⌨️ typing-drill language tabs.
 - **Long jobs go to the courier** — builds, full test suites, installs, training and other long work are handed to the 🦅 courier subagent in the background; the turn waits, with no time limit, for Claude's follow-up answer.
 - **Quest window** — when the AI needs an answer from you, it asks in a large quest window; pick a choice or type your own to attack with it.

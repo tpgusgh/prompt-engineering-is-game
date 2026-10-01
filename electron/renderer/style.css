@@ -3187,3 +3187,19 @@ body {
   box-shadow: 0 0 10px rgba(191, 97, 106, 0.45);
   color: #f2c4c8;
 }
+
+.lang-select {
+  margin-left: auto;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.lang-select select {
+  background: #1d222d;
+  color: #eceff4;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+  padding: 3px 6px;
+}
