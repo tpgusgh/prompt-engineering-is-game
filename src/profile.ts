@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
 import type { BattleSummary, PaidXp } from './battle.ts';
+import { isPetId, type PetId } from './pets.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
@@ -37,6 +38,11 @@ export interface Profile {
   maxHpPenalty: number;
   // What XP each recent run line has banked (save/load dupe guard, see PaidXp).
   xpClaims?: Record<string, PaidXp>;
+  // Pets owned for good, and the one riding along (src/pets.ts).
+  pets?: PetId[];
+  activePet?: PetId;
+  // 환생 stars: each one is +10% damage and coins, +2 starting stat points.
+  prestige?: number;
 }
 
 const BASE_MAX_HP = 100;
@@ -133,6 +139,9 @@ function coerceProfile(parsed: unknown): Profile {
     relics: Array.isArray(p?.relics) ? p.relics.filter((r): r is string => r === 'coinCharm') : [],
     maxHpPenalty: isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0,
     ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
+    ...(isValidCount(p?.prestige, 0) && p.prestige > 0 ? { prestige: p.prestige } : {}),
+    ...(Array.isArray(p?.pets) && p.pets.some(isPetId) ? { pets: [...new Set(p.pets.filter(isPetId))] } : {}),
+    ...(isPetId(p?.activePet) && Array.isArray(p?.pets) && p.pets.includes(p.activePet) ? { activePet: p.activePet } : {}),
   };
 }
 
@@ -178,7 +187,16 @@ export function titleForLevel(level: number): string {
 // Leveling up pays off in every new run: it starts with one stat point per
 // hero level (a loaded save keeps that run's own points).
 export function startingStatPoints(profile: Profile): number {
-  return profile.level;
+  return profile.level + PRESTIGE_STAT_POINTS * (profile.prestige ?? 0);
+}
+
+// 환생: from PRESTIGE_LEVEL the hero can start over at level 1 for a star.
+export const PRESTIGE_LEVEL = 20;
+export const PRESTIGE_STAT_POINTS = 2;
+export const PRESTIGE_BONUS = 0.1; // damage and coins, per star
+export function rebirth(profile: Profile): Profile | null {
+  if (profile.level < PRESTIGE_LEVEL) return null;
+  return { ...profile, xp: 0, level: 1, prestige: (profile.prestige ?? 0) + 1 };
 }
 
 export function addXp(profile: Profile, gained: number): Profile {
@@ -205,6 +223,10 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   }
   updated.relics = [...(summary.relics ?? profile.relics ?? [])];
   updated.swordLevel = summary.swordLevel;
+  if (summary.newPets?.length) {
+    updated.pets = [...new Set([...(profile.pets ?? []), ...summary.newPets])];
+    updated.activePet = profile.activePet ?? summary.newPets[0];
+  }
   if (summary.runId && summary.paidXp) {
     const prev = profile.xpClaims?.[summary.runId] ?? { floor: -1, scroll: -1 };
     const { [summary.runId]: _old, ...others } = profile.xpClaims ?? {};

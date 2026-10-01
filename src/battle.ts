@@ -2,6 +2,7 @@ import { calculateDamage } from './damage.ts';
 import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFICULTY_REWARD, type Difficulty, type TraitId } from './monsters.ts';
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
+import { rollPet, PET_HEAL_RATIO, PET_FIRE_RATIO, PET_XP_BONUS, type PetId } from './pets.ts';
 import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
@@ -39,6 +40,9 @@ export type BattleEvent =
   | { type: 'gimmickHeal'; amount: number }
   | { type: 'hesitate' }
   | { type: 'monsterWaits' }
+  | { type: 'bossEnraged' }
+  | { type: 'petHelped'; pet: PetId; amount: number }
+  | { type: 'petFound'; pet: PetId }
   | { type: 'turnStart'; prompt: string }
   | { type: 'partialHit'; damage: number; agentEvent: AgentEvent }
   | { type: 'attack'; damage: number; crit: boolean; matchedKeywords: string[] }
@@ -203,6 +207,14 @@ export interface BattleDeps {
   // Save/load XP dupe guard: this run line and what it was already paid.
   runId?: string;
   paidXp?: PaidXp;
+  // The pet riding along, and every pet owned (a chest only holds new ones).
+  pet?: PetId;
+  ownedPets?: string[];
+  // 환생 stars: +10% damage and coins each.
+  prestige?: number;
+  // 일일 도전 (src/daily.ts): that day's areas per chapter; the run can't be saved.
+  rosters?: number[];
+  daily?: string;
 }
 
 export interface BattleSummary {
@@ -227,6 +239,7 @@ export interface BattleSummary {
   maxHpPenalty: number;
   runId?: string;
   paidXp?: PaidXp;
+  newPets: PetId[];
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -269,6 +282,7 @@ export function endsWithQuestion(text: string): boolean {
   return isQ(lines[i]);
 }
 
+export const ENRAGE_COUNTER = 1.3; // boss phase 2 counter multiplier
 export const COUNTER_CAP = 0.9; // of the hero's max HP, per counterattack: no one-shot from full
 
 function counterDamage(monsterMaxHp: number, punished: boolean): number {
@@ -331,7 +345,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const relics = [...(deps.relics ?? [])];
   let maxHpPenalty = 0;
   let shopVisits = 0;
-  const coinGain = (n: number) => Math.round(n * mods.coinMult * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
+  const prestigeMult = 1 + 0.1 * (deps.prestige ?? 0);
+  const coinGain = (n: number) => Math.round(n * mods.coinMult * prestigeMult * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
   // This turn's damage past the monster's last HP, and whether it has fallen.
   let overkill = 0;
   let monsterDown = false;
@@ -359,6 +374,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let xpGained = 0;
   const alreadyPaid = deps.paidXp ?? NOTHING_PAID;
   const paidXp = { ...alreadyPaid };
+  const newPets: PetId[] = [];
   let defeated = false;
   // A run starts a fresh Claude session unless resuming this folder's saved
   // one; turns within the run resume it. A resumed id that has never worked
@@ -501,6 +517,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // Every wait for input: the per-session autosave (slot 0) and the auto slot
   // (4), both with the live state — a wounded monster stays wounded on load.
   const autosave = () => {
+    if (deps.daily) return; // a daily run can't be saved (a reload would reroll the day)
     const state = currentState();
     deps.onBattleEvent({ type: 'snapshot', slot: 0, state });
     deps.onBattleEvent({ type: 'snapshot', slot: AUTO_SAVE_SLOT, state });
@@ -520,6 +537,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       return true;
     }
     if (input === '/save' || input.startsWith('/save ')) {
+      if (deps.daily) {
+        deps.onBattleEvent({ type: 'saveFailed', reason: '일일 도전은 저장할 수 없다 — 한 번에 끝까지!' });
+        return true;
+      }
       const slot = Number(input.slice('/save'.length).trim() || '1');
       if (!Number.isInteger(slot) || slot < 1 || slot > SAVE_SLOTS) {
         deps.onBattleEvent({ type: 'saveFailed', reason: `슬롯은 1~${SAVE_SLOTS}번이다` });
@@ -666,7 +687,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   });
 
   while (true) {
-    const spawned = spawnMonster(floor, deps.difficulty, deps.themeId);
+    const spawned = spawnMonster(floor, deps.difficulty, deps.themeId, deps.rosters);
     const monsterIndex = spawned.index;
     const isBoss = floor % MONSTER_COUNT === MONSTER_COUNT - 1;
     const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
@@ -677,11 +698,15 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     let turnFailedTool = false; // debug-quest: a failed tool call hardens the counter
     // Counters grow with the monster's HP, plus 10% per chapter.
     const chapterPower = 1 + 0.1 * (chapter - 1);
+    // Boss phase 2: at half HP or less a boss enrages (once) and hits harder.
+    let enraged = false;
     // Capped so even a deep boss can't one-shot a full-HP hero.
     const counter = (punished: boolean) =>
       Math.min(
         Math.round(playerMaxHp * COUNTER_CAP),
-        Math.round(counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1)),
+        Math.round(
+          counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1) * (enraged ? ENRAGE_COUNTER : 1),
+        ),
       );
     currentMaxHp = maxHp;
     currentIsBoss = isBoss;
@@ -758,7 +783,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       currentFloorEngaged = true;
       const base = calculateDamage(prompt);
       let damage = Math.round(
-        base.damage * (deps.getDamageMultiplier?.() ?? 1) * attackMultiplier(stats) * swordMultiplier(swordLevel),
+        base.damage * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * attackMultiplier(stats) * swordMultiplier(swordLevel),
       );
       if (sharpened) {
         damage *= 2;
@@ -905,12 +930,27 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       }
 
       if (playerHp <= 0) break; // thorns finished the hero mid-turn
+      if (isBoss && !enraged && hp > 0 && hp <= maxHp / 2) {
+        enraged = true;
+        deps.onBattleEvent({ type: 'bossEnraged' });
+      }
       // A question, or the player's own stop: the monster waits for the next prompt.
       if (hp > 0 && !turn.error && (turn.interrupted || endsWithQuestion(turn.summary))) {
         deps.onBattleEvent({ type: 'monsterWaits' });
       } else if (hp > 0) {
         takeHit(counter(Boolean(turn.error)));
         if (playerHp <= 0) break;
+      }
+      if (deps.pet === 'slime' && playerHp < playerMaxHp) {
+        const amount = Math.min(playerMaxHp - playerHp, Math.max(1, Math.round(playerMaxHp * PET_HEAL_RATIO)));
+        playerHp += amount;
+        deps.onBattleEvent({ type: 'petHelped', pet: 'slime', amount });
+        emitPlayerHp();
+      } else if (deps.pet === 'drake' && hp > 0) {
+        const amount = Math.max(1, Math.round(maxHp * PET_FIRE_RATIO));
+        hp = Math.max(0, hp - amount);
+        deps.onBattleEvent({ type: 'petHelped', pet: 'drake', amount });
+        deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
       }
       if (mods.healPerTurn > 0 && playerHp < playerMaxHp) {
         playerHp = Math.min(playerMaxHp, playerHp + mods.healPerTurn);
@@ -954,11 +994,16 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         bag[loot.id] = (bag[loot.id] ?? 0) + 1;
       }
       deps.onBattleEvent({ type: 'chestOpened', grade: grade.id, name: grade.name, overkill, coins: chestCoins, items: loot ? [loot.id] : [] });
+      const pet = rollPet(grade.id, [...(deps.ownedPets ?? []), ...newPets], random);
+      if (pet) {
+        newPets.push(pet);
+        deps.onBattleEvent({ type: 'petFound', pet });
+      }
       deps.onBattleEvent({ type: 'coinsChanged', coins, gained: chestCoins });
       if (loot && loot.id !== 'crystal') emitBag();
       overkill = 0;
     }
-    const gained = floor > alreadyPaid.floor ? Math.round(xpForFloor(floor) * rewardMult) : 0;
+    const gained = floor > alreadyPaid.floor ? Math.round(xpForFloor(floor) * rewardMult * (deps.pet === 'owl' ? PET_XP_BONUS : 1)) : 0;
     paidXp.floor = Math.max(paidXp.floor, floor);
     xpGained += gained;
     floorsCleared += 1;
@@ -1005,6 +1050,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     maxHpPenalty,
     ...(deps.runId ? { runId: deps.runId } : {}),
     paidXp,
+    newPets,
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

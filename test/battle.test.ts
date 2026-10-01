@@ -952,6 +952,52 @@ test('treasure chest: the overkill of the killing blow picks the grade (goblin 6
   assert.ok(luckyChest && luckyChest.type === 'chestOpened' && luckyChest.items.length === 1, 'a low roll drops an item');
 });
 
+test('prestige: each rebirth gives +10% damage and +10% coins', async () => {
+  const plain = makeFakeDeps(['x', '/quit']);
+  await runDungeon(plain.deps);
+  const reborn = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...reborn.deps, prestige: 2 });
+  const hit = (events: BattleEvent[]) => events.find((e) => e.type === 'attack');
+  const a = hit(plain.events), b = hit(reborn.events);
+  assert.ok(a?.type === 'attack' && b?.type === 'attack');
+  assert.ok(Math.abs(b.damage - a.damage * 1.2) <= 1);
+  const coins = await runDungeon({ ...makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps, prestige: 2 });
+  const base = await runDungeon(makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps);
+  assert.equal(coins.coins, Math.round(base.coins * 1.2));
+});
+
+test('pets: the slime heals 5% of max HP after every turn', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, pet: 'slime', playerHp: 50 });
+  const heal = events.find((e) => e.type === 'petHelped');
+  assert.ok(heal?.type === 'petHelped' && heal.pet === 'slime' && heal.amount === 5);
+});
+
+test('pets: the drake breathes fire for 3% of the monster max HP after every turn', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, pet: 'drake', startFloor: 10 });
+  const start = events.find((e) => e.type === 'floorStart');
+  const fire = events.find((e) => e.type === 'petHelped');
+  assert.ok(start?.type === 'floorStart' && fire?.type === 'petHelped' && fire.pet === 'drake');
+  assert.equal(fire.amount, Math.max(1, Math.round(start.maxHp * 0.03)));
+});
+
+test('pets: the owl gives +20% floor XP', async () => {
+  const plain = await runDungeon(makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps);
+  const owl = await runDungeon({ ...makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps, pet: 'owl' });
+  assert.equal(owl.xpGained, Math.round(plain.xpGained * 1.2));
+});
+
+test('pets: a good chest can hold a pet you do not own yet', async () => {
+  const found = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const s1 = await runDungeon({ ...found.deps, chests: true, random: () => 0 });
+  assert.deepEqual(s1.newPets, ['slime']);
+  assert.ok(found.events.some((e) => e.type === 'petFound' && e.pet === 'slime'));
+  const full = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const s2 = await runDungeon({ ...full.deps, chests: true, random: () => 0, ownedPets: ['slime', 'drake', 'owl'] });
+  assert.deepEqual(s2.newPets, []);
+});
+
 test('treasure chest: once the monster is down mid-turn, later work hits pile onto the chest', async () => {
   const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action; goblin has 60
   const calls = Array.from({ length: 7 }, (_, i) => [
@@ -1112,6 +1158,25 @@ test('one counterattack takes at most 90% of the hero max HP: a full-HP hero sur
   assert.ok(start?.type === 'floorStart' && start.isBoss && hit?.type === 'monsterAttack');
   assert.ok(Math.round(start.maxHp * 0.1 * 1.1) > 90, 'uncapped it would one-shot');
   assert.equal(hit.damage, 90);
+});
+
+test('boss phase 2: at half HP or less a boss enrages once and its counters hit 30% harder', async () => {
+  const calm = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...calm.deps, startFloor: 5, monsterHp: 500, playerMaxHp: 1000 });
+  const angry = makeFakeDeps(['x', 'x', '/quit']);
+  await runDungeon({ ...angry.deps, startFloor: 5, monsterHp: 200, playerMaxHp: 1000 });
+  const c0 = calm.events.find((e) => e.type === 'monsterAttack');
+  const hits = angry.events.filter((e) => e.type === 'monsterAttack');
+  assert.ok(c0?.type === 'monsterAttack' && hits[0]?.type === 'monsterAttack');
+  assert.equal(calm.events.some((e) => e.type === 'bossEnraged'), false);
+  assert.equal(angry.events.filter((e) => e.type === 'bossEnraged').length, 1, 'only once');
+  assert.ok(Math.abs(hits[0].damage - c0.damage * 1.3) <= 1);
+});
+
+test('a regular monster never enrages', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, startFloor: 4, monsterHp: 10 });
+  assert.equal(events.some((e) => e.type === 'bossEnraged'), false);
 });
 
 test('counters grow +10% per chapter', async () => {

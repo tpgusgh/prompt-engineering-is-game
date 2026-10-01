@@ -12,6 +12,7 @@
         <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
         <div class="setup-hero">
           <p id="profile-line" class="profile-line"></p>
+          <button type="button" id="rebirth-btn" class="rebirth-btn" hidden>🌟 환생하기</button>
           <p id="daily-line" class="daily-line"></p>
           <p class="fatigue" data-fatigue hidden></p>
           <div class="xp-row setup-xp"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
@@ -48,6 +49,13 @@
           <div id="class-options" class="choice-grid"></div>
         </div>
         <div class="choice-row">
+          <span class="choice-label">동료</span>
+          <div>
+            <div id="pet-options" class="choice-grid"></div>
+            <p id="pet-hint" class="choice-hint"></p>
+          </div>
+        </div>
+        <div class="choice-row">
           <span class="choice-label">무기</span>
           <div>
             <div id="weapon-options" class="choice-grid"></div>
@@ -73,6 +81,10 @@
           </div>
         </div>
         <button id="start-btn" class="start-btn" disabled>▶ 던전 입장</button>
+        <div class="daily-run">
+          <button type="button" id="daily-btn" class="daily-btn">📅 오늘의 도전</button>
+          <span id="daily-info" class="choice-hint"></span>
+        </div>
       </div>
 
       <div class="setup-card">
@@ -147,6 +159,7 @@
           <span id="coin-label" class="coin-label"></span>
           <span class="fatigue" data-fatigue hidden></span>
           <span id="contract-badge" class="contract-badge" hidden></span>
+          <span id="pet-badge" class="pet-badge" hidden></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
           <label class="weapon-select" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
         </div>
@@ -228,6 +241,7 @@
         <div id="attachments" class="attachments" hidden></div>
         <form id="attack-form">
           <button type="button" id="attach-btn" class="attach-btn" title="파일·사진 첨부 (끌어다 놓기, 이미지 붙여넣기도 된다)">📎</button>
+          <button type="button" id="skillbook-btn" class="attach-btn" title="스킬북: Claude 스킬을 파일로 만들고 불러온다">📜</button>
           <textarea id="prompt-input" rows="1" placeholder="공격 프롬프트를 입력하세요... (Enter 공격 · Shift+Enter 줄바꿈 · /new 새 세션)" autocomplete="off"></textarea>
           <button type="submit">공격</button>
           <button type="button" id="flee-btn" title="50% 확률. 실패하면 한 턴을 날린다">도망</button>
@@ -361,11 +375,46 @@
       </div>
     </div>
 
+    <div id="skillbook-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel skillbook-panel" role="dialog" aria-label="스킬북">
+        <div class="settings-head">
+          <h2>📜 스킬북 <span class="option-sub">Claude 스킬 = .claude/skills/이름/SKILL.md</span></h2>
+          <button type="button" id="skillbook-close" aria-label="닫기">✕</button>
+        </div>
+        <div id="skillbook-list" class="skillbook-list"></div>
+        <form id="skill-form" class="skill-form" hidden>
+          <label>이름 <input id="skill-name" maxlength="64" placeholder="fix-tests (영어 소문자·숫자·-)" autocomplete="off" /></label>
+          <label>설명 <input id="skill-description" maxlength="300" placeholder="언제 쓰는 스킬인지 (Claude가 보고 고른다)" autocomplete="off" /></label>
+          <label>내용 <textarea id="skill-body" rows="8" placeholder="Claude에게 줄 지시 (프롬프트). 불러오면 /이름 으로 실행된다."></textarea></label>
+          <p id="skill-error" class="error-text" hidden></p>
+          <div class="skill-form-actions">
+            <button type="submit">저장</button>
+            <button type="button" id="skill-cancel">취소</button>
+          </div>
+        </form>
+        <button type="button" id="skill-new" class="skill-new">+ 새 스킬</button>
+      </div>
+    </div>
+
     <div id="ranking-overlay" class="file-viewer-overlay" hidden>
       <div class="settings-panel ranking-panel" role="dialog" aria-label="랭킹">
         <div class="settings-head">
           <h2>🏆 랭킹 <span class="option-sub">상위 100명 · 쓰러질 때 등록</span></h2>
           <button type="button" id="ranking-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="ranking-controls">
+          <div class="ranking-tabs" role="tablist">
+            <button type="button" class="ranking-tab active" data-board="all" role="tab">전체</button>
+            <button type="button" class="ranking-tab" data-board="weekly" role="tab">이번 주</button>
+            <button type="button" class="ranking-tab" data-board="daily" role="tab">📅 오늘의 도전</button>
+          </div>
+          <select id="ranking-theme" aria-label="테마"><option value="">모든 테마</option></select>
+          <select id="ranking-difficulty" aria-label="난이도">
+            <option value="">모든 난이도</option>
+            <option value="easy">쉬움</option>
+            <option value="normal">보통</option>
+            <option value="hard">어려움</option>
+          </select>
         </div>
         <p id="ranking-status" class="option-sub"></p>
         <div class="ranking-scroll"><table id="ranking-table" class="ranking-table"></table></div>

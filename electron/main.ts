@@ -16,8 +16,12 @@ import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, li
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
 import { loadSlots, writeSlot, deleteSlot } from '../src/saves.ts';
+import { PETS, isPetId } from '../src/pets.ts';
+import { dailyDungeon, dailyRandom } from '../src/daily.ts';
+import { listSkills, saveSkill, deleteSkill } from '../src/skills.ts';
+import { ROSTER_NAMES } from '../src/monsters.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
-import { loadProfile, saveProfile, finishRun, startingStatPoints, XP_PER_LEVEL, TITLES } from '../src/profile.ts';
+import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, XP_PER_LEVEL, TITLES, PRESTIGE_LEVEL } from '../src/profile.ts';
 import { ACHIEVEMENTS, DAILY_QUESTS, currentDaily, localDate } from '../src/progress.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
@@ -202,10 +206,11 @@ ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boole
 // they carry the signing key). The run token is fetched when a run starts.
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
-ipcMain.handle('ranking-list', async () => {
+ipcMain.handle('ranking-list', async (_event, board: unknown) => {
   if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
+  const which = board === 'weekly' || board === 'daily' ? board : 'all';
   try {
-    return { entries: await fetchRanking(rankingConfig.url) };
+    return { entries: await fetchRanking(rankingConfig.url, which, which === 'daily' ? localDate() : undefined) };
   } catch (err) {
     return { error: `랭킹을 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
   }
@@ -334,6 +339,10 @@ ipcMain.handle('get-setup-info', async () => ({
   difficultyReward: DIFFICULTY_REWARD,
   chestGrades: CHEST_GRADES,
   pacts: { god: GODS, demon: DEMONS },
+  pets: PETS,
+  prestigeLevel: PRESTIGE_LEVEL,
+  daily: dailyDungeon(localDate()),
+  rosterNames: ROSTER_NAMES,
   appVersion: app.getVersion(),
 }));
 
@@ -426,6 +435,14 @@ ipcMain.handle('get-folder-session', (_event, cwd: string) => loadFolderSession(
 ipcMain.handle('list-sessions', (_event, cwd: string) => listFolderSessions(path.resolve(cwd)));
 ipcMain.handle('session-history', (_event, cwd: string, sessionId: string) => loadSessionHistory(sessionId, path.resolve(cwd)));
 ipcMain.handle('list-slots', () => loadSlots());
+// 환생: level 1 again for a prestige star (only between runs).
+ipcMain.handle('rebirth', async () => {
+  const reborn = rebirth(await loadProfile());
+  if (!reborn) return { error: `레벨 ${PRESTIGE_LEVEL}부터 환생할 수 있다` };
+  await saveProfile(reborn);
+  return { profile: reborn };
+});
+
 ipcMain.handle('delete-slot', async (_event, slot: number) => {
   if (!Number.isInteger(slot) || slot < 1 || slot > AUTO_SAVE_SLOT) return loadSlots();
   await deleteSlot(slot);
@@ -449,9 +466,20 @@ ipcMain.handle(
       // Let the AI send out the wizard/swordsman/archer subagents.
       party?: boolean;
       heroClass?: string;
+      // The pet to bring ('' = none); must be one the profile owns.
+      pet?: string;
+      // 일일 도전: today's fixed dungeon (theme, areas and rolls from the date).
+      daily?: boolean;
     },
   ) => {
     const profile = await loadProfile();
+    if (requested.pet !== undefined) {
+      const chosen = isPetId(requested.pet) && profile.pets?.includes(requested.pet) ? requested.pet : undefined;
+      if (chosen) profile.activePet = chosen;
+      else delete profile.activePet;
+    }
+    const day = requested.daily ? dailyDungeon(localDate()) : null;
+    if (day) Object.assign(requested, { difficulty: 'normal', themeId: day.themeId, startFloor: 0, sessionId: undefined, loadSlot: undefined });
     const manual = requested.loadSlot ? (await loadSlots())[requested.loadSlot - 1] : null;
     if (requested.loadSlot && !manual) throw new Error(`슬롯 ${requested.loadSlot}이(가) 비어 있습니다.`);
     // Resuming a Claude session also resumes that session's autosaved run.
@@ -544,6 +572,10 @@ ipcMain.handle(
       swordLevel: slot ? slot.swordLevel : profile.swordLevel,
       runId,
       ...(paidXp ? { paidXp } : {}),
+      ...(profile.activePet ? { pet: profile.activePet } : {}),
+      ownedPets: profile.pets ?? [],
+      prestige: profile.prestige ?? 0,
+      ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date) } : {}),
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
         if (event.type !== 'snapshot') {
@@ -581,7 +613,8 @@ ipcMain.handle(
     });
 
     // Settings changed mid-run win over the copy loaded at the start.
-    const finished = finishRun(profile, summary, options.themeId);
+    // A daily run doesn't move the theme's story progress.
+    const finished = finishRun(profile, summary, day ? undefined : options.themeId);
     const updated = { ...finished.profile, heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
     await saving;
@@ -595,7 +628,10 @@ ipcMain.handle(
     const rankStats = { floors: summary.nextFloor, bosses: summary.chaptersCleared, xp: summary.xpGained, difficulty: options.difficulty };
     const rankScore = scoreFor(rankStats);
     const startFloor = Math.min(summary.nextFloor, Math.max(0, Math.floor(options.startFloor || 0)));
-    pendingRank = runToken && rankScore > 0 ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level } : null;
+    pendingRank =
+      runToken && rankScore > 0
+        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, ...(day ? { daily: day.date } : {}) }
+        : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
     return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
@@ -610,6 +646,12 @@ function insideCwd(filePath: string): string | null {
 
 // Inventory drag & drop and "new file/folder" — all confined to the project.
 const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
+// 스킬북 (src/skills.ts): the run's project skills plus the user's.
+ipcMain.handle('skills-list', () => (currentCwd ? listSkills(currentCwd) : []));
+ipcMain.handle('skill-save', (_event, skill: { name: string; description: string; body: string }) =>
+  currentCwd ? saveSkill(currentCwd, { name: String(skill?.name ?? ''), description: String(skill?.description ?? ''), body: String(skill?.body ?? '') }) : { error: noProject.message },
+);
+ipcMain.handle('skill-delete', (_event, name: string) => (currentCwd ? deleteSkill(currentCwd, String(name)) : { error: noProject.message }));
 ipcMain.handle('move-path', (_event, src: string, destDir: string) => (currentCwd ? movePath(currentCwd, src, destDir) : noProject));
 ipcMain.handle('import-files', (_event, sources: string[], destDir: string) =>
   currentCwd ? importPaths(currentCwd, sources, destDir) : { imported: 0, failed: sources },

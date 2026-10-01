@@ -149,6 +149,49 @@ function renderWeaponOptions() {
   weaponSelect.value = chosenWeapon;
 }
 
+let prestigeLevel = 20;
+$('rebirth-btn').addEventListener('click', async () => {
+  const next = (profile.prestige ?? 0) + 1;
+  const ok = window.confirm(
+    `환생할까?\n\n레벨 ${profile.level} → 레벨 1 (경험치 0)\n대신 환생 ★${next}: 피해·코인 +${next * 10}%, 시작 능력치 포인트 +${next * 2}\n코인·무기 강화·동료·계약·도감은 그대로 남는다.`,
+  );
+  if (!ok) return;
+  const res = await window.promptBattle.rebirth();
+  if (res.error) return window.alert(res.error);
+  profile = res.profile;
+  runXp = 0;
+  renderXp();
+  renderProfileLine();
+  sfx('fanfare');
+});
+
+// Pets: owned ones from the profile; '' = go alone.
+let petDefs = [];
+let chosenPet = '';
+const petInfo = (id) => petDefs.find((p) => p.id === id);
+const PET_ICON = { slime: '🟢', drake: '🐉', owl: '🦉' };
+function renderPetOptions() {
+  const el = $('pet-options');
+  el.textContent = '';
+  const owned = profile?.pets ?? [];
+  $('pet-hint').textContent = owned.length ? '한 번에 한 마리만 데려간다. 보물상자(금 이상)에서 드물게 새 동료가 나온다.' : '아직 동료가 없다. 보물상자(금 이상)에서 드물게 나온다.';
+  if (!owned.length) return;
+  el.append(choiceCard('pet', '', chosenPet === '', '혼자 간다', '동료 없이', () => (chosenPet = '')));
+  for (const id of owned) {
+    const pet = petInfo(id);
+    if (pet) el.append(choiceCard('pet', id, chosenPet === id, `${PET_ICON[id] ?? '🐾'} ${pet.name}`, pet.text, () => (chosenPet = id)));
+  }
+}
+function renderPetBadge() {
+  const el = $('pet-badge');
+  const pet = petInfo(chosenPet);
+  el.hidden = !pet;
+  if (pet) {
+    el.textContent = `${PET_ICON[pet.id] ?? '🐾'} ${pet.name}`;
+    el.title = pet.text;
+  }
+}
+
 function renderClassOptions() {
   const el = $('class-options');
   el.textContent = '';
@@ -181,6 +224,13 @@ async function loadSetup() {
   difficultyReward = info.difficultyReward ?? difficultyReward;
   chestGrades = info.chestGrades ?? [];
   pacts = info.pacts ?? pacts;
+  petDefs = info.pets ?? [];
+  prestigeLevel = info.prestigeLevel ?? prestigeLevel;
+  todayDungeon = info.daily ?? null;
+  rosterNames = info.rosterNames ?? [];
+  renderDailyInfo();
+  chosenPet = profile.activePet ?? '';
+  renderPetOptions();
   heroContract = profile.contract ?? null;
   renderContract();
   renderDailyLine();
@@ -215,7 +265,11 @@ loadSetup();
 function renderProfileLine() {
   const pact = pactInfo(profile.contract);
   const charm = profile.relics?.includes('coinCharm') ? ' · 코인의 부적' : '';
-  profileLineEl.textContent = `🎖 ${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}${pact ? ` · 계약: ${pact.name}` : ''}${charm}`;
+  const stars = profile.prestige ? `${'★'.repeat(Math.min(profile.prestige, 5))}${profile.prestige > 5 ? `×${profile.prestige}` : ''} ` : '';
+  const btn = $('rebirth-btn');
+  btn.hidden = profile.level < prestigeLevel;
+  btn.title = `레벨 1로 돌아가는 대신 환생 ★ 하나: 피해·코인 +10%, 시작 능력치 포인트 +2 (영구, 누적). 코인·무기·동료·계약은 그대로.`;
+  profileLineEl.textContent = `🎖 ${stars}${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}${pact ? ` · 계약: ${pact.name}` : ''}${charm}`;
 }
 
 // Battle stat panel: unspent points + one button per stat (a free action).
@@ -1079,6 +1133,9 @@ function soundFor(event) {
     case 'monsterAttack':
       sfx('hurt');
       break;
+    case 'bossEnraged':
+      sfx('boss');
+      break;
     case 'counterBlocked':
     case 'gimmickBlocked':
     case 'gimmickHeal':
@@ -1147,7 +1204,7 @@ playMusic('title');
 
 function renderBattleEvent(event) {
   soundFor(event);
-  if (PROGRESS_EVENTS.has(event.type)) unsaved = true;
+  if (PROGRESS_EVENTS.has(event.type) && !dailyRun) unsaved = true; // a daily run can't be saved anyway
   speechFor(event);
   switch (event.type) {
     case 'runStart':
@@ -1164,7 +1221,7 @@ function renderBattleEvent(event) {
       chapterBanner.textContent = `챕터 ${event.chapter} · ${info.title} · ${(event.floor % 6) + 1}/6층`;
       currentMonsterName = event.isBoss ? info.boss : event.monsterName;
       monsterPanel.classList.toggle('boss', event.isBoss);
-      monsterPanel.classList.remove('defeated');
+      monsterPanel.classList.remove('defeated', 'enraged');
       monsterNameEl.textContent = event.isBoss ? `보스: ${currentMonsterName}` : `${event.floor + 1}층: ${currentMonsterName}`;
       monsterArtEl.innerHTML = monsterSvg(event.monsterIndex, event.isBoss);
       setBar(hpBarFillEl, hpLabelEl, event.maxHp, event.maxHp, ' HP');
@@ -1189,6 +1246,22 @@ function renderBattleEvent(event) {
       break;
     case 'traitRegen':
       appendLog(`🩹 ${currentMonsterName}이(가) 체력을 ${event.amount} 재생했다.`);
+      break;
+    case 'petHelped': {
+      const pet = petInfo(event.pet)?.name ?? '동료';
+      appendLog(event.pet === 'slime' ? `${PET_ICON.slime} ${pet}가 HP ${event.amount}을(를) 회복시켰다.` : `${PET_ICON.drake} ${pet}의 불꽃! ${event.amount}의 피해!`, 'partial-hit');
+      if (event.pet === 'drake') flashMonster();
+      break;
+    }
+    case 'petFound': {
+      const pet = petInfo(event.pet);
+      appendLog(`🐾 상자 안에서 새 동료를 찾았다: ${PET_ICON[event.pet] ?? ''} ${pet?.name ?? event.pet} — ${pet?.text ?? ''} (다음 판부터 데려갈 수 있다)`, 'victory');
+      break;
+    }
+    case 'bossEnraged':
+      monsterPanel.classList.add('enraged');
+      appendLog(`🔥 ${currentMonsterName}이(가) 격노했다! 2페이즈 — 반격이 30% 더 강해진다!`, 'crit');
+      shakeScreen();
       break;
     case 'monsterWaits':
       appendLog(stoppedTurn ? `${currentMonsterName}이(가) 다음 명령을 기다린다...` : `❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
@@ -1798,10 +1871,34 @@ $('save-close').addEventListener('click', () => ($('save-overlay').hidden = true
 
 startBtn.addEventListener('click', () => startGame({}));
 
-async function startGame({ loadSlot, slot }) {
+// 일일 도전: today's fixed dungeon, same for everyone, normal difficulty, no saving.
+let todayDungeon = null;
+let rosterNames = [];
+let dailyRun = false;
+function renderDailyInfo() {
+  if (!todayDungeon) return;
+  const theme = THEMES.find((t) => t.id === todayDungeon.themeId);
+  const areas = todayDungeon.rosters.slice(0, 3).map((r) => rosterNames[r]).filter(Boolean).join(' → ');
+  $('daily-info').textContent = `${todayDungeon.date.slice(5).replace('-', '/')} · ${theme?.title ?? ''} · ${areas} … · 보통 난이도 · 저장 불가 · 일일 랭킹`;
+}
+$('daily-btn').addEventListener('click', () => {
+  if (!chosenFolder) {
+    setupErrorEl.textContent = '작업할 폴더를 먼저 골라 주세요.';
+    setupErrorEl.hidden = false;
+    return;
+  }
+  startGame({ daily: true });
+});
+
+async function startGame({ loadSlot, slot, daily = false }) {
+  dailyRun = daily;
+  if (daily) {
+    slot = undefined;
+    loadSlot = undefined;
+  }
   // Picking a Claude session resumes its autosaved run too (main does the
   // same lookup); treat it like a slot for the starting UI state.
-  if (!slot && chosenFolder && !sessionPicker.hidden && sessionSelect.value) {
+  if (!daily && !slot && chosenFolder && !sessionPicker.hidden && sessionSelect.value) {
     slot = (await window.promptBattle.getFolderSession(chosenFolder)).runStates?.[sessionSelect.value];
   }
   if (slot) {
@@ -1812,11 +1909,11 @@ async function startGame({ loadSlot, slot }) {
     renderWeaponOptions();
   }
   if (!chosenFolder) return;
-  const difficulty = slot ? slot.difficulty : document.querySelector('input[name="difficulty"]:checked').value;
-  activeTheme = THEMES.find((t) => t.id === chosenThemeId) || THEMES[0];
+  const difficulty = slot ? slot.difficulty : daily ? 'normal' : document.querySelector('input[name="difficulty"]:checked').value;
+  activeTheme = THEMES.find((t) => t.id === (daily && todayDungeon ? todayDungeon.themeId : chosenThemeId)) || THEMES[0];
   // A new adventure starts at the beginning; continuing is the slots' job.
   const startFloor = 0;
-  const sessionId = slot ? slot.sessionId : sessionPicker.hidden ? undefined : sessionSelect.value || undefined;
+  const sessionId = slot ? slot.sessionId : daily || sessionPicker.hidden ? undefined : sessionSelect.value || undefined;
   currentSessionId = sessionId ?? null;
   weaponSelect.value = chosenWeapon;
   touchedFiles.clear();
@@ -1836,7 +1933,8 @@ async function startGame({ loadSlot, slot }) {
   // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
   stats = { attack: 0, defense: 0, vitality: 0, ...slot?.stats };
   // Level bonus: a new run starts with one stat point per hero level.
-  statPoints = slot ? slot.statPoints : profile.level;
+  const startPoints = profile.level + 2 * (profile.prestige ?? 0); // 환생 ★: +2 each
+  statPoints = slot ? slot.statPoints : startPoints;
   swordLevel = from.swordLevel;
   renderCoins();
   renderSwordLevel();
@@ -1854,7 +1952,8 @@ async function startGame({ loadSlot, slot }) {
   }
   // A new session starts on a clean log: Claude doesn't remember earlier
   // sessions, so their chat isn't shown either.
-  if (!slot) appendLog(`⭐ 레벨 ${profile.level} 보너스: 능력치 포인트 ${profile.level}개로 시작한다! 위쪽 버튼으로 바로 올려보자.`, 'coin-line');
+  if (!slot) appendLog(`⭐ 레벨 ${profile.level}${profile.prestige ? ` · 환생 ★${profile.prestige}` : ''} 보너스: 능력치 포인트 ${startPoints}개로 시작한다! 위쪽 버튼으로 바로 올려보자.`, 'coin-line');
+  if (daily) appendLog(`📅 오늘의 도전 (${todayDungeon?.date ?? ''}) — 모두가 같은 던전을 돈다. 저장은 안 된다. 쓰러지면 일일 랭킹에 올릴 수 있다!`, 'story-intro');
   if (slot) {
     const from = loadSlot ? `슬롯 ${loadSlot}을(를)` : '이 세션의 자동 저장을';
     appendLog(`💾 ${from} 불러왔다. ${slotSummary(slot)}`, 'story-line');
@@ -1865,7 +1964,9 @@ async function startGame({ loadSlot, slot }) {
     const party = $('party-mode').checked;
     const heroClassId = chosenClass;
     resetDeathCard();
-    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId });
+    renderPetBadge();
+    $('save-btn').hidden = daily;
+    const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId, pet: chosenPet, daily });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated, progress, ranking } = await runPromise;
     if (summary.defeated) await deathAck;
@@ -1941,6 +2042,9 @@ function renderRunRewards(progress) {
   if (progress.unlocked.length || progress.dailyCompleted) sfx('fanfare');
 }
 
+const GAME_COMMANDS = ['/bet', '/buy', '/enhance', '/flee', '/leave', '/new', '/quit', '/save', '/sell', '/session', '/stat', '/use'];
+const isGameCommand = (text) => GAME_COMMANDS.some((c) => text === c || text.startsWith(`${c} `));
+
 attackForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = promptInput.value;
@@ -1951,11 +2055,13 @@ attackForm.addEventListener('submit', (e) => {
   // resolve instantly, so disabling for them would lock the input.
   // At a shop an empty line just leaves it (no hesitate follows).
   const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
-  const startsTurn = (!trimmed.startsWith('/') && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
+  // A skill (/fix-tests ...) is a real attack; only the game's own commands aren't.
+  const command = isGameCommand(trimmed);
+  const startsTurn = (!command && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
   if (startsTurn) setInputEnabled(false);
   // Show my message right away, then jump to the bottom.
   const shown = trimmed.startsWith('/new ') ? trimmed.slice(5).trim() : trimmed;
-  if (shown && !shown.startsWith('/') && !atMerchant) appendUserChat(shown);
+  if (shown && !isGameCommand(shown) && !atMerchant) appendUserChat(shown);
   answeringQuest = null;
   window.promptBattle.submitPrompt(text);
   autoGrowInput();
@@ -2906,35 +3012,62 @@ $('rank-form').addEventListener('submit', async (e) => {
     return;
   }
   $('rank-form').hidden = true;
-  $('rank-result').textContent = result.rank ? `🏆 ${result.rank}위로 등록됐다! (${fmtNum(result.score)}점)` : `등록했지만 상위 100위 밖이다 (${fmtNum(result.score)}점)`;
+  const places = [
+    result.dailyRank ? `오늘의 도전 ${result.dailyRank}위` : '',
+    result.rank ? `전체 ${result.rank}위` : '',
+    result.weeklyRank ? `이번 주 ${result.weeklyRank}위` : '',
+  ].filter(Boolean);
+  $('rank-result').textContent = places.length ? `🏆 ${places.join(' · ')}로 등록됐다! (${fmtNum(result.score)}점)` : `등록했지만 상위 100위 밖이다 (${fmtNum(result.score)}점)`;
   sfx(result.rank && result.rank <= 10 ? 'fanfare' : 'coin');
 });
 
 const CLASS_NAME = { swordsman: '검사', wizard: '마법사', archer: '궁수' };
+let rankingBoard = 'all';
+let rankingEntries = [];
 async function openRanking() {
   $('ranking-overlay').hidden = false;
-  const table = $('ranking-table');
-  table.textContent = '';
+  const themeSel = $('ranking-theme');
+  if (themeSel.options.length === 1) {
+    for (const t of THEMES) themeSel.append(new Option(t.title, t.id));
+  }
+  for (const tab of document.querySelectorAll('.ranking-tab')) tab.classList.toggle('active', tab.dataset.board === rankingBoard);
+  $('ranking-table').textContent = '';
   $('ranking-status').textContent = '불러오는 중...';
-  const res = await window.promptBattle.rankingList();
+  const board = rankingBoard;
+  const res = await window.promptBattle.rankingList(board);
+  if (board !== rankingBoard) return; // switched tabs meanwhile
   if (res.error) {
     $('ranking-status').textContent = res.error;
     return;
   }
-  $('ranking-status').textContent = res.entries.length ? '' : '아직 기록이 없다. 첫 번째가 되어 보자!';
+  rankingEntries = res.entries;
+  renderRankingTable();
+}
+// Theme / difficulty filters work on the board's top 100 (ranks stay the board's).
+function renderRankingTable() {
+  const table = $('ranking-table');
+  table.textContent = '';
+  const theme = $('ranking-theme').value;
+  const difficulty = $('ranking-difficulty').value;
+  const shown = rankingEntries.filter((e) => (!theme || e.theme === theme) && (!difficulty || e.difficulty === difficulty));
+  const empty = rankingBoard === 'daily' ? '오늘의 도전 기록이 아직 없다. 첫 번째가 되어 보자!' : '아직 기록이 없다. 첫 번째가 되어 보자!';
+  $('ranking-status').textContent = shown.length ? '' : rankingEntries.length ? '조건에 맞는 기록이 없다' : empty;
+  if (!shown.length) return;
   const head = document.createElement('tr');
-  for (const h of ['순위', '이름', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
+  for (const h of ['순위', '이름', '칭호', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
     const th = document.createElement('th');
     th.textContent = h;
     head.append(th);
   }
   table.append(head);
-  for (const e of res.entries) {
+  for (const e of shown) {
     const tr = document.createElement('tr');
     if (e.rank <= 3) tr.className = `top${e.rank}`;
+    const stars = e.prestige ? `${'★'.repeat(Math.min(e.prestige, 5))}${e.prestige > 5 ? `×${e.prestige}` : ''} ` : '';
     const cells = [
       e.rank <= 3 ? ['1위', '2위', '3위'][e.rank - 1] : String(e.rank),
       e.name ?? '',
+      `${stars}${titleOf(e.level ?? 1)}`,
       fmtNum(e.score),
       CLASS_NAME[e.heroClass] ?? '',
       THEMES.find((t) => t.id === e.theme)?.title ?? '',
@@ -2950,6 +3083,14 @@ async function openRanking() {
     table.append(tr);
   }
 }
+for (const tab of document.querySelectorAll('.ranking-tab')) {
+  tab.addEventListener('click', () => {
+    rankingBoard = tab.dataset.board;
+    openRanking();
+  });
+}
+$('ranking-theme').addEventListener('change', renderRankingTable);
+$('ranking-difficulty').addEventListener('change', renderRankingTable);
 $('ranking-btn').addEventListener('click', openRanking);
 $('ranking-close').addEventListener('click', () => ($('ranking-overlay').hidden = true));
 $('ranking-overlay').addEventListener('click', (e) => {
@@ -3070,3 +3211,95 @@ function useNextMemo() {
   appendLog('📝 메모해 둔 다음 명령을 입력창에 넣었다. Enter로 바로 공격!', 'story-line');
   promptInput.focus();
 }
+
+// ---------------------------------------------------------------------------
+// 스킬북: Claude Code skills as files (project .claude/skills/<name>/SKILL.md,
+// plus the user's ~/.claude/skills). 불러오기 puts /<name> in front of the prompt.
+async function openSkillbook() {
+  $('skillbook-overlay').hidden = false;
+  $('skill-form').hidden = true;
+  $('skill-new').hidden = false;
+  const list = $('skillbook-list');
+  list.textContent = '불러오는 중...';
+  const skills = await window.promptBattle.skillsList();
+  list.textContent = '';
+  if (!skills.length) {
+    list.textContent = '아직 스킬이 없다. 자주 쓰는 지시를 스킬로 만들어 두면 /이름 으로 바로 쓴다.';
+    return;
+  }
+  for (const skill of skills) {
+    const card = document.createElement('div');
+    card.className = 'skill-card';
+    const head = document.createElement('div');
+    head.className = 'skill-head';
+    const title = document.createElement('strong');
+    title.textContent = `/${skill.name}`;
+    const scope = document.createElement('span');
+    scope.className = 'option-sub';
+    scope.textContent = skill.scope === 'project' ? '이 프로젝트' : '내 전체 (~/.claude)';
+    head.append(title, scope);
+    const desc = document.createElement('p');
+    desc.textContent = skill.description || '(설명 없음)';
+    const actions = document.createElement('div');
+    actions.className = 'skill-actions';
+    const load = document.createElement('button');
+    load.type = 'button';
+    load.textContent = '불러오기';
+    load.addEventListener('click', () => {
+      const rest = promptInput.value.replace(/^\/[a-z0-9-]+\s*/, '');
+      promptInput.value = `/${skill.name} ${rest}`;
+      $('skillbook-overlay').hidden = true;
+      promptInput.focus();
+      autoGrowInput();
+    });
+    actions.append(load);
+    if (skill.scope === 'project') {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = '편집';
+      edit.addEventListener('click', () => openSkillForm(skill));
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '삭제';
+      del.addEventListener('click', async () => {
+        if (!confirm(`/${skill.name} 스킬을 삭제할까요? (.claude/skills/${skill.name}/SKILL.md)`)) return;
+        const res = await window.promptBattle.skillDelete(skill.name);
+        if (res.error) return alert(res.error);
+        openSkillbook();
+      });
+      actions.append(edit, del);
+    }
+    card.append(head, desc, actions);
+    list.append(card);
+  }
+}
+function openSkillForm(skill) {
+  $('skill-form').hidden = false;
+  $('skill-new').hidden = true;
+  $('skill-error').hidden = true;
+  $('skill-name').value = skill?.name ?? '';
+  $('skill-name').readOnly = Boolean(skill);
+  $('skill-description').value = skill?.description ?? '';
+  $('skill-body').value = skill?.body ?? promptInput.value.trim();
+  (skill ? $('skill-body') : $('skill-name')).focus();
+}
+$('skillbook-btn').addEventListener('click', openSkillbook);
+$('skillbook-close').addEventListener('click', () => ($('skillbook-overlay').hidden = true));
+$('skillbook-overlay').addEventListener('click', (e) => {
+  if (e.target === $('skillbook-overlay')) $('skillbook-overlay').hidden = true;
+});
+$('skill-new').addEventListener('click', () => openSkillForm(null));
+$('skill-cancel').addEventListener('click', () => {
+  $('skill-form').hidden = true;
+  $('skill-new').hidden = false;
+});
+$('skill-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await window.promptBattle.skillSave({ name: $('skill-name').value, description: $('skill-description').value, body: $('skill-body').value });
+  if (res.error) {
+    $('skill-error').textContent = res.error;
+    $('skill-error').hidden = false;
+    return;
+  }
+  openSkillbook();
+});

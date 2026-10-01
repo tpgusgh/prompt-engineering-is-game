@@ -179,8 +179,10 @@ export const DIFFICULTY_MULTIPLIER: Record<Difficulty, number> = {
 const HP_GROWTH_PER_FLOOR = 0.25;
 const HP_GROWTH_SQUARED = 0.01;
 
-export function spawnMonster(floor: number, difficulty: Difficulty, themeId?: string): { name: string; art: string; maxHp: number; index: number; trait: TraitId } {
-  const roster = rosterFor(themeId, Math.floor(floor / MONSTER_COUNT) + 1);
+export function spawnMonster(floor: number, difficulty: Difficulty, themeId?: string, rosters?: number[]): { name: string; art: string; maxHp: number; index: number; trait: TraitId } {
+  const chapter = Math.floor(floor / MONSTER_COUNT) + 1;
+  // rosters: a fixed area per chapter (the daily dungeon) instead of the theme's.
+  const roster = rosters?.length ? rosters[(chapter - 1) % rosters.length] : rosterFor(themeId, chapter);
   const slot = floor % MONSTER_COUNT;
   const template = ROSTERS[roster][slot];
   const floorScaling = 1 + floor * HP_GROWTH_PER_FLOOR + floor * floor * HP_GROWTH_SQUARED;

@@ -80,16 +80,22 @@ export interface RankedRun {
   theme: string;
   heroClass: string;
   level: number;
+  prestige?: number;
+  // 일일 도전 date: the run also goes on that day's board.
+  daily?: string;
 }
 
-export async function submitScore(config: RankingConfig, run: RankedRun): Promise<{ rank: number | null; score: number }> {
+export async function submitScore(config: RankingConfig, run: RankedRun): Promise<{ rank: number | null; score: number; weeklyRank: number | null; dailyRank?: number | null }> {
   const body = { ...run, score: scoreFor(run), ts: Date.now() };
   const data = await post(config, '', body);
-  return { rank: typeof data.rank === 'number' ? data.rank : null, score: Number(data.score) };
+  const rankOf = (v: unknown) => (typeof v === 'number' ? v : null);
+  return { rank: rankOf(data.rank), score: Number(data.score), weeklyRank: rankOf(data.weeklyRank), ...('dailyRank' in data ? { dailyRank: rankOf(data.dailyRank) } : {}) };
 }
 
-export async function fetchRanking(url: string): Promise<unknown[]> {
-  const res = await fetch(`${url.replace(/\/+$/, '')}/api/ranking`, { signal: AbortSignal.timeout(10_000) });
+// board: 'all' | 'weekly' | 'daily' (with the daily dungeon's date).
+export async function fetchRanking(url: string, board = 'all', date?: string): Promise<unknown[]> {
+  const query = new URLSearchParams({ board, ...(date ? { date } : {}) });
+  const res = await fetch(`${url.replace(/\/+$/, '')}/api/ranking?${query}`, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { entries?: unknown[] };
   return Array.isArray(data.entries) ? data.entries : [];

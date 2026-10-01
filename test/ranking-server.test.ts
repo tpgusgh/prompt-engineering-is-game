@@ -26,6 +26,7 @@ function fakeRedis() {
       case 'HMGET': return a.map((f) => h(key).get(f) ?? null);
       case 'HDEL': for (const f of a) h(key).delete(f); return 1;
       case 'SET': if (keys.has(key)) return null; keys.add(key); return 'OK';
+      case 'EXPIRE': return 1;
       default: throw new Error(`unsupported ${cmd}`);
     }
   };
@@ -104,6 +105,30 @@ test('a run continued from a later floor is timed from where it started', async 
   assert.equal((await call({ startFloor: 30 })).status, 200, 'continued from floor 30: only 10 new floors');
 });
 
+test('boards: a run goes on all-time and this week; a daily run also on that day; GET picks the board', async () => {
+  const run = fakeRedis();
+  const t0 = Date.UTC(2026, 9, 1, 3); // 2026-10-01 03:00 UTC
+  const now = t0 + 10 * 60_000;
+  const submit = async (name: string, extra: Record<string, unknown>) => {
+    const token = await startRun(run, t0);
+    return handle({ method: 'POST', ip: name, ...signed(submission(token, now, { name, ...extra })) }, { run, env, now });
+  };
+  const plain = await submit('평범', {});
+  assert.equal(plain.status, 200);
+  const daily = await submit('일일', { daily: '2026-10-01', prestige: 2 });
+  assert.equal(daily.status, 200);
+  assert.equal(daily.body.dailyRank, 1);
+  assert.equal((await submit('미래', { daily: '2026-10-05' })).status, 400, 'only around today');
+  const get = (query: Record<string, string>) => handle({ method: 'GET', query }, { run, env, now });
+  assert.equal((await get({})).body.entries.length, 2);
+  assert.equal((await get({ board: 'weekly' })).body.entries.length, 2);
+  const day = (await get({ board: 'daily', date: '2026-10-01' })).body.entries;
+  assert.deepEqual(day.map((e: { name: string }) => e.name), ['일일']);
+  assert.equal(day[0].prestige, 2);
+  assert.equal((await get({ board: 'daily', date: '2026-09-01' })).body.entries.length, 0);
+  assert.equal((await get({ board: 'nope' })).status, 400);
+});
+
 test('only the top 100 are kept', async () => {
   const run = fakeRedis();
   const t0 = 1_800_000_000_000;
@@ -125,7 +150,7 @@ test('a score below the full top 100 is compared, then dropped without being sto
   const run = fakeRedis();
   const written: string[][] = [];
   const spy = async (cmds: string[][]) => {
-    written.push(...cmds.filter((c) => c[0] === 'ZADD' || c[0] === 'HSET'));
+    written.push(...cmds.filter((c) => (c[0] === 'ZADD' || c[0] === 'HSET') && (c[1] === 'ranking:board' || c[1] === 'ranking:entries')));
     return run(cmds);
   };
   const t0 = 1_800_000_000_000;
@@ -141,7 +166,7 @@ test('a score below the full top 100 is compared, then dropped without being sto
   assert.equal(res.status, 200);
   assert.equal(res.body.rank, null);
   assert.equal(res.body.kept, false);
-  assert.deepEqual(written, [], 'nothing about the low run is stored');
+  assert.deepEqual(written, [], 'nothing about the low run is stored on the all-time board');
 });
 
 test('missing Redis settings are reported plainly', async () => {

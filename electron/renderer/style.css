@@ -2820,3 +2820,143 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
+
+/* Boss phase 2 */
+.enraged #monster-art {
+  filter: drop-shadow(0 0 14px rgba(191, 97, 106, 0.9)) saturate(1.4);
+  animation: enrage-pulse 1.2s ease-in-out infinite;
+}
+@keyframes enrage-pulse {
+  50% {
+    filter: drop-shadow(0 0 24px rgba(191, 97, 106, 1)) saturate(1.6);
+  }
+}
+
+.pet-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #a3be8c;
+  color: #a3be8c;
+  background: rgba(163, 190, 140, 0.1);
+  white-space: nowrap;
+}
+
+.rebirth-btn {
+  margin: 4px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #ebcb8b;
+  background: rgba(235, 203, 139, 0.12);
+  color: #ebcb8b;
+  cursor: pointer;
+}
+
+.daily-run {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.daily-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #88c0d0;
+  background: rgba(136, 192, 208, 0.12);
+  color: #88c0d0;
+  cursor: pointer;
+}
+
+.ranking-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ranking-tabs {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+.ranking-tab {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid #4c566a;
+  background: transparent;
+  color: #d8dee9;
+  cursor: pointer;
+}
+.ranking-tab.active {
+  border-color: #ebcb8b;
+  color: #ebcb8b;
+  background: rgba(235, 203, 139, 0.12);
+}
+.ranking-controls select {
+  padding: 4px 8px;
+  background: #1d222d;
+  color: #eceff4;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+}
+
+.skillbook-panel {
+  width: min(640px, calc(100vw - 32px));
+}
+.skillbook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 50vh;
+  color: #d8dee9;
+}
+.skill-card {
+  border: 1px solid #3b4252;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #1d222d;
+}
+.skill-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.skill-card p {
+  margin: 6px 0;
+  font-size: 13px;
+  color: #d8dee9;
+}
+.skill-actions,
+.skill-form-actions {
+  display: flex;
+  gap: 6px;
+}
+.skill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.skill-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #d8dee9;
+}
+.skill-form input,
+.skill-form textarea {
+  padding: 6px 8px;
+  background: #11141b;
+  color: #eceff4;
+  border: 1px solid #4c566a;
+  border-radius: 6px;
+  font: inherit;
+}
+.skill-new {
+  margin-top: 10px;
+  align-self: flex-start;
+}

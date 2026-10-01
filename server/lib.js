@@ -29,6 +29,8 @@ const hmac = (secret, text) => crypto.createHmac('sha256', secret).update(text).
 const safeEqual = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 // The body the app signs: stable key order.
+export { isoWeek };
+
 export function canonical(body) {
   return JSON.stringify(body, Object.keys(body).sort());
 }
@@ -55,12 +57,29 @@ const cleanName = (name) =>
 
 const isCount = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
 
-async function top(run) {
-  const [ids] = await run([['ZREVRANGE', BOARD, '0', String(TOP_N - 1), 'WITHSCORES']]);
+// Boards: all-time (the original keys), this ISO week, and one per daily
+// dungeon date. Weekly and daily boards expire on their own.
+const DAY_MS = 24 * 3600_000;
+const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+function isoWeek(now) {
+  const d = new Date(now);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7)); // the week's Thursday
+  const week = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / DAY_MS + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+const allTime = { board: BOARD, entries: ENTRIES, ttl: 0 };
+const weekly = (now) => ({ board: `ranking:weekly:${isoWeek(now)}:board`, entries: `ranking:weekly:${isoWeek(now)}:entries`, ttl: 21 * 24 * 3600 });
+const daily = (date) => ({ board: `ranking:daily:${date}:board`, entries: `ranking:daily:${date}:entries`, ttl: 3 * 24 * 3600 });
+// A daily dungeon date the player's clock could show right now (any time zone).
+const dailyOk = (date, now) => isDate(date) && Math.abs(Date.parse(`${date}T12:00:00Z`) - now) <= 1.6 * DAY_MS;
+
+async function top(run, { board, entries } = allTime) {
+  const [ids] = await run([['ZREVRANGE', board, '0', String(TOP_N - 1), 'WITHSCORES']]);
   const pairs = [];
   for (let i = 0; i < (ids?.length ?? 0); i += 2) pairs.push([ids[i], Number(ids[i + 1])]);
   if (!pairs.length) return [];
-  const [details] = await run([['HMGET', ENTRIES, ...pairs.map(([id]) => id)]]);
+  const [details] = await run([['HMGET', entries, ...pairs.map(([id]) => id)]]);
   return pairs.map(([id, score], i) => {
     let d = {};
     try {
@@ -76,7 +95,13 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   const serverSecret = env.RANKING_SERVER_SECRET;
   if (!appSecret || !serverSecret) return { status: 500, body: { error: 'server not configured' } };
 
-  if (method === 'GET') return { status: 200, body: { entries: await top(run) } };
+  if (method === 'GET') {
+    const which = query.board ?? 'all';
+    if (which === 'all') return { status: 200, body: { entries: await top(run) } };
+    if (which === 'weekly') return { status: 200, body: { entries: await top(run, weekly(now)), week: isoWeek(now) } };
+    if (which === 'daily' && isDate(query.date)) return { status: 200, body: { entries: await top(run, daily(query.date)) } };
+    return { status: 400, body: { error: 'unknown board' } };
+  }
   if (method !== 'POST') return { status: 405, body: { error: 'method not allowed' } };
 
   // Everything below must come from the app: signed, fresh.
@@ -106,6 +131,7 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   const score = scoreFor({ floors, bosses, xp, difficulty });
   if (body.score !== score) return { status: 400, body: { error: 'score mismatch' } };
   if (score <= 0) return { status: 400, body: { error: 'nothing to rank' } };
+  if (body.daily !== undefined && !dailyOk(body.daily, now)) return { status: 400, body: { error: 'not today\'s daily dungeon' } };
 
   // One submission per run token, and a short cooldown per address.
   const [fresh, allowed] = await run([
@@ -115,14 +141,8 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   if (fresh !== 'OK') return { status: 409, body: { error: 'run already submitted' } };
   if (allowed !== 'OK') return { status: 429, body: { error: 'too many submissions, wait a moment' } };
 
-  // Only a top-100 score is stored: anything lower is compared, then dropped.
-  const [count, lowest] = await run([['ZCARD', BOARD], ['ZRANGE', BOARD, '0', '0', 'WITHSCORES']]);
-  if (count >= TOP_N && lowest?.length && score <= Number(lowest[1])) {
-    return { status: 200, body: { rank: null, score, kept: false } };
-  }
-
   const id = run0.rid;
-  const entry = {
+  const entry = JSON.stringify({
     name,
     floors,
     bosses,
@@ -130,20 +150,34 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
     theme: typeof body.theme === 'string' ? body.theme.slice(0, 24) : '',
     heroClass: typeof body.heroClass === 'string' ? body.heroClass.slice(0, 16) : '',
     level: isCount(body.level, 100_000) ? body.level : 1,
+    prestige: isCount(body.prestige, 1000) ? body.prestige : 0,
+    ...(body.daily !== undefined ? { daily: body.daily } : {}),
     at: now,
-  };
+  });
+  const rank = await addToBoard(run, allTime, id, score, entry);
+  const weeklyRank = await addToBoard(run, weekly(now), id, score, entry);
+  const dailyRank = body.daily !== undefined ? await addToBoard(run, daily(body.daily), id, score, entry) : undefined;
+  return { status: 200, body: { rank, score, kept: rank !== null, weeklyRank, ...(dailyRank !== undefined ? { dailyRank } : {}) } };
+}
+
+// Only a top-100 score is stored on a board: anything lower is compared, then
+// dropped. Returns the rank on that board, or null.
+async function addToBoard(run, { board, entries, ttl }, id, score, entry) {
+  const [count, lowest] = await run([['ZCARD', board], ['ZRANGE', board, '0', '0', 'WITHSCORES']]);
+  if (count >= TOP_N && lowest?.length && score <= Number(lowest[1])) return null;
   await run([
-    ['ZADD', BOARD, String(score), id],
-    ['HSET', ENTRIES, id, JSON.stringify(entry)],
+    ['ZADD', board, String(score), id],
+    ['HSET', entries, id, entry],
+    ...(ttl ? [['EXPIRE', board, String(ttl)], ['EXPIRE', entries, String(ttl)]] : []),
   ]);
   // Keep the top 100: drop the rest and their details.
-  const [card] = await run([['ZCARD', BOARD]]);
+  const [card] = await run([['ZCARD', board]]);
   if (card > TOP_N) {
-    const [dropped] = await run([['ZRANGE', BOARD, '0', String(card - TOP_N - 1)]]);
-    await run([['ZREMRANGEBYRANK', BOARD, '0', String(card - TOP_N - 1)], ...(dropped.length ? [['HDEL', ENTRIES, ...dropped]] : [])]);
+    const [dropped] = await run([['ZRANGE', board, '0', String(card - TOP_N - 1)]]);
+    await run([['ZREMRANGEBYRANK', board, '0', String(card - TOP_N - 1)], ...(dropped.length ? [['HDEL', entries, ...dropped]] : [])]);
   }
-  const [rank] = await run([['ZREVRANK', BOARD, id]]);
-  return { status: 200, body: { rank: rank === null ? null : rank + 1, score, kept: rank !== null } };
+  const [rank] = await run([['ZREVRANK', board, id]]);
+  return rank === null ? null : rank + 1;
 }
 
 // Upstash Redis REST pipeline. The Vercel Marketplace integration names its

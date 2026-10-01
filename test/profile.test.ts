@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { loadProfile, saveProfile, levelForXp, addXp, applyRun, type Profile } from '../src/profile.ts';
+import { loadProfile, saveProfile, levelForXp, addXp, applyRun, rebirth, startingStatPoints, PRESTIGE_LEVEL, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
 import { emptyRecords, emptyRunStats } from '../src/progress.ts';
 
@@ -124,6 +124,28 @@ test('applyRun keeps what XP each run line was paid, so a reloaded save cannot b
   for (let i = 0; i < 60; i++) many = applyRun(many, summary({ runId: `r${i}`, paidXp: { floor: i, scroll: -1 } }), 'adventure');
   assert.equal(Object.keys(many.xpClaims ?? {}).length, 50, 'only the latest run lines are kept');
   assert.ok(many.xpClaims?.r59 && !many.xpClaims?.r0);
+});
+
+test('rebirth: from level 20 the hero restarts at level 1 with a prestige star and 2 more starting stat points per star', () => {
+  assert.equal(PRESTIGE_LEVEL, 20);
+  assert.equal(rebirth({ ...base, xp: 1800, level: 19 }), null, 'level 19 is too early');
+  const r = rebirth({ ...base, xp: 1950, level: 20, coins: 300 });
+  assert.ok(r);
+  assert.equal(r.level, 1);
+  assert.equal(r.xp, 0);
+  assert.equal(r.prestige, 1);
+  assert.equal(r.coins, 300, 'everything else stays');
+  assert.equal(startingStatPoints(r), 1 + 2);
+  assert.equal(rebirth({ ...r, xp: 1900, level: 20 })?.prestige, 2);
+});
+
+test('applyRun keeps pets for good; the first one found starts riding along', () => {
+  const p = applyRun(base, summary({ newPets: ['drake'] }), 'adventure');
+  assert.deepEqual(p.pets, ['drake']);
+  assert.equal(p.activePet, 'drake');
+  const q = applyRun({ ...p, activePet: 'drake' }, summary({ newPets: ['owl'] }), 'adventure');
+  assert.deepEqual(q.pets, ['drake', 'owl']);
+  assert.equal(q.activePet, 'drake', 'a new pet does not replace the chosen one');
 });
 
 test('applyRun: defeat rewinds to the chapter start; progress never goes backwards', () => {
