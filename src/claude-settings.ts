@@ -24,6 +24,40 @@ export interface ClaudeSettings {
   // cli = the Claude Code login on this machine; api = an Anthropic API key
   // (stored encrypted by the app, never in this settings object).
   auth: 'cli' | 'api';
+  // MCP servers added in the game (⚙️ → Claude → 🔌 MCP 연결하러 가기),
+  // passed to every Claude query on top of Claude Code's own config.
+  mcpServers?: Record<string, GameMcpServer>;
+}
+
+export type GameMcpServer = { type: 'stdio'; command: string; args: string[] } | { type: 'http'; url: string };
+const MCP_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
+// A server from the form: a command line (stdio) or an http(s) URL.
+// ponytail: the command is split on spaces, no shell quoting; add a real
+// parser if someone needs args with spaces.
+export function parseMcpEntry(name: string, kind: 'command' | 'url', value: string): { server: GameMcpServer } | { error: string } {
+  if (!MCP_NAME.test(name.trim())) return { error: '이름은 영어·숫자·_·- 만, 64자까지' };
+  const v = value.trim();
+  if (kind === 'url') {
+    if (!/^https?:\/\/\S+$/.test(v)) return { error: 'http:// 또는 https:// 로 시작하는 주소를 넣어 줘' };
+    return { server: { type: 'http', url: v } };
+  }
+  const [command, ...args] = v.split(/\s+/).filter(Boolean);
+  if (!command) return { error: '실행할 명령을 넣어 줘 (예: npx -y @modelcontextprotocol/server-filesystem .)' };
+  return { server: { type: 'stdio', command, args } };
+}
+
+function coerceMcpServers(v: unknown): Record<string, GameMcpServer> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, GameMcpServer> = {};
+  for (const [name, s] of Object.entries(v as Record<string, any>)) {
+    if (!MCP_NAME.test(name)) continue;
+    if (s?.type === 'http' && typeof s.url === 'string' && /^https?:\/\//.test(s.url)) out[name] = { type: 'http', url: s.url };
+    else if (s?.type === 'stdio' && typeof s.command === 'string' && s.command && Array.isArray(s.args) && s.args.every((a: unknown) => typeof a === 'string')) {
+      out[name] = { type: 'stdio', command: s.command, args: [...s.args] };
+    }
+  }
+  return out;
 }
 
 export const DEFAULT_CLAUDE_SETTINGS: ClaudeSettings = { effort: 'high', skillsMode: 'all', enabledSkills: [], disabledMcp: [], auth: 'cli' };
@@ -35,11 +69,12 @@ export function mcpToolPrefix(serverName: string): string {
   return `mcp__${serverName.replace(/[^A-Za-z0-9_-]/g, '_')}`;
 }
 
-export function toQueryOptions(s: ClaudeSettings): { effort: EffortLevel; skills?: string[]; disallowedTools: string[] } {
+export function toQueryOptions(s: ClaudeSettings): { effort: EffortLevel; skills?: string[]; disallowedTools: string[]; mcpServers?: Record<string, GameMcpServer> } {
   return {
     effort: s.effort,
     ...(s.skillsMode === 'none' ? { skills: [] } : s.skillsMode === 'custom' ? { skills: [...s.enabledSkills] } : {}),
     disallowedTools: s.disabledMcp.map(mcpToolPrefix),
+    ...(s.mcpServers && Object.keys(s.mcpServers).length ? { mcpServers: { ...s.mcpServers } } : {}),
   };
 }
 
@@ -53,6 +88,7 @@ export function coerceClaudeSettings(value: unknown): ClaudeSettings {
     enabledSkills: strings(v.enabledSkills),
     disabledMcp: strings(v.disabledMcp),
     auth: v.auth === 'api' ? 'api' : 'cli',
+    ...(Object.keys(coerceMcpServers(v.mcpServers)).length ? { mcpServers: coerceMcpServers(v.mcpServers) } : {}),
   };
 }
 

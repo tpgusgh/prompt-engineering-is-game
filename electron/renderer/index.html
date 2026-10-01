@@ -96,6 +96,13 @@
     </section>
 
     <section id="dungeon-screen" hidden>
+      <div id="story-card" class="story-card" hidden role="dialog" aria-label="이야기">
+        <div class="story-card-inner">
+          <h2 id="story-card-title"></h2>
+          <div id="story-card-lines" class="story-card-lines"></div>
+          <button type="button" id="story-card-next">계속 ▶</button>
+        </div>
+      </div>
       <div id="death-card" class="death-card" hidden role="alertdialog" aria-label="용사가 쓰러졌다">
         <strong>💀 용사가 쓰러졌다</strong>
         <p id="death-last-hit"></p>
@@ -165,6 +172,20 @@
         </div>
         <div id="stat-panel" class="stat-panel"></div>
 
+        <div id="rest-panel" class="merchant-panel rest-panel" hidden>
+          <h2 id="rest-title"></h2>
+          <div class="merchant-body">
+            <div id="rest-art" class="rest-art"></div>
+            <div>
+              <p id="rest-text" class="merchant-greeting"></p>
+              <div class="forge-actions">
+                <button type="button" id="rest-action"></button>
+                <button type="button" id="rest-leave">떠나기</button>
+                <span id="rest-result" class="bet-result"></span>
+              </div>
+            </div>
+          </div>
+        </div>
         <div id="blacksmith-panel" class="merchant-panel" hidden>
           <h2>대장장이</h2>
           <div class="merchant-body">
@@ -492,6 +513,23 @@
         </div>
         <div class="setting-row">🔌 MCP 서버 <button type="button" id="caps-refresh" title="다시 불러오기">↻</button></div>
         <div id="mcp-list" class="mcp-list"></div>
+        <button type="button" id="mcp-connect" class="mcp-connect">🔌 MCP 연결하러 가기</button>
+        <div id="mcp-connect-panel" class="mcp-connect-panel" hidden>
+          <p class="option-sub"><strong>claude.ai 커넥터</strong> (Gmail · Notion · Figma 등): 웹에서 연결하면 Claude Code 로그인(CLI)으로 게임에서도 쓴다.</p>
+          <div class="mcp-links">
+            <button type="button" id="mcp-open-connectors">claude.ai 커넥터 열기 ↗</button>
+            <button type="button" id="mcp-open-servers">MCP 서버 목록 보기 ↗</button>
+          </div>
+          <p class="option-sub"><strong>직접 추가</strong>: 실행 명령(로컬) 또는 URL(원격). 게임 안에서만 쓰이고 매 공격에 함께 붙는다.</p>
+          <form id="mcp-add-form" class="mcp-add-form">
+            <input id="mcp-add-name" placeholder="이름 (예: filesystem)" maxlength="64" autocomplete="off" />
+            <select id="mcp-add-kind"><option value="command">명령</option><option value="url">URL</option></select>
+            <input id="mcp-add-value" placeholder="npx -y @modelcontextprotocol/server-filesystem ." autocomplete="off" />
+            <button type="submit">추가</button>
+          </form>
+          <p id="mcp-add-error" class="error-text" hidden></p>
+          <div id="mcp-game-list" class="mcp-game-list"></div>
+        </div>
         </section>
         <section class="settings-tab" data-tab="party" hidden>
           <label class="setting-row party-toggle"><input type="checkbox" id="party-mode" checked /> <strong>파티 모드 켜기</strong></label>

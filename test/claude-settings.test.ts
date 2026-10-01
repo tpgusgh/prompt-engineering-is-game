@@ -62,3 +62,18 @@ test('auth mode defaults to cli and survives coercion', () => {
   assert.equal(coerceClaudeSettings({ auth: 'api' }).auth, 'api');
   assert.equal(coerceClaudeSettings({ auth: 'nope' }).auth, 'cli');
 });
+
+test('game MCP servers: a command or an http URL, validated; handed to Claude in the query options', async () => {
+  const { parseMcpEntry } = await import('../src/claude-settings.ts');
+  assert.deepEqual(parseMcpEntry('fs', 'command', 'npx -y @modelcontextprotocol/server-filesystem /tmp'), {
+    server: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'] },
+  });
+  assert.deepEqual(parseMcpEntry('docs', 'url', 'https://example.com/mcp'), { server: { type: 'http', url: 'https://example.com/mcp' } });
+  assert.ok('error' in parseMcpEntry('bad name!', 'url', 'https://x'));
+  assert.ok('error' in parseMcpEntry('ok', 'url', 'ftp://x'));
+  assert.ok('error' in parseMcpEntry('ok', 'command', '   '));
+  const s = coerceClaudeSettings({ mcpServers: { docs: { type: 'http', url: 'https://example.com/mcp' }, junk: { type: 'http', url: 5 } } });
+  assert.deepEqual(s.mcpServers, { docs: { type: 'http', url: 'https://example.com/mcp' } });
+  assert.deepEqual(toQueryOptions(s).mcpServers, { docs: { type: 'http', url: 'https://example.com/mcp' } });
+  assert.equal('mcpServers' in toQueryOptions(DEFAULT_CLAUDE_SETTINGS), false);
+});

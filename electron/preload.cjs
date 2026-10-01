@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   typingHit: () => ipcRenderer.invoke('typing-hit'),
   claudeCapabilities: (cwd, refresh) => ipcRenderer.invoke('claude-capabilities', cwd, refresh),
   setClaudeSettings: (settings) => ipcRenderer.invoke('set-claude-settings', settings),
+  mcpParse: (name, kind, value) => ipcRenderer.invoke('mcp-parse', name, kind, value),
+  openLink: (key) => ipcRenderer.invoke('open-link', key),
   claudeSettingsInfo: () => ipcRenderer.invoke('claude-settings-info'),
   apiKeyInfo: () => ipcRenderer.invoke('api-key-info'),
   setApiKey: (key) => ipcRenderer.invoke('set-api-key', key),

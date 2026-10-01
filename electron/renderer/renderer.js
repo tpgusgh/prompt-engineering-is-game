@@ -4,7 +4,7 @@ import { monsterSvg, merchantSvg, blacksmithSvg, chestSvg } from './monster-art.
 import './iconize.js';
 import { $ } from './dom.js';
 import { logEl, appendLog, scrollLogToBottom } from './log.js';
-import { THEMES, chapterInfo } from './story.js';
+import { THEMES, chapterInfo, PROLOGUES, bossTaunt, bossRoar } from './story.js';
 import { decorateReply } from './reply-format.js';
 import { startTyping, stopTyping } from './typing-drill.js';
 import { speechFor } from './speech.js';
@@ -13,6 +13,7 @@ import './updates.js';
 import { MONSTER_LORE } from './monster-lore.js';
 import { MONSTER_LINES } from './monster-lines.js';
 import { fatigueOf } from './fatigue.js';
+import { fx } from './fx.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -313,6 +314,30 @@ function openBlacksmith(event) {
   $('forge-result').textContent = '';
   renderForgeInfo(event.odds);
 }
+
+// Rest stops: the healing spring and the shrine of broken pacts.
+const SPRING_SVG = '<svg viewBox="0 0 200 200" width="160" height="160"><ellipse cx="100" cy="150" rx="80" ry="26" fill="#2e5a7a"/><ellipse cx="100" cy="146" rx="66" ry="18" fill="#5fb0d8"/><path d="M100 60 Q90 100 100 140 Q110 100 100 60Z" fill="#a8e0ff" opacity=".85"/><circle cx="70" cy="120" r="4" fill="#fff" opacity=".8"/><circle cx="132" cy="112" r="3" fill="#fff" opacity=".7"/><circle cx="118" cy="90" r="2.5" fill="#fff" opacity=".7"/><path d="M30 150 Q20 110 40 96 M170 150 Q182 112 160 98" stroke="#5c8a4a" stroke-width="6" fill="none" stroke-linecap="round"/></svg>';
+const SHRINE_SVG = '<svg viewBox="0 0 200 200" width="160" height="160"><rect x="50" y="120" width="100" height="50" rx="4" fill="#4c566a"/><rect x="40" y="166" width="120" height="12" rx="3" fill="#3b4252"/><rect x="62" y="60" width="12" height="62" fill="#5e6779"/><rect x="126" y="60" width="12" height="62" fill="#5e6779"/><path d="M50 60 H150 L140 46 H60 Z" fill="#6b7489"/><circle cx="100" cy="100" r="16" fill="none" stroke="#b48ead" stroke-width="4"/><path d="M90 92 L110 108 M110 92 L90 108" stroke="#bf616a" stroke-width="4" stroke-linecap="round"/><path d="M84 120 Q100 108 116 120" stroke="#ebcb8b" stroke-width="3" fill="none"/></svg>';
+function openRest(kind, text, action, command) {
+  monsterPanel.hidden = true;
+  fleeBtn.disabled = true;
+  const panel = $('rest-panel');
+  panel.hidden = false;
+  panel.dataset.kind = kind;
+  $('rest-title').textContent = kind === 'spring' ? '회복의 샘' : '계약 파기의 제단';
+  $('rest-art').innerHTML = kind === 'spring' ? SPRING_SVG : SHRINE_SVG;
+  $('rest-text').textContent = text;
+  $('rest-action').textContent = action;
+  $('rest-action').disabled = false;
+  $('rest-action').onclick = () => window.promptBattle.submitPrompt(command);
+  $('rest-result').textContent = '';
+}
+function closeRest() {
+  $('rest-panel').hidden = true;
+  monsterPanel.hidden = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
+  fleeBtn.disabled = !inputEnabled;
+}
+$('rest-leave').addEventListener('click', () => window.promptBattle.submitPrompt('/leave'));
 
 function closeBlacksmith() {
   $('blacksmith-panel').hidden = true;
@@ -617,7 +642,7 @@ function renderBag() {
     row.className = 'bag-item';
     const icon = document.createElement('span');
     icon.className = 'bag-icon';
-    icon.textContent = ITEM_ICONS[id] ?? '📦';
+    icon.textContent = ITEM_ICONS[id] ?? (id.startsWith('boss-') ? '👑' : '📦');
     const info = document.createElement('div');
     info.className = 'bag-info';
     const name = document.createElement('strong');
@@ -680,13 +705,15 @@ function renderSellList() {
     btn.type = 'button';
     btn.className = 'sell-item';
     btn.disabled = !inputEnabled;
-    btn.textContent = `${ITEM_ICONS[id] ?? '📦'} ${item.name} ×${count} · 🪙 ${Math.floor(item.price / 2)}`;
-    btn.title = `${item.name} 1개를 ${Math.floor(item.price / 2)} 코인에 판다`;
+    const gain = Math.floor(Math.round(item.price * merchantPriceMult) / 2); // half today's price
+    btn.textContent = `${ITEM_ICONS[id] ?? (id.startsWith('boss-') ? '👑' : '📦')} ${item.name} ×${count} · 🪙 ${gain}`;
+    btn.title = `${item.name} 1개를 ${gain} 코인에 판다`;
     btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/sell ${id}`));
     el.append(btn);
   }
 }
 
+let merchantPriceMult = 1;
 function closeMerchant() {
   merchantPanel.hidden = true;
   monsterPanel.hidden = false;
@@ -1202,8 +1229,61 @@ volumeSlider.addEventListener('input', () => {
 renderSoundControls();
 playMusic('title');
 
+// Hit numbers, sparkles and flashes for what just happened (fx.js).
+let fxPlayerHp = null;
+function fxFor(event) {
+  switch (event.type) {
+    case 'attack':
+      if (event.damage > 0) {
+        fx.number('monster-art', event.damage, event.crit ? 'crit' : 'hit');
+        fx.burst(event.crit ? 'crit' : 'hit');
+        if (event.crit) fx.flash();
+      }
+      break;
+    case 'partialHit':
+    case 'typingHit':
+    case 'reflectHit':
+      fx.number('monster-art', event.damage, 'small');
+      break;
+    case 'bombHit':
+      fx.number('monster-art', event.damage, 'crit');
+      fx.burst('fire');
+      break;
+    case 'petHelped':
+      if (event.pet === 'drake') {
+        fx.number('monster-art', event.amount, 'small');
+        fx.burst('fire', 'monster-art', 8);
+      }
+      break;
+    case 'chestHit':
+      fx.number('monster-art', event.damage, 'small');
+      break;
+    case 'chestOpened':
+      setTimeout(() => fx.burst('chest'), 900); // after the lid opens
+      break;
+    case 'floorCleared':
+      fx.burst('clear');
+      break;
+    case 'bossEnraged':
+      fx.flash('rgba(191, 97, 106, 0.35)');
+      break;
+    case 'playerHpChanged':
+      if (fxPlayerHp !== null && event.hp !== fxPlayerHp) {
+        const diff = event.hp - fxPlayerHp;
+        fx.number('player-hp-fill', Math.abs(diff), diff > 0 ? 'heal' : 'hurt');
+        if (diff > 0) fx.burst('heal', 'player-hp-fill', 8);
+      }
+      fxPlayerHp = event.hp;
+      break;
+    case 'runStart':
+      fxPlayerHp = event.playerHp;
+      break;
+  }
+}
+
 function renderBattleEvent(event) {
   soundFor(event);
+  fxFor(event);
   if (PROGRESS_EVENTS.has(event.type) && !dailyRun) unsaved = true; // a daily run can't be saved anyway
   speechFor(event);
   switch (event.type) {
@@ -1225,7 +1305,9 @@ function renderBattleEvent(event) {
       monsterNameEl.textContent = event.isBoss ? `보스: ${currentMonsterName}` : `${event.floor + 1}층: ${currentMonsterName}`;
       monsterArtEl.innerHTML = monsterSvg(event.monsterIndex, event.isBoss);
       setBar(hpBarFillEl, hpLabelEl, event.maxHp, event.maxHp, ' HP');
+      currentChapter = event.chapter;
       appendLog(event.isBoss ? `보스 ${currentMonsterName}이(가) 모습을 드러냈다!` : `${currentMonsterName}이(가) 나타났다!`, event.isBoss ? 'crit' : undefined);
+      if (event.isBoss) appendLog(`${currentMonsterName}: ${bossTaunt(currentMonsterName, event.chapter)}`, 'boss-taunt');
       if (event.trait) appendLog(`특성 — ${event.trait.name}: ${event.trait.text}`, 'trait-line');
       $('boss-rule').hidden = !event.gimmick;
       if (event.gimmick) {
@@ -1260,8 +1342,18 @@ function renderBattleEvent(event) {
     }
     case 'bossEnraged':
       monsterPanel.classList.add('enraged');
-      appendLog(`🔥 ${currentMonsterName}이(가) 격노했다! 2페이즈 — 반격이 30% 더 강해진다!`, 'crit');
+      monsterPanel.dataset.awakening = event.awakening ?? 'rage';
+      appendLog(`${currentMonsterName}: ${bossRoar(currentChapter)}`, 'boss-taunt');
+      appendLog(`🔥 ${currentMonsterName}이(가) 각성했다! 2페이즈 「${event.name ?? '격노'}」 — ${event.text ?? '반격이 30% 더 강해진다'}!`, 'crit');
       shakeScreen();
+      fx.burst('awaken');
+      break;
+    case 'bossDrop':
+      appendLog(`👑 보스가 고유 유물을 떨어뜨렸다: 「${event.name}」 — ${event.description} (가방에 넣었다)`, 'victory');
+      fx.burst('chest');
+      break;
+    case 'bossDrain':
+      appendLog(`🩸 ${currentMonsterName}이(가) 피를 빨아 HP ${event.amount}을(를) 회복했다!`, 'error');
       break;
     case 'monsterWaits':
       appendLog(stoppedTurn ? `${currentMonsterName}이(가) 다음 명령을 기다린다...` : `❔ AI가 묻고 있다. ${currentMonsterName}이(가) 대답을 기다린다...`);
@@ -1436,6 +1528,7 @@ function renderBattleEvent(event) {
       renderXp();
       if (after > before) {
         appendLog(`⬆️ 레벨 업! 용사 레벨 ${after}이(가) 되었다! (다음 판은 능력치 포인트 ${after}개로 시작)`, 'victory');
+        fx.burst('levelup', document.querySelector('[data-xp-fill]'));
         if (titleOf(after) !== titleOf(before)) appendLog(`🎖 새 칭호 획득: 「${titleOf(after)}」`, 'victory');
         sfx('fanfare');
       }
@@ -1447,6 +1540,7 @@ function renderBattleEvent(event) {
       const info = chapterInfo(activeTheme, event.chapter);
       appendLog(`★ 챕터 ${event.chapter} 클리어! ★`, 'victory');
       appendLog(info.outro, 'story-intro');
+      showStoryCard(`★ 챕터 ${event.chapter} 클리어 — ${info.title}`, [info.outro, `다음: ${chapterInfo(activeTheme, event.chapter + 1).title}`], { autoClose: 6000 });
       appendLog('이야기는 계속된다... (지금 도망쳐도 다음에 이어서 할 수 있다)', 'story-line');
       break;
     }
@@ -1483,8 +1577,9 @@ function renderBattleEvent(event) {
       break;
     case 'merchantOpen':
       coins = event.coins;
+      merchantPriceMult = event.priceMult ?? 1;
       renderCoins();
-      appendLog('상인 고블린이 나타났다! "헤헤, 구경하고 가~"', 'coin-line');
+      appendLog(merchantPriceMult > 1 ? `상인 고블린이 나타났다! "헤헤, 이 깊이까지 오느라 물가가 ${Math.round((merchantPriceMult - 1) * 100)}% 올랐어~"` : '상인 고블린이 나타났다! "헤헤, 구경하고 가~"', 'coin-line');
       openMerchant(event);
       break;
     case 'purchased':
@@ -1601,6 +1696,37 @@ function renderBattleEvent(event) {
       appendLog('대장장이가 나타났다! "그 검, 좀 더 날카롭게 해줄까?"', 'coin-line');
       openBlacksmith(event);
       break;
+    case 'springOpen':
+      appendLog('💧 숲 사이로 맑은 샘이 보인다. 한 모금이면 상처가 아물 것 같다.', 'story-line');
+      openRest('spring', `"지친 용사여, 한 번만 마시게나." — 최대 HP의 50%를 회복한다. (지금 ${event.playerHp}/${event.playerMaxHp})`, '샘물 마시기', '/drink');
+      break;
+    case 'springDrank':
+      $('rest-result').textContent = `HP ${event.amount} 회복!`;
+      $('rest-action').disabled = true;
+      appendLog(`💧 샘물을 마셨다. HP ${event.amount} 회복!`, 'victory');
+      fx.burst('heal', 'rest-art', 18);
+      break;
+    case 'springFailed':
+      $('rest-result').textContent = event.reason;
+      break;
+    case 'springClosed':
+    case 'shrineClosed':
+      closeRest();
+      break;
+    case 'shrineOpen': {
+      const pact = pactInfo(event.contract);
+      appendLog('🕯 무너진 제단이 나타났다. 계약의 사슬이 희미하게 울린다...', 'story-line');
+      openRest('shrine', `"맺은 계약을 이곳에 내려놓을 수 있다. 대가는 없다." — 지금 계약: ${pact?.name ?? '?'}. 파기하면 효과가 사라지고 최대 HP는 깎이지 않는다.`, '계약 파기하기', '/renounce');
+      break;
+    }
+    case 'contractRenounced':
+      heroContract = null;
+      renderContract();
+      $('rest-action').disabled = true;
+      $('rest-result').textContent = '계약이 풀렸다';
+      appendLog(`🕯 ${event.name}와(과)의 계약을 제단에 내려놓았다. 몸이 가벼워진다. (최대 HP 그대로)`, 'victory');
+      fx.burst('awaken', 'rest-art', 16);
+      break;
     case 'enhanceResult': {
       coins = event.coins;
       swordLevel = event.swordLevel;
@@ -1676,6 +1802,43 @@ function renderBattleEvent(event) {
 // monster's counter (and the hit log) never shows up before the AI has
 // finished talking on screen.
 const battleQueue = [];
+// Story cards: lines fade in one by one; the button shows the rest, then
+// closes. autoClose (ms) closes a short card by itself.
+let storyTimer = 0;
+function showStoryCard(title, lines, { button = '계속 ▶', autoClose = 0 } = {}) {
+  clearInterval(storyTimer);
+  const card = $('story-card');
+  const box = $('story-card-lines');
+  $('story-card-title').textContent = title;
+  box.textContent = '';
+  const els = lines.map((text) => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    box.append(p);
+    return p;
+  });
+  let shown = 0;
+  const step = () => {
+    if (shown < els.length) els[shown++].classList.add('shown');
+    if (shown >= els.length) {
+      clearInterval(storyTimer);
+      $('story-card-next').textContent = button;
+      if (autoClose) storyTimer = setTimeout(close, autoClose);
+    }
+  };
+  const close = () => {
+    clearInterval(storyTimer);
+    card.hidden = true;
+    promptInput.focus();
+  };
+  $('story-card-next').textContent = '건너뛰기 ▶▶';
+  $('story-card-next').onclick = () => (shown < els.length ? (els.forEach((p) => p.classList.add('shown')), (shown = els.length), step()) : close());
+  card.hidden = false;
+  step();
+  storyTimer = setInterval(step, 1500);
+}
+let currentChapter = 1;
+
 // Death: the battle screen stays with the killing blow shown until 다음으로.
 let lastPlayerHp = null;
 let lastHit = null;
@@ -1940,6 +2103,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
   renderSwordLevel();
   closeMerchant();
   closeBlacksmith();
+  closeRest();
   exitOverlay.hidden = true;
   unsaved = false;
   saveThenExit = false;
@@ -1953,6 +2117,10 @@ async function startGame({ loadSlot, slot, daily = false }) {
   // A new session starts on a clean log: Claude doesn't remember earlier
   // sessions, so their chat isn't shown either.
   if (!slot) appendLog(`⭐ 레벨 ${profile.level}${profile.prestige ? ` · 환생 ★${profile.prestige}` : ''} 보너스: 능력치 포인트 ${startPoints}개로 시작한다! 위쪽 버튼으로 바로 올려보자.`, 'coin-line');
+  if (!slot) {
+    const lines = PROLOGUES[daily ? 'daily' : activeTheme.id] ?? [];
+    if (lines.length) showStoryCard(daily ? '📅 오늘의 도전' : activeTheme.title, lines, { button: '모험 시작 ▶' });
+  }
   if (daily) appendLog(`📅 오늘의 도전 (${todayDungeon?.date ?? ''}) — 모두가 같은 던전을 돈다. 저장은 안 된다. 쓰러지면 일일 랭킹에 올릴 수 있다!`, 'story-intro');
   if (slot) {
     const from = loadSlot ? `슬롯 ${loadSlot}을(를)` : '이 세션의 자동 저장을';
@@ -2042,7 +2210,7 @@ function renderRunRewards(progress) {
   if (progress.unlocked.length || progress.dailyCompleted) sfx('fanfare');
 }
 
-const GAME_COMMANDS = ['/bet', '/buy', '/enhance', '/flee', '/leave', '/new', '/quit', '/save', '/sell', '/session', '/stat', '/use'];
+const GAME_COMMANDS = ['/bet', '/buy', '/drink', '/enhance', '/flee', '/leave', '/new', '/quit', '/renounce', '/save', '/sell', '/session', '/stat', '/use'];
 const isGameCommand = (text) => GAME_COMMANDS.some((c) => text === c || text.startsWith(`${c} `));
 
 attackForm.addEventListener('submit', (e) => {
@@ -2054,7 +2222,7 @@ attackForm.addEventListener('submit', (e) => {
   // re-enables input; slash commands (/new alone, /use, /buy, /flee...)
   // resolve instantly, so disabling for them would lock the input.
   // At a shop an empty line just leaves it (no hesitate follows).
-  const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
+  const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden || !$('rest-panel').hidden;
   // A skill (/fix-tests ...) is a real attack; only the game's own commands aren't.
   const command = isGameCommand(trimmed);
   const startsTurn = (!command && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);
@@ -2341,8 +2509,51 @@ function renderMcp() {
   }
 }
 
+// Servers added in the game (claudeSettings.mcpServers), with a remove button.
+function renderGameMcp() {
+  const list = $('mcp-game-list');
+  list.textContent = '';
+  for (const [name, server] of Object.entries(claudeSettings.mcpServers ?? {})) {
+    const row = document.createElement('div');
+    row.className = 'mcp-item';
+    const label = document.createElement('span');
+    label.textContent = `${name} — ${server.type === 'http' ? server.url : [server.command, ...server.args].join(' ')}`;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '빼기';
+    del.addEventListener('click', async () => {
+      const { [name]: _gone, ...rest } = claudeSettings.mcpServers ?? {};
+      await saveClaude({ mcpServers: rest });
+      loadCapabilities(true);
+    });
+    row.append(label, del);
+    list.append(row);
+  }
+}
+$('mcp-connect').addEventListener('click', () => ($('mcp-connect-panel').hidden = !$('mcp-connect-panel').hidden));
+$('mcp-open-connectors').addEventListener('click', () => window.promptBattle.openLink('connectors'));
+$('mcp-open-servers').addEventListener('click', () => window.promptBattle.openLink('servers'));
+$('mcp-add-kind').addEventListener('change', () => {
+  $('mcp-add-value').placeholder = $('mcp-add-kind').value === 'url' ? 'https://example.com/mcp' : 'npx -y @modelcontextprotocol/server-filesystem .';
+});
+$('mcp-add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('mcp-add-name').value.trim();
+  const res = await window.promptBattle.mcpParse(name, $('mcp-add-kind').value, $('mcp-add-value').value);
+  $('mcp-add-error').hidden = !res.error;
+  if (res.error) {
+    $('mcp-add-error').textContent = res.error;
+    return;
+  }
+  await saveClaude({ mcpServers: { ...(claudeSettings.mcpServers ?? {}), [name]: res.server } });
+  $('mcp-add-name').value = '';
+  $('mcp-add-value').value = '';
+  loadCapabilities(true);
+});
+
 function renderClaudeSettings() {
   renderAuth();
+  renderGameMcp();
   renderEffortSelects();
   renderSkills();
   renderMcp();
@@ -2854,6 +3065,7 @@ function showMonsterDetail(m, killCount) {
   };
   el.append(back, top, section(`특성 — ${m.trait.name}`, m.trait.text, 'trait'));
   if (m.gimmick) el.append(section('보스 규칙', m.gimmick.text, 'rule'));
+  if (m.awakening) el.append(section(`2페이즈 — ${m.awakening.name}`, `HP가 절반 아래로 떨어지면 각성: ${m.awakening.text}`, 'rule'));
   el.append(section('성격', MONSTER_LORE[m.index] ?? ''));
   const lines = MONSTER_LINES[m.index];
   if (lines) el.append(section('자주 하는 말', [lines.appear[0], ...lines.idle.slice(0, 2)].map((l) => `“${l}”`).join('\n'), 'quotes'));

@@ -252,12 +252,13 @@ async function withIdleQuery<T>(
   cwd: string,
   ask: (q: ReturnType<typeof query>) => Promise<T>,
   env?: Record<string, string | undefined>,
+  extra: Record<string, unknown> = {},
 ): Promise<T | null> {
   let release = () => {};
   const idle = (async function* () {
     await new Promise<void>((r) => (release = r));
   })() as AsyncIterable<never>;
-  const q = query({ prompt: idle, options: { cwd, ...(env ? { env } : {}), ...executableOverrideOptions() } });
+  const q = query({ prompt: idle, options: { cwd, ...(env ? { env } : {}), ...extra, ...executableOverrideOptions() } });
   try {
     const timeout = new Promise<null>((r) => setTimeout(() => r(null), 15000));
     return await Promise.race([ask(q), timeout]);
@@ -285,7 +286,7 @@ export interface ClaudeCapabilities {
 }
 
 // What the settings tab can toggle for this folder.
-export async function fetchClaudeCapabilities(cwd: string, env?: Record<string, string | undefined>): Promise<ClaudeCapabilities | null> {
+export async function fetchClaudeCapabilities(cwd: string, env?: Record<string, string | undefined>, mcpServers?: Record<string, unknown>): Promise<ClaudeCapabilities | null> {
   return withIdleQuery(cwd, async (q) => {
     const init = await q.initializationResult();
     const mcp = await q.mcpServerStatus();
@@ -295,7 +296,7 @@ export async function fetchClaudeCapabilities(cwd: string, env?: Record<string, 
       .map((c) => ({ name: c.name, description: c.description }))
       .sort((a, b) => a.name.localeCompare(b.name));
     return { skills, mcpServers: mcp.map((s) => ({ name: s.name, status: s.status })) };
-  }, env);
+  }, env, mcpServers && Object.keys(mcpServers).length ? { mcpServers } : {});
 }
 
 const MAX_TOOL_OUTPUT = 4000;
@@ -440,6 +441,7 @@ export async function runAgentTurn(
         systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: systemPromptFor(party) },
         ...(env ? { env } : {}),
         ...(settings ? { effort: settings.effort, disallowedTools: settings.disallowedTools } : {}),
+        ...(settings?.mcpServers ? { mcpServers: settings.mcpServers } : {}),
         ...(settings?.skills ? { skills: settings.skills } : {}),
         // Stream text as it's written so the UI can type it out live.
         includePartialMessages: true,

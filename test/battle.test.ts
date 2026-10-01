@@ -369,10 +369,10 @@ test('the merchant appears after a clear on a low roll; /buy spends coins, /leav
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/buy potion', '/buy crystal', '/leave', '/quit']);
   const summary = await runDungeon({ ...deps, coins: 50, random: seq(0.1, 0.99) });
   assert.ok(events.some((e) => e.type === 'merchantOpen' && e.coins === 60));
-  assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'potion' && e.coins === 30));
-  assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'crystal'), '30 coins cannot buy an 80-coin crystal');
+  assert.ok(events.some((e) => e.type === 'purchased' && e.itemId === 'potion' && e.coins === 27), 'potion 30 x1.1 on the way to floor 2 = 33');
+  assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'crystal'), '27 coins cannot buy an 88-coin crystal');
   assert.ok(events.some((e) => e.type === 'merchantClosed'));
-  assert.equal(summary.coins, 30);
+  assert.equal(summary.coins, 27);
   assert.deepEqual(summary.bag, { potion: 1 });
 });
 
@@ -1070,6 +1070,73 @@ test('contracts: sloth removes work hits and doubles the closing blow; greed add
   assert.equal(s.coins, 15, '10 floor coins x1.5');
 });
 
+test('boss drops: each boss has its own relic, dropped 30% of the time, and it works from the bag', async () => {
+  const { BOSS_ITEMS } = await import('../src/items.ts');
+  assert.equal(BOSS_ITEMS.length, 17);
+  assert.equal(new Set(BOSS_ITEMS.map((i) => i.id)).size, 17);
+  // Kill the floor-5 boss (area 0) with a lucky loot roll.
+  const kill = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  const s1 = await runDungeon({ ...kill.deps, startFloor: 5, getDamageMultiplier: () => 10, shopRandom: () => 0.1 });
+  const drop = kill.events.find((e) => e.type === 'bossDrop');
+  assert.ok(drop?.type === 'bossDrop' && drop.itemId === 'boss-0');
+  assert.equal(s1.bag['boss-0'], 1);
+  const unlucky = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon({ ...unlucky.deps, startFloor: 5, getDamageMultiplier: () => 10, shopRandom: () => 0.5 });
+  assert.equal(unlucky.events.some((e) => e.type === 'bossDrop'), false);
+  // boss-0: next attack x3.
+  const plain = makeFakeDeps(['x', '/quit']);
+  await runDungeon(plain.deps);
+  const powered = makeFakeDeps(['/use boss-0', 'x', '/quit']);
+  await runDungeon({ ...powered.deps, bag: { 'boss-0': 1 } });
+  const hit = (ev: BattleEvent[]) => ev.find((e) => e.type === 'attack');
+  const a = hit(plain.events), b = hit(powered.events);
+  assert.ok(a?.type === 'attack' && b?.type === 'attack');
+  assert.ok(Math.abs(b.damage - a.damage * 3) <= 2);
+  // boss-1: blocks the next two counters.
+  const shield = makeFakeDeps(['/use boss-1', 'x', 'x', 'x', '/quit']);
+  await runDungeon({ ...shield.deps, bag: { 'boss-1': 1 } });
+  assert.equal(shield.events.filter((e) => e.type === 'counterBlocked').length, 2);
+  assert.equal(shield.events.filter((e) => e.type === 'monsterAttack').length, 1);
+});
+
+test('rest stop: the spring heals half of max HP once', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/drink', '/drink', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, playerHp: 20, random: seq(0.84, 0.99) });
+  assert.ok(events.some((e) => e.type === 'springOpen'));
+  const drinks = events.filter((e) => e.type === 'springDrank');
+  assert.equal(drinks.length, 1, 'only once');
+  assert.ok(events.some((e) => e.type === 'springFailed'));
+  assert.ok(events.some((e) => e.type === 'springClosed'));
+  assert.ok(summary.playerMaxHp === 100);
+});
+
+test('rest stop: the shrine lets you renounce your pact with no max-HP penalty; it only appears with a pact', async () => {
+  const pact = makeFakeDeps([ONE_SHOT_PROMPT, '/renounce', '/leave', '/quit']);
+  const s1 = await runDungeon({ ...pact.deps, contract: { kind: 'demon', id: 'greed' }, random: seq(0.9, 0.99) });
+  assert.ok(pact.events.some((e) => e.type === 'shrineOpen'));
+  assert.ok(pact.events.some((e) => e.type === 'contractRenounced'));
+  assert.equal(s1.contract, null);
+  assert.equal(s1.maxHpPenalty, 0);
+  const none = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon({ ...none.deps, random: seq(0.9, 0.99) });
+  assert.equal(none.events.some((e) => e.type === 'shrineOpen'), false);
+});
+
+test('shop prices climb with depth: +10% per floor; selling pays half the current price', async () => {
+  const early = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', '/quit']);
+  await runDungeon({ ...early.deps, random: seq(0.1, 0.99) });
+  const deep = makeFakeDeps(['/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/use bomb', '/leave', '/quit']);
+  await runDungeon({ ...deep.deps, startFloor: 9, bag: { bomb: 10 }, random: seq(0.1, 0.99) });
+  const shelf = (events: BattleEvent[]) => events.find((e) => e.type === 'merchantOpen');
+  const a = shelf(early.events), b = shelf(deep.events);
+  assert.ok(a?.type === 'merchantOpen' && b?.type === 'merchantOpen');
+  const bandage = a.items.find((i) => i.id === 'bandage');
+  assert.equal(a.priceMult, 1.1, 'next floor 1');
+  assert.equal(bandage?.price, Math.round(12 * 1.1));
+  assert.equal(b.priceMult, 2, 'next floor 10');
+  assert.ok(b.items.every((i) => i.price >= 2 * 10));
+});
+
 test('shop: 5 items per visit; the coin charm is a one-time relic that boosts coins', async () => {
   // The charm is on the second visit's shelf (10 items rotate, contracts aside).
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
@@ -1146,10 +1213,10 @@ test('a bare /new at the merchant resets the session without leaving the shop', 
 test('the merchant buys bag items back at half price', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/sell potion', '/sell potion', '/sell crystal', '/leave', '/quit']);
   const summary = await runDungeon({ ...deps, coins: 0, bag: { potion: 1 }, random: seq(0.1, 0.99) });
-  assert.ok(events.some((e) => e.type === 'sold' && e.itemId === 'potion' && e.gained === 15), 'potion 30 → 15');
+  assert.ok(events.some((e) => e.type === 'sold' && e.itemId === 'potion' && e.gained === 16), 'potion 33 today → 16');
   assert.equal(events.filter((e) => e.type === 'sellFailed').length, 2, 'none left / not in the bag');
   assert.equal(summary.bag.potion, undefined);
-  assert.equal(summary.coins, 10 + 15);
+  assert.equal(summary.coins, 10 + 16);
 });
 
 test('one counterattack takes at most 90% of the hero max HP: a full-HP hero survives any single hit', async () => {
@@ -1173,6 +1240,62 @@ test('boss phase 2: at half HP or less a boss enrages once and its counters hit 
   assert.equal(calm.events.some((e) => e.type === 'bossEnraged'), false);
   assert.equal(angry.events.filter((e) => e.type === 'bossEnraged').length, 1, 'only once');
   assert.ok(Math.abs(hits[0].damage - c0.damage * 1.3) <= 1);
+});
+
+// Floor 5 boss of a chosen area (rosters), wounded below half, sturdy hero.
+async function awakenedBoss(roster: number, inputs = ['x', 'x', '/quit']) {
+  const run = makeFakeDeps(inputs);
+  const summary = await runDungeon({ ...run.deps, startFloor: 5, rosters: [roster], monsterHp: 200, playerMaxHp: 1000 });
+  return { events: run.events, summary };
+}
+
+test('boss awakenings differ by boss: rage, regen, armor, frenzy, vampire', async () => {
+  const kinds = [];
+  for (let r = 0; r < 5; r++) {
+    const { events } = await awakenedBoss(r);
+    const e = events.find((x) => x.type === 'bossEnraged');
+    assert.ok(e?.type === 'bossEnraged');
+    kinds.push(e.awakening);
+  }
+  assert.deepEqual(kinds, ['rage', 'regen', 'armor', 'frenzy', 'vampire']);
+});
+
+test('awakening: regen heals 4% of max HP each turn after it wakes', async () => {
+  const { events } = await awakenedBoss(1);
+  const start = events.find((e) => e.type === 'floorStart');
+  const heal = events.find((e) => e.type === 'traitRegen');
+  assert.ok(start?.type === 'floorStart' && heal?.type === 'traitRegen');
+  assert.equal(heal.amount, Math.round(start.maxHp * 0.04));
+});
+
+test('awakening: armor takes 25% less from the closing blow', async () => {
+  const plain = await awakenedBoss(0); // rage: no armor
+  const armored = await awakenedBoss(2);
+  const second = (events: BattleEvent[]) => events.filter((e) => e.type === 'attack')[1];
+  const a = second(plain.events), b = second(armored.events);
+  assert.ok(a?.type === 'attack' && b?.type === 'attack');
+  assert.ok(Math.abs(b.damage - a.damage * 0.75) <= 1);
+});
+
+test('awakening: frenzy counters twice at 60% each', async () => {
+  const calm = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...calm.deps, startFloor: 5, rosters: [3], monsterHp: 800, playerMaxHp: 1000 });
+  const one = calm.events.find((e) => e.type === 'monsterAttack');
+  const { events } = await awakenedBoss(3, ['x', '/quit']);
+  const hits = events.filter((e) => e.type === 'monsterAttack');
+  assert.ok(one?.type === 'monsterAttack');
+  assert.equal(hits.length, 2, 'awake: two hits a turn');
+  for (const h of hits) assert.ok(h.type === 'monsterAttack' && Math.abs(h.damage - one.damage * 0.6) <= 1);
+});
+
+test('awakening: vampire heals by what its counter dealt', async () => {
+  const { events } = await awakenedBoss(4);
+  const i = events.findIndex((e) => e.type === 'bossEnraged');
+  const after = events.slice(i);
+  const hit = after.find((e) => e.type === 'monsterAttack');
+  const drain = after.find((e) => e.type === 'bossDrain');
+  assert.ok(hit?.type === 'monsterAttack' && drain?.type === 'bossDrain');
+  assert.equal(drain.amount, hit.damage);
 });
 
 test('a regular monster never enrages', async () => {

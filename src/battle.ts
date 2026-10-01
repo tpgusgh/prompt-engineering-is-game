@@ -3,7 +3,7 @@ import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFIC
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { rollPet, PET_HEAL_RATIO, PET_FIRE_RATIO, PET_XP_BONUS, type PetId } from './pets.ts';
-import { getItem, shopOffer, sellPrice, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
+import { bossItemFor, BOSS_DROP_CHANCE, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
@@ -40,7 +40,16 @@ export type BattleEvent =
   | { type: 'gimmickHeal'; amount: number }
   | { type: 'hesitate' }
   | { type: 'monsterWaits' }
-  | { type: 'bossEnraged' }
+  | { type: 'bossEnraged'; awakening: AwakeningId; name: string; text: string }
+  | { type: 'bossDrain'; amount: number }
+  | { type: 'bossDrop'; itemId: string; name: string; description: string }
+  | { type: 'springOpen'; playerHp: number; playerMaxHp: number }
+  | { type: 'springDrank'; amount: number }
+  | { type: 'springFailed'; reason: string }
+  | { type: 'springClosed' }
+  | { type: 'shrineOpen'; contract: Contract }
+  | { type: 'contractRenounced'; name: string }
+  | { type: 'shrineClosed' }
   | { type: 'petHelped'; pet: PetId; amount: number }
   | { type: 'petFound'; pet: PetId }
   | { type: 'turnStart'; prompt: string }
@@ -62,7 +71,7 @@ export type BattleEvent =
   | { type: 'fleeAttempt'; success: boolean }
   | { type: 'fleeBlocked' }
   | { type: 'coinsChanged'; coins: number; gained: number }
-  | { type: 'merchantOpen'; coins: number; items: Item[] }
+  | { type: 'merchantOpen'; coins: number; items: Item[]; priceMult: number }
   | { type: 'purchased'; itemId: string; coins: number }
   | { type: 'purchaseFailed'; itemId: string; reason: string }
   | { type: 'merchantClosed' }
@@ -254,6 +263,11 @@ const SESSION_WARN_RATIO = 0.8;
 const FLEE_CHANCE = 0.5;
 const MERCHANT_CHANCE = 0.3;
 const BLACKSMITH_CHANCE = 0.2;
+// Rest stops, on their own band of the encounter roll (above the shops):
+// the healing spring, and the shrine where a pact can be renounced freely.
+const SPRING_BAND = [0.8, 0.88] as const;
+const SHRINE_BAND = [0.88, 0.96] as const; // only while holding a pact
+export const SPRING_HEAL = 0.5; // of max HP, once
 const BOSS_COIN_MULTIPLIER = 3;
 
 function xpForFloor(floor: number): number {
@@ -285,6 +299,21 @@ export function endsWithQuestion(text: string): boolean {
 }
 
 export const ENRAGE_COUNTER = 1.3; // boss phase 2 counter multiplier
+
+// Boss phase 2: at half HP or less every boss awakens once, each area's boss
+// in its own way (by area index, repeating).
+export type AwakeningId = 'rage' | 'regen' | 'armor' | 'frenzy' | 'vampire';
+export const AWAKENINGS: { id: AwakeningId; name: string; text: string }[] = [
+  { id: 'rage', name: '격노', text: '반격이 30% 더 강해진다' },
+  { id: 'regen', name: '재생', text: '매 턴 끝에 최대 HP의 4%를 회복한다' },
+  { id: 'armor', name: '강철 피부', text: '받는 피해가 25% 줄어든다' },
+  { id: 'frenzy', name: '광폭화', text: '반격을 두 번 한다 (한 번에 60%씩)' },
+  { id: 'vampire', name: '흡혈', text: '반격으로 준 피해만큼 HP를 회복한다' },
+];
+export const awakeningFor = (monsterIndex: number) => AWAKENINGS[Math.floor(monsterIndex / MONSTER_COUNT) % AWAKENINGS.length];
+const AWAKEN_REGEN = 0.04;
+const AWAKEN_ARMOR = 0.75;
+const AWAKEN_FRENZY = 0.6;
 export const COUNTER_CAP = 0.9; // of the hero's max HP, per counterattack: no one-shot from full
 
 function counterDamage(monsterMaxHp: number, punished: boolean): number {
@@ -319,6 +348,7 @@ export function bestiary() {
       counter,
       trait: { id: m.trait, ...TRAITS[m.trait] },
       gimmick: m.isBoss ? gimmickFor(first.chapter) : undefined,
+      awakening: m.isBoss ? awakeningFor(m.index) : undefined,
     };
   });
 }
@@ -342,7 +372,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let currentIsBoss = false;
   let pendingMonsterHp = deps.monsterHp;
   let turnRunning = false;
-  let sharpened = false; // whetstone: next attack x2
+  let sharpenMult = 1; // whetstone (x2) or a boss relic: the next attack's multiplier
   const chests = deps.chests ?? true;
   let contract: Contract | null = deps.contract ?? null;
   let mods = contractMods(contract);
@@ -358,7 +388,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     overkill += damage;
     deps.onBattleEvent({ type: 'chestHit', damage, total: overkill });
   };
-  let shielded = false; // amulet: next counterattack blocked
+  let shields = 0; // amulet (1) or a boss relic: counterattacks still to block
   // Input typed at the merchant that wasn't a shop command: replayed as the
   // next floor's first input, so a prompt typed there isn't lost.
   let carried: string | null = null;
@@ -390,10 +420,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   deps.onBattleEvent({ type: 'runStart', playerHp, playerMaxHp });
 
   const takeHit = (damage: number) => {
-    if (shielded) {
-      shielded = false;
+    if (shields > 0) {
+      shields -= 1;
       deps.onBattleEvent({ type: 'counterBlocked' });
-      return;
+      return 0;
     }
     damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats)) * mods.counterMult));
     playerHp = Math.max(0, playerHp - damage);
@@ -405,6 +435,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'reflectHit', damage: back });
       deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
     }
+    return damage;
   };
 
   const emitPlayerHp = () => deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
@@ -418,20 +449,51 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   };
 
   // Free action: never costs a turn or draws a counterattack.
+  // A boss relic from the bag (src/items.ts BOSS_ITEMS).
+  const useRelic = (effect: NonNullable<Item['effect']>) => {
+    if (effect.kind === 'power') sharpenMult = Math.max(sharpenMult, effect.value);
+    else if (effect.kind === 'shield') shields = Math.max(shields, effect.value);
+    else if (effect.kind === 'heal') {
+      playerHp = Math.min(playerMaxHp, playerHp + Math.round(playerMaxHp * effect.value));
+      emitPlayerHp();
+    } else if (effect.kind === 'blast') {
+      const before = hp;
+      const damage = Math.max(1, Math.round(currentMaxHp * effect.value * (currentIsBoss ? 0.25 : 1)));
+      hp = Math.max(0, hp - damage);
+      if (chests && hp === 0) overkill = damage - before;
+      deps.onBattleEvent({ type: 'bombHit', damage });
+      deps.onBattleEvent({ type: 'hpChanged', hp, maxHp: currentMaxHp });
+    } else if (effect.kind === 'xp') {
+      xpGained += effect.value;
+      deps.onBattleEvent({ type: 'bonusXp', amount: effect.value });
+    } else if (effect.kind === 'coins') {
+      coins += effect.value;
+      deps.onBattleEvent({ type: 'coinsChanged', coins, gained: effect.value });
+    }
+  };
+
   const useItem = (id: string) => {
     const usable = ['bandage', 'potion', 'whetstone', 'amulet', 'elixir', 'bomb', 'scroll', 'contract', 'devilContract'];
-    // The bomb needs a monster to throw it at (not at a shop).
-    if (!usable.includes(id) || (id === 'bomb' && hp <= 0) || !takeItem(id)) {
+    const effect = getItem(id)?.effect;
+    // The bomb (and a blast relic) needs a monster to throw it at (not at a shop).
+    const needsMonster = id === 'bomb' || effect?.kind === 'blast';
+    if ((!usable.includes(id) && !effect) || (needsMonster && hp <= 0) || !takeItem(id)) {
       deps.onBattleEvent({ type: 'itemUseFailed', itemId: id });
+      return;
+    }
+    if (effect) {
+      useRelic(effect);
+      deps.onBattleEvent({ type: 'itemUsed', itemId: id });
+      emitBag();
       return;
     }
     if (id === 'potion' || id === 'bandage' || id === 'elixir') {
       playerHp = id === 'elixir' ? playerMaxHp : Math.min(playerMaxHp, playerHp + (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL));
       emitPlayerHp();
     } else if (id === 'whetstone') {
-      sharpened = true;
+      sharpenMult = Math.max(sharpenMult, 2);
     } else if (id === 'amulet') {
-      shielded = true;
+      shields = Math.max(shields, 1);
     } else if (id === 'bomb') {
       const before = hp;
       const damage = bombDamage(currentMaxHp, currentIsBoss);
@@ -624,9 +686,44 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     );
   };
 
+  const visitSpring = () => {
+    let drank = false;
+    deps.onBattleEvent({ type: 'springOpen', playerHp, playerMaxHp });
+    return visitShop(
+      (input) => {
+        if (input !== '/drink') return false;
+        if (drank) deps.onBattleEvent({ type: 'springFailed', reason: '샘물은 이미 다 마셨다' });
+        else {
+          drank = true;
+          const amount = Math.min(playerMaxHp - playerHp, Math.round(playerMaxHp * SPRING_HEAL));
+          playerHp += amount;
+          deps.onBattleEvent({ type: 'springDrank', amount });
+          emitPlayerHp();
+        }
+        return true;
+      },
+      () => deps.onBattleEvent({ type: 'springClosed' }),
+    );
+  };
+
+  const visitShrine = () => {
+    deps.onBattleEvent({ type: 'shrineOpen', contract: contract! });
+    return visitShop(
+      (input) => {
+        if (input !== '/renounce' || !contract) return false;
+        const name = pactOf(contract)?.name ?? '';
+        contract = null;
+        mods = contractMods(contract);
+        deps.onBattleEvent({ type: 'contractRenounced', name });
+        return true;
+      },
+      () => deps.onBattleEvent({ type: 'shrineClosed' }),
+    );
+  };
+
   const visitMerchant = () => {
-    const offer = shopOffer(shopVisits++, relics, shopRandom);
-    deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer });
+    const offer = shopOffer(shopVisits++, relics, shopRandom).map((i) => ({ ...i, price: priceAt(i, floor) }));
+    deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer, priceMult: priceMultiplier(floor) });
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
         placeBet(input);
@@ -640,7 +737,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           deps.onBattleEvent({ type: 'sellFailed', itemId: id, reason: item ? '가방에 없다' : '그런 물건은 없다' });
           return true;
         }
-        const gained = sellPrice(item);
+        const gained = sellPrice(item, floor);
         coins += gained;
         emitBag();
         deps.onBattleEvent({ type: 'sold', itemId: id, gained, coins });
@@ -704,12 +801,14 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const chapterPower = 1 + 0.1 * (chapter - 1);
     // Boss phase 2: at half HP or less a boss enrages (once) and hits harder.
     let enraged = false;
+    const awakening = awakeningFor(monsterIndex);
+    const armorMult = () => (enraged && awakening.id === 'armor' ? AWAKEN_ARMOR : 1);
     // Capped so even a deep boss can't one-shot a full-HP hero.
     const counter = (punished: boolean) =>
       Math.min(
         Math.round(playerMaxHp * COUNTER_CAP),
         Math.round(
-          counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1) * (enraged ? ENRAGE_COUNTER : 1),
+          counterDamage(maxHp, punished) * chapterPower * (trait === 'fierce' ? FIERCE : 1) * (turnFailedTool ? theme.failCounter : 1) * (enraged && awakening.id === 'rage' ? ENRAGE_COUNTER : 1),
         ),
       );
     currentMaxHp = maxHp;
@@ -789,9 +888,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       let damage = Math.round(
         base.damage * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * attackMultiplier(stats) * swordMultiplier(swordLevel),
       );
-      if (sharpened) {
-        damage *= 2;
-        sharpened = false;
+      if (sharpenMult > 1) {
+        damage = Math.round(damage * sharpenMult);
+        sharpenMult = 1;
       }
       const { crit, matchedKeywords } = base;
       deps.onBattleEvent({ type: 'turnStart', prompt });
@@ -814,7 +913,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       // when the turn ends normally (not on error or stop). So a short
       // prompt that makes the AI do a lot still hits hard.
       const baseAction = Math.max(1, Math.round(actionDamage(damage) * mods.actionMult * mods.hitMult));
-      const actionHit = mods.noActionHits ? 0 : trait === 'armor' ? Math.max(1, Math.round(baseAction / 2)) : baseAction;
+      const actionHit = mods.noActionHits ? 0 : Math.max(1, Math.round((trait === 'armor' ? baseAction / 2 : baseAction) * armorMult()));
       const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
         deps.onBattleEvent({ type: 'agentEvent', agentEvent: event });
@@ -908,7 +1007,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
         if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
         if (turnTests > 0) damage = Math.round(damage * theme.testBonus);
-        damage = Math.round(damage * mods.hitMult * mods.closingMult * (crit ? mods.critMult : 1) * (isBoss ? mods.bossMult : 1) * (playerHp <= playerMaxHp / 2 ? mods.lowHpMult : 1));
+        damage = Math.round(damage * armorMult() * mods.hitMult * mods.closingMult * (crit ? mods.critMult : 1) * (isBoss ? mods.bossMult : 1) * (playerHp <= playerMaxHp / 2 ? mods.lowHpMult : 1));
         if (chests) overkill += Math.max(0, damage - hp);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
@@ -936,13 +1035,22 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (playerHp <= 0) break; // thorns finished the hero mid-turn
       if (isBoss && !enraged && hp > 0 && hp <= maxHp / 2) {
         enraged = true;
-        deps.onBattleEvent({ type: 'bossEnraged' });
+        deps.onBattleEvent({ type: 'bossEnraged', awakening: awakening.id, name: awakening.name, text: awakening.text });
       }
       // A question, or the player's own stop: the monster waits for the next prompt.
       if (hp > 0 && !turn.error && (turn.interrupted || endsWithQuestion(turn.summary))) {
         deps.onBattleEvent({ type: 'monsterWaits' });
       } else if (hp > 0) {
-        takeHit(counter(Boolean(turn.error)));
+        const c = counter(Boolean(turn.error));
+        const frenzy = enraged && awakening.id === 'frenzy';
+        let dealt = takeHit(frenzy ? Math.round(c * AWAKEN_FRENZY) : c);
+        if (frenzy && playerHp > 0) dealt += takeHit(Math.round(c * AWAKEN_FRENZY));
+        if (enraged && awakening.id === 'vampire' && dealt > 0 && hp < maxHp) {
+          const amount = Math.min(maxHp - hp, dealt);
+          hp += amount;
+          deps.onBattleEvent({ type: 'bossDrain', amount });
+          deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
+        }
         if (playerHp <= 0) break;
       }
       if (deps.pet === 'slime' && playerHp < playerMaxHp) {
@@ -959,6 +1067,12 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (mods.healPerTurnRatio > 0 && playerHp < playerMaxHp) {
         playerHp = Math.min(playerMaxHp, playerHp + Math.max(1, Math.round(playerMaxHp * mods.healPerTurnRatio)));
         emitPlayerHp();
+      }
+      if (enraged && awakening.id === 'regen' && hp > 0 && hp < maxHp) {
+        const amount = Math.min(maxHp - hp, Math.max(1, Math.round(maxHp * AWAKEN_REGEN)));
+        hp += amount;
+        deps.onBattleEvent({ type: 'traitRegen', amount });
+        deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
       }
       if (trait === 'regen' && hp > 0 && hp < maxHp) {
         const amount = Math.min(maxHp - hp, Math.max(1, Math.round(maxHp * REGEN_RATIO)));
@@ -1017,6 +1131,13 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (currentFloorEngaged) modelRecord(floorModel).cleared += 1;
     deps.onBattleEvent({ type: 'floorCleared', monsterName: spawned.name, xpGained: gained });
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
+    // Its own relic, sometimes (on the loot stream, like the shop's contract slot).
+    const relicDrop = isBoss ? bossItemFor(Math.floor(monsterIndex / MONSTER_COUNT)) : undefined;
+    if (relicDrop && shopRandom() < BOSS_DROP_CHANCE) {
+      bag[relicDrop.id] = (bag[relicDrop.id] ?? 0) + 1;
+      deps.onBattleEvent({ type: 'bossDrop', itemId: relicDrop.id, name: relicDrop.name, description: relicDrop.description });
+      emitBag();
+    }
     playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL * mods.clearHealMult + Math.round(playerMaxHp * mods.clearHealRatio));
     emitPlayerHp();
     const coinsGained = coinGain(coinsForFloor(floor, isBoss) * rewardMult);
@@ -1032,6 +1153,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (!(await visitMerchant())) break;
     } else if (encounter < (MERCHANT_CHANCE + BLACKSMITH_CHANCE) * theme.shopChance) {
       if (!(await visitBlacksmith())) break;
+    } else if (encounter >= SPRING_BAND[0] && encounter < SPRING_BAND[1]) {
+      if (!(await visitSpring())) break;
+    } else if (contract && encounter >= SHRINE_BAND[0] && encounter < SHRINE_BAND[1]) {
+      if (!(await visitShrine())) break;
     }
   }
 

@@ -13,7 +13,7 @@ import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachmen
 import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
-import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
+import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, parseMcpEntry, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
 import { loadSlots, writeSlot, deleteSlot } from '../src/saves.ts';
 import { PETS, isPetId } from '../src/pets.ts';
@@ -26,7 +26,7 @@ import { ACHIEVEMENTS, DAILY_QUESTS, currentDaily, localDate } from '../src/prog
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
-import { ITEMS } from '../src/items.ts';
+import { ITEMS, BOSS_ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
 import { isNewerVersion, updateMode, RELEASES_URL, LATEST_RELEASE_API, type UpdateStatus } from '../src/updates.ts';
@@ -323,7 +323,7 @@ let currentModel = DEFAULT_WEAPON_ID;
 ipcMain.handle('get-setup-info', async () => ({
   profile: await loadProfile(),
   weapons: WEAPONS,
-  items: ITEMS,
+  items: [...ITEMS, ...BOSS_ITEMS],
   stats: STATS,
   statMaxLevel: STAT_MAX_LEVEL,
   swordMaxLevel: SWORD_MAX_LEVEL,
@@ -356,18 +356,29 @@ const capabilityCache = new Map<string, Awaited<ReturnType<typeof fetchClaudeCap
 ipcMain.handle('claude-capabilities', async (_event, cwd: string | null, refresh = false) => {
   await authReady;
   const dir = path.resolve(cwd ?? app.getPath('home'));
-  if (refresh || !capabilityCache.get(dir)) capabilityCache.set(dir, await fetchClaudeCapabilities(dir, claudeEnv()));
+  const mcp = (currentClaude ?? (await loadProfile()).claude).mcpServers;
+  if (refresh || !capabilityCache.get(dir)) capabilityCache.set(dir, await fetchClaudeCapabilities(dir, claudeEnv(), mcp));
   return capabilityCache.get(dir) ?? null;
 });
 let currentClaude: ClaudeSettings | null = null;
 ipcMain.handle('set-claude-settings', async (_event, settings: unknown) => {
   const next = coerceClaudeSettings(settings);
-  if (currentClaude?.auth !== next.auth) capabilityCache.clear();
+  if (currentClaude?.auth !== next.auth || JSON.stringify(currentClaude?.mcpServers ?? {}) !== JSON.stringify(next.mcpServers ?? {})) capabilityCache.clear();
   currentClaude = next;
   await saveProfile({ ...(await loadProfile()), claude: next });
   return next;
 });
 ipcMain.handle('claude-settings-info', () => ({ levels: EFFORT_LEVELS, attackSpeed: ATTACK_SPEED }));
+// 🔌 MCP 연결하러 가기: check a server from the form; the renderer saves it
+// into the Claude settings (coerced again there).
+ipcMain.handle('mcp-parse', (_event, name: unknown, kind: unknown, value: unknown) =>
+  parseMcpEntry(String(name ?? ''), kind === 'url' ? 'url' : 'command', String(value ?? '')),
+);
+const LINKS: Record<string, string> = {
+  connectors: 'https://claude.ai/settings/connectors',
+  servers: 'https://github.com/modelcontextprotocol/servers',
+};
+ipcMain.handle('open-link', (_event, key: unknown) => (typeof key === 'string' && LINKS[key] ? shell.openExternal(LINKS[key]) : undefined));
 
 ipcMain.handle('get-usage', async () => {
   await authReady;
