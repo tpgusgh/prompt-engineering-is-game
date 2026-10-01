@@ -43,6 +43,8 @@ export type BattleEvent =
   | { type: 'bossEnraged'; awakening: AwakeningId; name: string; text: string }
   | { type: 'bossDrain'; amount: number }
   | { type: 'bossDrop'; itemId: string; name: string; description: string }
+  | { type: 'equipmentChanged'; equipment: string[]; itemId: string; on: boolean }
+  | { type: 'equipFailed'; itemId: string; reason: string }
   | { type: 'springOpen'; playerHp: number; playerMaxHp: number }
   | { type: 'springDrank'; amount: number }
   | { type: 'springFailed'; reason: string }
@@ -228,6 +230,8 @@ export interface BattleDeps {
   daily?: string;
   // The merchant's contract roll (see shopOffer); defaults to Math.random.
   shopRandom?: () => number;
+  // Boss relics worn (2 slots), carried in the profile.
+  equipment?: string[];
 }
 
 export interface BattleSummary {
@@ -253,6 +257,7 @@ export interface BattleSummary {
   runId?: string;
   paidXp?: PaidXp;
   newPets: PetId[];
+  equipment: string[];
 }
 
 const BOSS_HP_MULTIPLIER = 1.5;
@@ -260,7 +265,7 @@ const BOSS_HP_MULTIPLIER = 1.5;
 const FIERCE = 1.3;
 const THORNS_DAMAGE = 2;
 const REGEN_RATIO = 0.05;
-const FLOOR_CLEAR_HEAL = 25;
+const FLOOR_CLEAR_HEAL = 0.25; // of max HP
 const SESSION_WARN_RATIO = 0.8;
 const FLEE_CHANCE = 0.5;
 // What waits after a floor clear: one roll on this table (theme odds, the
@@ -318,6 +323,9 @@ export function endsWithQuestion(text: string): boolean {
   return isQ(lines[i]);
 }
 
+// Worn boss relics: 2 slots; per relic of a kind.
+export const EQUIP_SLOTS = 2;
+export const GEAR = { power: 0.1, shield: 0.1, heal: 0.02, blast: 0.15, xp: 0.1, coins: 0.1 };
 export const ENRAGE_COUNTER = 1.3; // boss phase 2 counter multiplier
 
 // Boss phase 2: at half HP or less every boss awakens once, each area's boss
@@ -400,7 +408,18 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let maxHpPenalty = 0;
   let shopVisits = 0;
   const prestigeMult = 1 + 0.1 * (deps.prestige ?? 0);
-  const coinGain = (n: number) => Math.round(n * mods.coinMult * prestigeMult * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
+  // Worn boss relics (2 slots, kept in the profile): a small passive by kind.
+  let equipment = [...(deps.equipment ?? [])].filter((id) => getItem(id)?.effect).slice(0, EQUIP_SLOTS);
+  const worn = (kind: string) => equipment.filter((id) => getItem(id)?.effect?.kind === kind).length;
+  const gear = {
+    damage: () => 1 + GEAR.power * worn('power'),
+    counter: () => Math.max(0.5, 1 - GEAR.shield * worn('shield')),
+    heal: () => GEAR.heal * worn('heal'),
+    action: () => 1 + GEAR.blast * worn('blast'),
+    xp: () => 1 + GEAR.xp * worn('xp'),
+    coins: () => 1 + GEAR.coins * worn('coins'),
+  };
+  const coinGain = (n: number) => Math.round(n * mods.coinMult * prestigeMult * gear.coins() * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
   // This turn's damage past the monster's last HP, and whether it has fallen.
   let overkill = 0;
   let monsterDown = false;
@@ -445,7 +464,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'counterBlocked' });
       return 0;
     }
-    damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats)) * mods.counterMult));
+    damage = Math.max(1, Math.round(damage * (1 - defenseReduction(stats)) * mods.counterMult * gear.counter()));
     playerHp = Math.max(0, playerHp - damage);
     deps.onBattleEvent({ type: 'monsterAttack', damage });
     deps.onBattleEvent({ type: 'playerHpChanged', hp: playerHp, maxHp: playerMaxHp });
@@ -618,6 +637,28 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       sessionId = undefined;
       warnedSessionFull = false;
       deps.onBattleEvent({ type: 'sessionReset', reason: 'new' });
+      return true;
+    }
+    if (input.startsWith('/equip ') || input.startsWith('/unequip ')) {
+      const off = input.startsWith('/unequip ');
+      const id = input.slice(off ? '/unequip '.length : '/equip '.length).trim();
+      const fail = (reason: string) => deps.onBattleEvent({ type: 'equipFailed', itemId: id, reason });
+      if (!getItem(id)?.effect) fail('보스 유물만 장착할 수 있다');
+      else if (off) {
+        if (!equipment.includes(id)) fail('장착하고 있지 않다');
+        else {
+          equipment = equipment.filter((e) => e !== id);
+          bag[id] = (bag[id] ?? 0) + 1;
+          emitBag();
+          deps.onBattleEvent({ type: 'equipmentChanged', equipment: [...equipment], itemId: id, on: false });
+        }
+      } else if (equipment.length >= EQUIP_SLOTS) fail(`장비 칸 ${EQUIP_SLOTS}개가 꽉 찼다 — 하나를 먼저 빼자`);
+      else if (!takeItem(id)) fail('가방에 없다');
+      else {
+        equipment.push(id);
+        emitBag();
+        deps.onBattleEvent({ type: 'equipmentChanged', equipment: [...equipment], itemId: id, on: true });
+      }
       return true;
     }
     if (input.startsWith('/stat ')) {
@@ -942,7 +983,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       currentFloorEngaged = true;
       const base = calculateDamage(prompt);
       let damage = Math.round(
-        base.damage * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * attackMultiplier(stats) * swordMultiplier(swordLevel),
+        base.damage * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * gear.damage() * attackMultiplier(stats) * swordMultiplier(swordLevel),
       );
       if (sharpenMult > 1) {
         damage = Math.round(damage * sharpenMult);
@@ -968,7 +1009,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       // ones don't — and the prompt's full damage lands as the closing blow
       // when the turn ends normally (not on error or stop). So a short
       // prompt that makes the AI do a lot still hits hard.
-      const baseAction = Math.max(1, Math.round(actionDamage(damage) * mods.actionMult * mods.hitMult));
+      const baseAction = Math.max(1, Math.round(actionDamage(damage) * mods.actionMult * mods.hitMult * gear.action()));
       const actionHit = mods.noActionHits ? 0 : Math.max(1, Math.round((trait === 'armor' ? baseAction / 2 : baseAction) * armorMult()));
       const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
@@ -1109,6 +1150,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         }
         if (playerHp <= 0) break;
       }
+      if (gear.heal() > 0 && playerHp < playerMaxHp) {
+        playerHp = Math.min(playerMaxHp, playerHp + Math.max(1, Math.round(playerMaxHp * gear.heal())));
+        emitPlayerHp();
+      }
       if (deps.pet === 'slime' && playerHp < playerMaxHp) {
         const amount = Math.min(playerMaxHp - playerHp, Math.max(1, Math.round(playerMaxHp * PET_HEAL_RATIO)));
         playerHp += amount;
@@ -1178,7 +1223,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (loot && loot.id !== 'crystal') emitBag();
       overkill = 0;
     }
-    const gained = floor > alreadyPaid.floor ? Math.round(xpForFloor(floor) * rewardMult * (deps.pet === 'owl' ? PET_XP_BONUS : 1)) : 0;
+    const gained = floor > alreadyPaid.floor ? Math.round(xpForFloor(floor) * rewardMult * gear.xp() * (deps.pet === 'owl' ? PET_XP_BONUS : 1)) : 0;
     paidXp.floor = Math.max(paidXp.floor, floor);
     xpGained += gained;
     floorsCleared += 1;
@@ -1195,7 +1240,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       deps.onBattleEvent({ type: 'bossDrop', itemId: relicDrop.id, name: relicDrop.name, description: relicDrop.description });
       emitBag();
     }
-    playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL * mods.clearHealMult + Math.round(playerMaxHp * mods.clearHealRatio));
+    playerHp = Math.min(playerMaxHp, playerHp + Math.round(playerMaxHp * (FLOOR_CLEAR_HEAL * mods.clearHealMult + mods.clearHealRatio)));
     emitPlayerHp();
     const coinsGained = coinGain(coinsForFloor(floor, isBoss) * rewardMult);
     coins += coinsGained;
@@ -1231,6 +1276,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     ...(deps.runId ? { runId: deps.runId } : {}),
     paidXp,
     newPets,
+    equipment: [...equipment],
   };
   deps.onBattleEvent({ type: 'runEnded', ...summary });
   return summary;

@@ -10,7 +10,7 @@ import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } 
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
 import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachments.ts';
-import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
+import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, submitRaid, fetchRaid, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, parseMcpEntry, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
@@ -19,6 +19,7 @@ import { loadSlots, writeSlot, deleteSlot } from '../src/saves.ts';
 import { PETS, isPetId } from '../src/pets.ts';
 import { dailyDungeon, dailyRandom, seededRandom, dateSeed } from '../src/daily.ts';
 import { listSkills, saveSkill, deleteSkill } from '../src/skills.ts';
+import { loadJournal, recordJournal } from '../src/journal.ts';
 import { ROSTER_NAMES } from '../src/monsters.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
 import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, XP_PER_LEVEL, TITLES, PRESTIGE_LEVEL } from '../src/profile.ts';
@@ -217,6 +218,28 @@ function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
 
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
+// Weekly raid: the finished run's damage, waiting to be sent (once).
+let pendingRaid: { runToken: string; damage: number } | null = null;
+ipcMain.handle('raid-get', async () => {
+  if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
+  try {
+    return await fetchRaid(rankingConfig.url);
+  } catch (err) {
+    return { error: `레이드 정보를 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
+  }
+});
+ipcMain.handle('raid-submit', async (_event, name: unknown) => {
+  if (!rankingConfig?.secret || !pendingRaid) return { error: '이 판은 레이드에 보낼 수 없다' };
+  const clean = String(name ?? '').trim().slice(0, 16);
+  if (!clean) return { error: '이름을 입력해 줘' };
+  try {
+    const result = await submitRaid(rankingConfig, { ...pendingRaid, name: clean });
+    pendingRaid = null;
+    return result;
+  } catch (err) {
+    return { error: `보내지 못했다: ${err instanceof Error ? err.message : err}` };
+  }
+});
 ipcMain.handle('ranking-list', async (_event, board: unknown) => {
   if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
   const which = board === 'weekly' || board === 'daily' ? board : 'all';
@@ -547,7 +570,29 @@ ipcMain.handle(
       const snapshot = { ...folder, history: [...folder.history], runStates: { ...folder.runStates } };
       saving = saving.then(() => saveFolderSession(cwd, snapshot)).catch(() => {});
     };
+    // 모험 일지: a turn (and its prompt) right away; the files it touched are
+    // flushed with the next turn or at the end; tokens/tests/floors at the end.
+    let journalFiles: string[] = [];
+    const flushJournal = (delta: Parameters<typeof recordJournal>[2] = {}) => {
+      const files = journalFiles;
+      journalFiles = [];
+      const nothing = !files.length && !delta.prompts?.length && !['turns', 'floorsCleared', 'testsPassed', 'tokens'].some((k) => (delta as Record<string, number>)[k] > 0);
+      if (nothing) return Promise.resolve(); // a run with no AI turns leaves no empty day
+      return recordJournal(cwd, localDate(), { ...delta, files }).catch(() => {});
+    };
+    const trackJournal = (event: BattleEvent) => {
+      if (event.type === 'turnStart') void flushJournal({ turns: 1, prompts: [event.prompt] });
+      else if (event.type === 'agentEvent' && event.agentEvent.type === 'file') journalFiles.push(path.relative(cwd, path.resolve(cwd, event.agentEvent.value)) || event.agentEvent.value);
+    };
+    // Weekly raid: every hit this run lands on a monster or a chest.
+    let raidDamage = 0;
+    const trackRaid = (event: BattleEvent) => {
+      if (event.type === 'attack' || event.type === 'partialHit' || event.type === 'typingHit' || event.type === 'bombHit' || event.type === 'reflectHit' || event.type === 'chestHit') raidDamage += event.damage;
+      else if (event.type === 'petHelped' && event.pet === 'drake') raidDamage += event.amount;
+    };
     const trackHistory = (event: BattleEvent) => {
+      trackJournal(event);
+      trackRaid(event);
       if (event.type === 'turnStart') folder.history = appendHistory(folder.history, { role: 'user', text: event.prompt });
       else if (event.type === 'agentSummary') folder.history = appendHistory(folder.history, { role: 'assistant', text: event.summary });
       else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
@@ -597,6 +642,7 @@ ipcMain.handle(
       ...(profile.activePet ? { pet: profile.activePet } : {}),
       ownedPets: profile.pets ?? [],
       prestige: profile.prestige ?? 0,
+      equipment: profile.equipment ?? [],
       ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date), shopRandom: seededRandom(dateSeed(day.date) ^ 0x5bd1e995) } : {}),
       ...showcaseRolls(),
       onBattleEvent: (event: BattleEvent) => {
@@ -637,6 +683,7 @@ ipcMain.handle(
 
     // Settings changed mid-run win over the copy loaded at the start.
     // A daily run doesn't move the theme's story progress.
+    await flushJournal({ floorsCleared: summary.floorsCleared, testsPassed: summary.runStats.testsPassed, tokens: summary.runStats.tokens });
     const finished = finishRun(profile, summary, day ? undefined : options.themeId);
     const updated = { ...finished.profile, heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
@@ -645,7 +692,9 @@ ipcMain.handle(
 
     const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
     // A defeat can go on the ranking (if the server issued this run a token).
-    const runToken = summary.defeated ? await runTokenPromise : null;
+    const anyToken = await runTokenPromise;
+    pendingRaid = anyToken && raidDamage > 0 ? { runToken: anyToken, damage: Math.round(raidDamage) } : null;
+    const runToken = summary.defeated ? anyToken : null;
     // Ranked by how far the run got (chapter/floor), not just this sitting's
     // floors: a run continued from a save still counts from the beginning.
     const rankStats = { floors: summary.nextFloor, bosses: summary.chaptersCleared, xp: summary.xpGained, difficulty: options.difficulty };
@@ -657,7 +706,8 @@ ipcMain.handle(
         : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
-    return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
+    const raid = pendingRaid ? { damage: pendingRaid.damage, submittable: Boolean(rankingConfig?.secret) } : null;
+    return { summary, profile: updated, ranking, raid, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
   },
 );
 
@@ -670,6 +720,7 @@ function insideCwd(filePath: string): string | null {
 // Inventory drag & drop and "new file/folder" — all confined to the project.
 const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
 // 스킬북 (src/skills.ts): the run's project skills plus the user's.
+ipcMain.handle('journal-get', () => loadJournal());
 ipcMain.handle('skills-list', () => (currentCwd ? listSkills(currentCwd) : []));
 ipcMain.handle('skill-save', (_event, skill: { name: string; description: string; body: string }) =>
   currentCwd ? saveSkill(currentCwd, { name: String(skill?.name ?? ''), description: String(skill?.description ?? ''), body: String(skill?.body ?? '') }) : { error: noProject.message },

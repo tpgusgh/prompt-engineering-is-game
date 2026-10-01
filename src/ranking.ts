@@ -92,6 +92,16 @@ export async function submitScore(config: RankingConfig, run: RankedRun): Promis
   return { rank: rankOf(data.rank), score: Number(data.score), weeklyRank: rankOf(data.weeklyRank), ...('dailyRank' in data ? { dailyRank: rankOf(data.dailyRank) } : {}) };
 }
 
+// Weekly raid: this run's total damage, once per run token.
+export async function submitRaid(config: RankingConfig, hit: { runToken: string; name: string; damage: number }): Promise<Record<string, unknown>> {
+  return post(config, '?action=raid', { ...hit, ts: Date.now() });
+}
+export async function fetchRaid(url: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${url.replace(/\/+$/, '')}/api/ranking?board=raid`, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
 // board: 'all' | 'weekly' | 'daily' (with the daily dungeon's date).
 export async function fetchRanking(url: string, board = 'all', date?: string): Promise<unknown[]> {
   const query = new URLSearchParams({ board, ...(date ? { date } : {}) });

@@ -22,10 +22,16 @@
           <button type="button" class="settings-btn" id="ranking-btn" title="온라인 랭킹 (상위 100명)">🏆 랭킹</button>
           <button type="button" class="settings-btn" id="bestiary-btn" title="몬스터 도감">📖 도감</button>
           <button type="button" class="settings-btn" id="records-btn" title="기록 · 업적 · 오늘의 퀘스트">📊 기록</button>
+          <button type="button" class="settings-btn" id="journal-btn" title="모험 일지: 프로젝트별로 AI가 한 일 (Ctrl/⌘+J)">📓 일지</button>
           <button type="button" class="settings-btn" data-open-settings title="설정">⚙️ 설정</button>
         </div>
       </header>
 
+      <div id="raid-card" class="setup-card raid-card" hidden>
+        <div class="raid-head"><strong>⚔️ 주간 레이드</strong> <span id="raid-boss" class="raid-boss"></span> <span id="raid-week" class="option-sub"></span></div>
+        <div class="hp-bar-track raid-track"><div id="raid-fill" class="hp-bar-fill raid-fill"></div></div>
+        <p id="raid-info" class="choice-hint"></p>
+      </div>
       <div class="setup-card folder-card">
         <button id="pick-folder-btn">📁 프로젝트 폴더 선택</button>
         <p id="folder-path" class="folder-path">AI가 작업할 폴더를 골라줘</p>
@@ -167,6 +173,7 @@
           <span class="fatigue" data-fatigue hidden></span>
           <span id="contract-badge" class="contract-badge" hidden></span>
           <span id="pet-badge" class="pet-badge" hidden></span>
+          <span id="equipment-badges" class="equipment-badges"></span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
           <label class="weapon-select" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
         </div>
@@ -301,6 +308,15 @@
           <div class="xp-row"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
         </div>
         <div id="summary-rewards" class="summary-rewards"></div>
+        <div id="summary-raid" class="summary-ranking summary-raid" hidden>
+          <strong>⚔️ 주간 레이드</strong>
+          <p id="raid-damage-line" class="summary-sub"></p>
+          <form id="raid-form" class="rank-form">
+            <input id="raid-name" maxlength="16" placeholder="이름 (최대 16자)" autocomplete="off" />
+            <button type="submit" id="raid-submit">레이드에 보내기</button>
+          </form>
+          <p id="raid-result" class="summary-sub"></p>
+        </div>
         <div id="summary-ranking" class="summary-ranking" hidden>
           <strong>🏆 랭킹 등록</strong>
           <p id="summary-rank-score" class="summary-sub"></p>
@@ -409,6 +425,36 @@
       </div>
     </div>
 
+    <div id="journal-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel journal-panel" role="dialog" aria-label="모험 일지">
+        <div class="settings-head">
+          <h2>📓 모험 일지 <span class="option-sub">프로젝트별로 AI가 한 일</span></h2>
+          <button type="button" id="journal-close" aria-label="닫기">✕</button>
+        </div>
+        <select id="journal-folder" aria-label="프로젝트 폴더"></select>
+        <div id="journal-days" class="journal-days"></div>
+      </div>
+    </div>
+
+    <div id="shortcuts-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel shortcuts-panel" role="dialog" aria-label="단축키">
+        <div class="settings-head">
+          <h2>⌨️ 단축키</h2>
+          <button type="button" id="shortcuts-close" aria-label="닫기">✕</button>
+        </div>
+        <table class="shortcuts-table">
+          <tr><td><kbd>Enter</kbd></td><td>공격 (입력창에서)</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>줄바꿈</td></tr>
+          <tr><td><kbd>1</kbd> ~ <kbd>9</kbd></td><td>가방의 아이템 사용 (입력창 밖에서)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>열린 창 닫기 · AI 작업 멈추기</td></tr>
+          <tr><td><kbd>Ctrl/⌘</kbd>+<kbd>K</kbd></td><td>스킬북</td></tr>
+          <tr><td><kbd>Ctrl/⌘</kbd>+<kbd>J</kbd></td><td>모험 일지</td></tr>
+          <tr><td><kbd>Ctrl/⌘</kbd>+<kbd>S</kbd></td><td>파일 저장 (파일 편집 중)</td></tr>
+          <tr><td><kbd>?</kbd></td><td>이 도움말</td></tr>
+        </table>
+      </div>
+    </div>
+
     <div id="skillbook-overlay" class="file-viewer-overlay" hidden>
       <div class="settings-panel skillbook-panel" role="dialog" aria-label="스킬북">
         <div class="settings-head">
@@ -494,6 +540,7 @@
           <button type="button" data-tab="party">🧙 AI 파티</button>
           <button type="button" data-tab="sound">🔊 사운드·알림</button>
           <button type="button" data-tab="typing">⌨️ 코딩 타자</button>
+          <button type="button" data-tab="display">👁 보기</button>
         </nav>
         <section class="settings-tab" data-tab="claude">
           <p class="option-sub">이 게임의 세션에만 적용 · 내 Claude Code 설정은 안 바뀜. 게임 중에 바꾸면 다음 공격부터.</p>
@@ -557,6 +604,16 @@
           </div>
           <label class="setting-row"><input type="checkbox" id="notify-toggle" checked /> <strong>AI 작업이 끝나면 알림</strong></label>
           <p class="option-sub">게임 창이 뒤에 있을 때 AI가 작업을 마치면 알림을 띄운다(누르면 게임으로 돌아온다). Mac은 Dock 아이콘이 튀고, Windows는 작업표시줄이 깜빡인다.</p>
+        </section>
+        <section class="settings-tab" data-tab="display" hidden>
+          <label class="setting-row"><input type="checkbox" id="a11y-large" /> <strong>큰 글씨</strong></label>
+          <p class="option-sub">화면 전체를 15% 크게 보여 준다.</p>
+          <label class="setting-row"><input type="checkbox" id="a11y-colorblind" /> <strong>색약 모드</strong></label>
+          <p class="option-sub">빨강·초록 대신 주황·파랑으로: 받은 피해와 회복, 성공과 실패, HP 바를 구분하기 쉽게.</p>
+          <label class="setting-row"><input type="checkbox" id="a11y-calm" /> <strong>연출 줄이기</strong></label>
+          <p class="option-sub">화면 흔들림, 반짝임, 섬광, 깜빡이는 애니메이션을 끈다. 피해 숫자는 남는다.</p>
+          <p class="option-sub">단축키는 <kbd>?</kbd> 키로 볼 수 있다.</p>
+          <button type="button" id="tutorial-replay">🎓 튜토리얼 다시 보기</button>
         </section>
         <section class="settings-tab" data-tab="typing" hidden>
           <p class="option-sub">AI를 기다리는 동안 나오는 코딩 타자 연습 언어. 아무것도 안 고르면 전부.</p>

@@ -139,6 +139,11 @@ test('rebirth: from level 20 the hero restarts at level 1 with a prestige star a
   assert.equal(rebirth({ ...r, xp: 1900, level: 20 })?.prestige, 2);
 });
 
+test('applyRun keeps the worn boss relics', () => {
+  const p = applyRun(base, summary({ equipment: ['boss-0', 'boss-3'] }), 'adventure');
+  assert.deepEqual(p.equipment, ['boss-0', 'boss-3']);
+});
+
 test('applyRun keeps pets for good; the first one found starts riding along', () => {
   const p = applyRun(base, summary({ newPets: ['drake'] }), 'adventure');
   assert.deepEqual(p.pets, ['drake']);

@@ -247,6 +247,13 @@ test('clearing a floor heals the player a little', async () => {
   assert.deepEqual(hpValues, [94, 100], 'counter to 94, then the floor-clear heal caps back at 100');
 });
 
+test('clearing a floor heals 25% of max HP', async () => {
+  const { deps, events } = makeFakeDeps([WEAK_PROMPT, ONE_SHOT_PROMPT, '/quit']);
+  await runDungeon({ ...deps, playerMaxHp: 400, playerHp: 100 });
+  const hp = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : -1));
+  assert.equal(hp.at(-1) - hp.at(-2), 100, '25% of 400');
+});
+
 test('every 6th floor is a chapter boss with 1.5x HP, and clearing it emits chapterCleared', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
   const summary = await runDungeon({ ...deps, startFloor: 5, getDamageMultiplier: () => 10 });
@@ -965,6 +972,28 @@ test('prestige: each rebirth gives +10% damage and +10% coins', async () => {
   const coins = await runDungeon({ ...makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps, prestige: 2 });
   const base = await runDungeon(makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps);
   assert.equal(coins.coins, Math.round(base.coins * 1.2));
+});
+
+test('equipment: a boss relic can be worn (2 slots, kept for good) instead of used up', async () => {
+  const { deps, events } = makeFakeDeps(['/equip boss-0', '/equip boss-1', '/equip boss-2', '/unequip boss-1', '/quit']);
+  const summary = await runDungeon({ ...deps, bag: { 'boss-0': 1, 'boss-1': 1, 'boss-2': 1 } });
+  assert.deepEqual(summary.equipment, ['boss-0']);
+  assert.equal(summary.bag['boss-1'], 1, 'taken off goes back to the bag');
+  assert.equal(summary.bag['boss-2'], 1, 'a third did not fit');
+  assert.ok(events.some((e) => e.type === 'equipFailed'));
+});
+
+test('equipment effects: power +10% damage, shield -10% counters, xp +10%', async () => {
+  const hit = (ev: BattleEvent[], type: 'attack' | 'monsterAttack') => ev.find((e) => e.type === type) as { damage: number } | undefined;
+  const plain = makeFakeDeps(['x', '/quit']);
+  await runDungeon(plain.deps);
+  const worn = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...worn.deps, equipment: ['boss-0', 'boss-1'] }); // power + shield
+  assert.ok(Math.abs(hit(worn.events, 'attack')!.damage - hit(plain.events, 'attack')!.damage * 1.1) <= 1);
+  assert.ok(Math.abs(hit(worn.events, 'monsterAttack')!.damage - hit(plain.events, 'monsterAttack')!.damage * 0.9) <= 1);
+  const base = await runDungeon(makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps);
+  const wise = await runDungeon({ ...makeFakeDeps([ONE_SHOT_PROMPT, '/quit']).deps, equipment: ['boss-5'] }); // xp relic
+  assert.equal(wise.xpGained, Math.round(base.xpGained * 1.1));
 });
 
 test('pets: the slime heals 5% of max HP after every turn', async () => {

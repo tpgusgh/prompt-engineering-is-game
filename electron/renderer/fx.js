@@ -1,7 +1,7 @@
 // Battle effects: floating damage numbers, sparkle bursts, hit rings and a
 // crit flash. All DOM + CSS animations (style.css "fx-"), removed when done;
 // prefers-reduced-motion keeps only the numbers.
-const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const reduced = () => document.body.classList.contains('a11y-calm') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const layer = () => {
   let el = document.getElementById('fx-layer');

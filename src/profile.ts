@@ -43,6 +43,8 @@ export interface Profile {
   activePet?: PetId;
   // 환생 stars: each one is +10% damage and coins, +2 starting stat points.
   prestige?: number;
+  // Boss relics worn (2 slots), kept between runs.
+  equipment?: string[];
 }
 
 const BASE_MAX_HP = 100;
@@ -142,6 +144,7 @@ function coerceProfile(parsed: unknown): Profile {
     maxHpPenalty: 0,
     ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
     ...(isValidCount(p?.prestige, 0) && p.prestige > 0 ? { prestige: p.prestige } : {}),
+    ...(Array.isArray(p?.equipment) && p.equipment.length ? { equipment: p.equipment.filter((x): x is string => typeof x === 'string' && /^boss-\d+$/.test(x)).slice(0, 2) } : {}),
     ...(Array.isArray(p?.pets) && p.pets.some(isPetId) ? { pets: [...new Set(p.pets.filter(isPetId))] } : {}),
     ...(isPetId(p?.activePet) && Array.isArray(p?.pets) && p.pets.includes(p.activePet) ? { activePet: p.activePet } : {}),
   };
@@ -225,6 +228,7 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   }
   updated.relics = [...(summary.relics ?? profile.relics ?? [])];
   updated.swordLevel = summary.swordLevel;
+  if (summary.equipment) updated.equipment = [...summary.equipment];
   if (summary.newPets?.length) {
     updated.pets = [...new Set([...(profile.pets ?? []), ...summary.newPets])];
     updated.activePet = profile.activePet ?? summary.newPets[0];

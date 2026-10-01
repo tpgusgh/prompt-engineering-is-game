@@ -15,6 +15,7 @@ import { MONSTER_LORE } from './monster-lore.js';
 import { MONSTER_LINES } from './monster-lines.js';
 import { fatigueOf } from './fatigue.js';
 import { fx } from './fx.js';
+import { startTour, resetTutorial } from './tutorial.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -186,6 +187,24 @@ function renderPetOptions() {
     if (pet) el.append(choiceCard('pet', id, chosenPet === id, `${PET_ICON[id] ?? '🐾'} ${pet.name}`, pet.text, () => (chosenPet = id)));
   }
 }
+// Worn boss relics (2 slots): badges next to the pet; click one to take it off.
+let equipment = [];
+const GEAR_TEXT = { power: '피해 +10%', shield: '받는 반격 -10%', heal: '매 턴 최대 HP 2% 회복', blast: '작업 타격 +15%', xp: '경험치 +10%', coins: '코인 +10%' };
+const gearText = (kind) => GEAR_TEXT[kind] ?? '';
+function renderEquipment() {
+  const box = $('equipment-badges');
+  box.textContent = '';
+  for (const id of equipment) {
+    const item = items.find((i) => i.id === id);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'gear-badge';
+    b.textContent = `👑 ${item?.name ?? id}`;
+    b.title = `${gearText(item?.effect?.kind)} · 누르면 뺀다`;
+    b.addEventListener('click', () => window.promptBattle.submitPrompt(`/unequip ${id}`));
+    box.append(b);
+  }
+}
 function renderPetBadge() {
   const el = $('pet-badge');
   const pet = petInfo(chosenPet);
@@ -233,6 +252,7 @@ async function loadSetup() {
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
   renderDailyInfo();
+  if (typeof loadRaid === 'function') loadRaid();
   chosenPet = profile.activePet ?? '';
   renderPetOptions();
   heroContract = profile.contract ?? null;
@@ -712,6 +732,15 @@ function renderBag() {
     use.title = '턴 소모 없이 사용';
     use.addEventListener('click', () => window.promptBattle.submitPrompt(`/use ${id}`));
     row.append(icon, info, use);
+    if (id.startsWith('boss-')) {
+      const wear = document.createElement('button');
+      wear.type = 'button';
+      wear.textContent = '장착';
+      wear.disabled = !inputEnabled;
+      wear.title = `장비 칸(2)에 끼운다 — 영구: ${gearText(item?.effect?.kind)}`;
+      wear.addEventListener('click', () => window.promptBattle.submitPrompt(`/equip ${id}`));
+      row.append(wear);
+    }
     bagEl.append(row);
   }
 }
@@ -1430,6 +1459,16 @@ function renderBattleEvent(event) {
       appendLog(`🔥 ${currentMonsterName}이(가) 각성했다! 2페이즈 「${event.name ?? '격노'}」 — ${event.text ?? '반격이 30% 더 강해진다'}!`, 'crit');
       shakeScreen();
       fx.burst('awaken');
+      break;
+    case 'equipmentChanged': {
+      equipment = event.equipment;
+      renderEquipment();
+      const name = itemName(event.itemId);
+      appendLog(event.on ? `⚙️ ${name}을(를) 장착했다 — ${gearText(items.find((i) => i.id === event.itemId)?.effect?.kind)}` : `${name}을(를) 빼서 가방에 넣었다.`, event.on ? 'victory' : 'story-line');
+      break;
+    }
+    case 'equipFailed':
+      appendLog(`장착할 수 없다: ${event.reason}`, 'error');
       break;
     case 'bossDrop':
       appendLog(`👑 보스가 고유 유물을 떨어뜨렸다: 「${event.name}」 — ${event.description} (가방에 넣었다)`, 'victory');
@@ -2237,10 +2276,12 @@ async function startGame({ loadSlot, slot, daily = false }) {
     const heroClassId = chosenClass;
     resetDeathCard();
     renderPetBadge();
+    equipment = [...(profile.equipment ?? [])];
+    renderEquipment();
     $('save-btn').hidden = daily;
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId, pet: chosenPet, daily });
     setTimeout(refreshTree, 300);
-    const { summary, profile: updated, progress, ranking } = await runPromise;
+    const { summary, profile: updated, progress, ranking, raid } = await runPromise;
     if (summary.defeated) await deathAck;
     $('death-card').hidden = true;
     profile = updated;
@@ -2248,6 +2289,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
     summaryScreen.hidden = false;
     renderSummary(summary, updated, progress, { difficulty, startCoins: from.coins });
     renderRankingCard(ranking);
+    renderRaidCard(raid);
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
     // call). Without this, the player would be stuck on the dungeon screen.
@@ -2314,7 +2356,7 @@ function renderRunRewards(progress) {
   if (progress.unlocked.length || progress.dailyCompleted) sfx('fanfare');
 }
 
-const GAME_COMMANDS = ['/bet', '/buy', '/drink', '/enhance', '/flee', '/leave', '/new', '/quit', '/renounce', '/save', '/sell', '/session', '/stat', '/use'];
+const GAME_COMMANDS = ['/bet', '/buy', '/drink', '/enhance', '/equip', '/flee', '/leave', '/new', '/quit', '/renounce', '/save', '/sell', '/session', '/stat', '/unequip', '/use'];
 const isGameCommand = (text) => GAME_COMMANDS.some((c) => text === c || text.startsWith(`${c} `));
 
 attackForm.addEventListener('submit', (e) => {
@@ -3639,3 +3681,201 @@ $('skill-form').addEventListener('submit', async (e) => {
     if (dungeonScreen.hidden && summaryScreen.hidden) location.reload();
   });
 }
+
+// ---------------------------------------------------------------------------
+// Keyboard shortcuts (the ? key lists them).
+{
+  const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  const OVERLAYS = ['shortcuts-overlay', 'skillbook-overlay', 'journal-overlay', 'ranking-overlay', 'records-overlay', 'bestiary-overlay'];
+  const openOverlay = () => OVERLAYS.map((id) => $(id)).find((el) => el && !el.hidden);
+  $('shortcuts-close').addEventListener('click', () => ($('shortcuts-overlay').hidden = true));
+  $('shortcuts-overlay').addEventListener('click', (e) => {
+    if (e.target === $('shortcuts-overlay')) $('shortcuts-overlay').hidden = true;
+  });
+  document.addEventListener('keydown', (e) => {
+    const mod = e.metaKey || e.ctrlKey;
+    const inBattle = !dungeonScreen.hidden;
+    if (e.key === 'Escape') {
+      const open = openOverlay();
+      if (open) {
+        open.hidden = true;
+        return;
+      }
+      const stop = $('stop-turn');
+      if (inBattle && stop.offsetParent && !stop.disabled) stop.click();
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'k' && inBattle) {
+      e.preventDefault();
+      openSkillbook();
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'j') {
+      e.preventDefault();
+      openJournal();
+      return;
+    }
+    if (typing(document.activeElement) || mod || e.altKey) return;
+    if (e.key === '?') {
+      $('shortcuts-overlay').hidden = !$('shortcuts-overlay').hidden;
+      return;
+    }
+    // 1-9: the bag's items in the order the bag shows them.
+    if (inBattle && inputEnabled && /^[1-9]$/.test(e.key)) {
+      const rows = [...document.querySelectorAll('#bag .bag-item button')];
+      rows[Number(e.key) - 1]?.click();
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility (⚙️ → 👁 보기): big text, colour-blind palette, calm mode.
+{
+  const KEY = 'pb-a11y';
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') ?? {};
+  } catch {}
+  for (const opt of ['large', 'colorblind', 'calm']) {
+    const box = $(`a11y-${opt}`);
+    box.checked = Boolean(saved[opt]);
+    document.body.classList.toggle(`a11y-${opt}`, box.checked);
+    box.addEventListener('change', () => {
+      saved[opt] = box.checked;
+      document.body.classList.toggle(`a11y-${opt}`, box.checked);
+      try {
+        localStorage.setItem(KEY, JSON.stringify(saved));
+      } catch {}
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 모험 일지: per project folder, per day — turns, floors, tests, tokens,
+// files touched and the prompts sent (newest day first).
+let journalData = {};
+async function openJournal() {
+  $('journal-overlay').hidden = false;
+  journalData = await window.promptBattle.journal();
+  const select = $('journal-folder');
+  select.textContent = '';
+  const folders = Object.keys(journalData).reverse(); // most recent first
+  for (const f of folders) select.append(new Option(f, f));
+  const current = chosenFolder && folders.includes(chosenFolder) ? chosenFolder : folders[0];
+  if (current) select.value = current;
+  renderJournal();
+}
+function renderJournal() {
+  const box = $('journal-days');
+  box.textContent = '';
+  const days = journalData[$('journal-folder').value];
+  if (!days) {
+    box.textContent = '아직 기록이 없다. AI와 함께 싸우면 이곳에 하루하루 쌓인다.';
+    return;
+  }
+  for (const [date, d] of Object.entries(days).sort(([a], [b]) => b.localeCompare(a))) {
+    const card = document.createElement('details');
+    card.className = 'journal-day';
+    const head = document.createElement('summary');
+    const when = document.createElement('strong');
+    when.textContent = date;
+    const stats = document.createElement('span');
+    stats.className = 'journal-stats';
+    stats.textContent = `턴 ${d.turns} · 처치 ${d.floorsCleared} · 테스트 통과 ${d.testsPassed} · 파일 ${d.files.length} · 토큰 ${fmtNum(d.tokens)}`;
+    head.append(when, stats);
+    card.append(head);
+    const section = (title, list) => {
+      if (!list.length) return;
+      const h = document.createElement('h4');
+      h.textContent = title;
+      const ul = document.createElement('ul');
+      ul.setAttribute('data-no-i18n', ''); // file names and my own prompts stay as written
+      for (const item of list) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        ul.append(li);
+      }
+      card.append(h, ul);
+    };
+    section('고친 파일', d.files);
+    section('보낸 명령', d.prompts);
+    box.append(card);
+  }
+  box.querySelector('.journal-day')?.setAttribute('open', '');
+}
+$('journal-folder').addEventListener('change', renderJournal);
+$('journal-btn').addEventListener('click', openJournal);
+$('journal-close').addEventListener('click', () => ($('journal-overlay').hidden = true));
+$('journal-overlay').addEventListener('click', (e) => {
+  if (e.target === $('journal-overlay')) $('journal-overlay').hidden = true;
+});
+
+// ---------------------------------------------------------------------------
+// First-time tours: the start screen once its options are drawn, the first battle once.
+setTimeout(() => !setupScreen.hidden && startTour('setup'), 1200);
+// The battle tour waits for the prologue card to close.
+const battleTourWhenReady = (tries = 0) => {
+  if (dungeonScreen.hidden || tries > 60) return;
+  if ($('story-card').hidden && $('death-card').hidden) startTour('battle');
+  else setTimeout(() => battleTourWhenReady(tries + 1), 1000);
+};
+new MutationObserver(() => {
+  if (!dungeonScreen.hidden) setTimeout(battleTourWhenReady, 1500);
+}).observe(dungeonScreen, { attributes: true, attributeFilter: ['hidden'] });
+$('tutorial-replay').addEventListener('click', () => {
+  resetTutorial();
+  $('settings-overlay').hidden = true;
+  startTour(dungeonScreen.hidden ? 'setup' : 'battle', { force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Weekly raid: one boss a week, everyone's damage together.
+async function loadRaid() {
+  const card = $('raid-card');
+  const r = await window.promptBattle.raid();
+  if (!r || r.error || !r.boss) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $('raid-boss').textContent = r.boss.name;
+  $('raid-week').textContent = r.week;
+  $('raid-fill').style.width = `${Math.round((r.boss.hp / r.boss.maxHp) * 100)}%`;
+  const top = (r.top ?? []).slice(0, 3).map((e, i) => `${i + 1}. ${e.name} ${fmtNum(e.damage)}`).join(' · ');
+  $('raid-info').textContent = r.boss.hp > 0
+    ? `HP ${fmtNum(r.boss.hp)} / ${fmtNum(r.boss.maxHp)} — 판이 끝나면 그 판의 피해를 보낼 수 있다.${top ? ` 기여 ${top}` : ''}`
+    : `이번 주 보스를 쓰러뜨렸다! 기여 ${top}`;
+}
+function renderRaidCard(raid) {
+  const card = $('summary-raid');
+  card.hidden = !raid;
+  if (!raid) return;
+  $('raid-damage-line').textContent = `이번 판에 준 피해 ${fmtNum(raid.damage)}`;
+  $('raid-form').hidden = !raid.submittable;
+  $('raid-result').textContent = raid.submittable ? '' : '이 빌드는 레이드에 보낼 수 없다';
+  $('raid-submit').disabled = false;
+  try {
+    $('raid-name').value = localStorage.getItem(RANK_NAME_KEY) ?? '';
+  } catch {}
+}
+$('raid-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('raid-name').value.trim();
+  if (!name) return;
+  try {
+    localStorage.setItem(RANK_NAME_KEY, name);
+  } catch {}
+  $('raid-submit').disabled = true;
+  $('raid-result').textContent = '보내는 중...';
+  const res = await window.promptBattle.raidSubmit(name);
+  if (res.error) {
+    $('raid-result').textContent = res.error;
+    $('raid-submit').disabled = false;
+    return;
+  }
+  $('raid-form').hidden = true;
+  const me = (res.top ?? []).findIndex((x) => x.name === name);
+  $('raid-result').textContent = `⚔️ 보냈다! 보스 HP ${fmtNum(res.boss?.hp)} / ${fmtNum(res.boss?.maxHp)}${me >= 0 ? ` · 기여 ${me + 1}위` : ''}`;
+  sfx('fanfare');
+});
+loadRaid();
