@@ -66,6 +66,13 @@ jobs:
           v=$(node -p "require('./node_modules/@anthropic-ai/claude-agent-sdk/package.json').version")
           for d in node_modules/@anthropic-ai/claude-agent-sdk-*; do [ "$d" = "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || rm -rf "$d"; done
           [ -d "node_modules/@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}" ] || npm install --no-save --force "@anthropic-ai/claude-agent-sdk-${{ matrix.sdk }}@$v"
+      # Same for Codex's native binary (its platform packages are npm aliases).
+      - name: Native codex binary for ${{ matrix.sdk }}
+        shell: bash
+        run: |
+          v=$(node -p "require('./node_modules/@openai/codex/package.json').version")
+          for d in node_modules/@openai/codex-*; do case "$d" in *codex-sdk) ;; "node_modules/@openai/codex-${{ matrix.sdk }}") ;; *) rm -rf "$d" ;; esac; done
+          [ -d "node_modules/@openai/codex-${{ matrix.sdk }}" ] || npm install --no-save --force "@openai/codex-${{ matrix.sdk }}@npm:@openai/codex@$v-${{ matrix.sdk }}"
       # The ranking key exists only in release builds (never in the repo).
       - run: node scripts/inject-ranking-config.mjs
         env:

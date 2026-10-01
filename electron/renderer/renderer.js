@@ -106,7 +106,22 @@ const touchedFiles = new Set();
 const heroClass = () => heroClasses.find((c) => c.id === chosenClass) ?? heroClasses[0];
 // Old saves hold versioned ids ("claude-opus-5-5"): match them to their family.
 const familyOf = (model) => ['haiku', 'sonnet', 'opus', 'fable'].find((f) => model === f || model?.includes(`-${f}-`)) ?? model;
-const classWeapon = (model) => heroClass()?.weapons[familyOf(model)] ?? { name: '무기', flavor: '' };
+// Claude and Codex: four matching tiers; a Codex weapon is named like its Claude twin.
+const CODEX_TIER = { haiku: 'codex:luna', sonnet: 'codex:terra', opus: 'codex:sol', fable: 'codex:astra' };
+const providerOf = (model) => (model?.startsWith('codex:') ? 'codex' : 'claude');
+const tierTwin = (model) => Object.keys(CODEX_TIER).find((k) => CODEX_TIER[k] === model);
+const sameTierOn = (model, provider) => {
+  const f = familyOf(model);
+  if (providerOf(f) === provider) return f;
+  return provider === 'codex' ? CODEX_TIER[f] ?? 'codex:terra' : tierTwin(f) ?? 'sonnet';
+};
+const classWeapon = (model) => {
+  if (providerOf(model) === 'codex') {
+    const own = weapons.find((w) => w.model === model);
+    return { name: heroClass()?.weapons[tierTwin(model)]?.name ?? '무기', flavor: own?.flavor ?? 'Codex' };
+  }
+  return heroClass()?.weapons[familyOf(model)] ?? { name: '무기', flavor: '' };
+};
 const enhancedName = (model, level) =>
   `${heroClass()?.modifiers[Math.max(0, Math.min(level, swordMax))] ?? ''} ${classWeapon(model).name}`.trim();
 
@@ -139,9 +154,11 @@ function choiceCard(name, value, checked, title, sub, onChange) {
 function renderWeaponOptions() {
   weaponOptionsEl.textContent = '';
   weaponSelect.textContent = '';
-  for (const w of weapons) {
+  const provider = providerOf(chosenWeapon);
+  for (const w of weapons.filter((x) => (x.provider ?? 'claude') === provider)) {
     const card = choiceCard('weapon', w.model, w.model === chosenWeapon, classWeapon(w.model).name, `${classWeapon(w.model).flavor} · 피해 x${w.multiplier} · 토큰 ${weaponCost(w)}`, () => {
       chosenWeapon = w.model;
+      renderBattleDetailsSummary();
     });
     card.title = classWeapon(w.model).flavor;
     weaponOptionsEl.append(card);
@@ -152,6 +169,87 @@ function renderWeaponOptions() {
     weaponSelect.append(option);
   }
   weaponSelect.value = chosenWeapon;
+  renderAiSwitch();
+  renderBattleDetailsSummary();
+}
+
+// ② 누구와 싸울까: Claude or Codex (Codex needs a ChatGPT sign-in once).
+let codexState = null;
+async function refreshCodexStatus() {
+  codexState = await window.promptBattle.codexStatus().catch(() => ({ loggedIn: false, detail: '' }));
+  renderAiOptions();
+}
+function renderAiOptions() {
+  const box = $('ai-options');
+  box.textContent = '';
+  const tiles = [
+    { id: 'claude', icon: '🤖', name: 'Claude', by: 'Anthropic · Claude Code', note: '파티 모드 · 스킬북 · MCP 지원' },
+    { id: 'codex', icon: '⚡', name: 'Codex', by: 'OpenAI · Codex', note: codexState?.loggedIn ? '로그인됨' : codexState ? 'ChatGPT 로그인이 필요하다' : '확인 중...' },
+  ];
+  for (const t of tiles) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = `ai-tile${providerOf(chosenWeapon) === t.id ? ' active' : ''}`;
+    tile.dataset.provider = t.id;
+    const head = document.createElement('strong');
+    head.textContent = `${t.icon} ${t.name}`;
+    const by = document.createElement('small');
+    by.textContent = t.by;
+    const note = document.createElement('span');
+    note.className = 'ai-note';
+    note.textContent = t.note;
+    tile.append(head, by, note);
+    tile.addEventListener('click', () => chooseProvider(t.id));
+    box.append(tile);
+    if (t.id === 'codex' && codexState && !codexState.loggedIn) {
+      const login = document.createElement('button');
+      login.type = 'button';
+      login.className = 'ai-login';
+      login.textContent = 'ChatGPT로 로그인';
+      login.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        login.disabled = true;
+        login.textContent = '브라우저에서 로그인해 주세요...';
+        await window.promptBattle.codexLogin();
+        await refreshCodexStatus();
+      });
+      tile.append(login);
+    }
+  }
+}
+function chooseProvider(provider) {
+  chosenWeapon = sameTierOn(chosenWeapon, provider);
+  renderWeaponOptions();
+  renderAiOptions();
+}
+function renderBattleDetailsSummary() {
+  const el = $('battle-details-summary');
+  if (!el) return;
+  const diff = document.querySelector('input[name="difficulty"]:checked')?.value ?? 'normal';
+  el.textContent = `${classWeapon(chosenWeapon).name} · ${skillName()} · ${DIFFICULTY_LABEL[diff] ?? ''}`;
+}
+document.querySelectorAll('input[name="difficulty"]').forEach((r) => r.addEventListener('change', () => renderBattleDetailsSummary()));
+// In battle: the same switch next to the weapon; the next attack goes to the other AI.
+function renderAiSwitch() {
+  for (const b of document.querySelectorAll('.ai-switch button')) b.classList.toggle('active', b.dataset.provider === providerOf(weaponSelect.value || chosenWeapon));
+}
+for (const b of document.querySelectorAll('.ai-switch button')) {
+  b.addEventListener('click', async () => {
+    const provider = b.dataset.provider;
+    if (provider === providerOf(weaponSelect.value)) return;
+    if (provider === 'codex' && !codexState?.loggedIn) {
+      await refreshCodexStatus();
+      if (!codexState?.loggedIn) {
+        appendLog('⚡ Codex를 쓰려면 먼저 시작 화면(② 누구와 싸울까)에서 ChatGPT로 로그인해야 한다.', 'error');
+        return;
+      }
+    }
+    chosenWeapon = sameTierOn(weaponSelect.value, provider);
+    renderWeaponOptions();
+    const w = await window.promptBattle.setModel(chosenWeapon);
+    appendLog(`${provider === 'codex' ? '⚡ Codex' : '🤖 Claude'}로 바꿨다 — 다음 공격부터. 지금까지의 대화는 이어서 넘겨준다. (무기: ${weaponName()} x${w.multiplier})`, 'story-line');
+    renderSwordLevel();
+  });
 }
 
 let prestigeLevel = 20;
@@ -248,11 +346,11 @@ async function loadSetup() {
   chestGrades = info.chestGrades ?? [];
   pacts = info.pacts ?? pacts;
   petDefs = info.pets ?? [];
+  refreshCodexStatus();
   prestigeLevel = info.prestigeLevel ?? prestigeLevel;
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
   renderDailyInfo();
-  if (typeof loadRaid === 'function') loadRaid();
   chosenPet = profile.activePet ?? '';
   renderPetOptions();
   heroContract = profile.contract ?? null;
@@ -1241,6 +1339,7 @@ document.addEventListener('keydown', (e) => {
 // Weapon switch mid-run: applies to the very next attack.
 weaponSelect.addEventListener('change', async () => {
   const w = await window.promptBattle.setModel(weaponSelect.value);
+  chosenWeapon = w.model;
   appendLog(`무기를 바꿨다: ${weaponName()} — ${classWeapon(w.model).flavor} (x${w.multiplier})`, 'story-line');
   renderSwordLevel();
 });
@@ -2281,7 +2380,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
     $('save-btn').hidden = daily;
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId, pet: chosenPet, daily });
     setTimeout(refreshTree, 300);
-    const { summary, profile: updated, progress, ranking, raid } = await runPromise;
+    const { summary, profile: updated, progress, ranking } = await runPromise;
     if (summary.defeated) await deathAck;
     $('death-card').hidden = true;
     profile = updated;
@@ -2289,7 +2388,6 @@ async function startGame({ loadSlot, slot, daily = false }) {
     summaryScreen.hidden = false;
     renderSummary(summary, updated, progress, { difficulty, startCoins: from.coins });
     renderRankingCard(ranking);
-    renderRaidCard(raid);
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
     // call). Without this, the player would be stuck on the dungeon screen.
@@ -2802,7 +2900,7 @@ async function renderAuth() {
   for (const r of document.querySelectorAll('input[name="auth-mode"]')) r.checked = r.value === claudeSettings.auth;
   $('api-key-row').hidden = claudeSettings.auth !== 'api';
   const info = await window.promptBattle.apiKeyInfo();
-  $('api-key-info').textContent = info.hasKey ? `저장된 키: ••••${info.last4} (키체인 암호화)` : info.encryption ? '저장된 키 없음' : '⚠️ 이 컴퓨터에서 키체인 암호화를 쓸 수 없음';
+  $('api-key-info').textContent = info.hasKey ? `저장된 키: ••••${info.last4} (키체인 암호화)` : info.unreadable ? '저장된 키를 키체인에서 찾지 못했다 — 다시 입력해 줘' : '저장된 키 없음';
   if (claudeSettings.auth === 'api' && !info.hasKey) $('auth-status').textContent = 'API 키를 입력해줘';
 }
 for (const radio of document.querySelectorAll('input[name="auth-mode"]')) {
@@ -3828,54 +3926,3 @@ $('tutorial-replay').addEventListener('click', () => {
   startTour(dungeonScreen.hidden ? 'setup' : 'battle', { force: true });
 });
 
-// ---------------------------------------------------------------------------
-// Weekly raid: one boss a week, everyone's damage together.
-async function loadRaid() {
-  const card = $('raid-card');
-  const r = await window.promptBattle.raid();
-  if (!r || r.error || !r.boss) {
-    card.hidden = true;
-    return;
-  }
-  card.hidden = false;
-  $('raid-boss').textContent = r.boss.name;
-  $('raid-week').textContent = r.week;
-  $('raid-fill').style.width = `${Math.round((r.boss.hp / r.boss.maxHp) * 100)}%`;
-  const top = (r.top ?? []).slice(0, 3).map((e, i) => `${i + 1}. ${e.name} ${fmtNum(e.damage)}`).join(' · ');
-  $('raid-info').textContent = r.boss.hp > 0
-    ? `HP ${fmtNum(r.boss.hp)} / ${fmtNum(r.boss.maxHp)} — 판이 끝나면 그 판의 피해를 보낼 수 있다.${top ? ` 기여 ${top}` : ''}`
-    : `이번 주 보스를 쓰러뜨렸다! 기여 ${top}`;
-}
-function renderRaidCard(raid) {
-  const card = $('summary-raid');
-  card.hidden = !raid;
-  if (!raid) return;
-  $('raid-damage-line').textContent = `이번 판에 준 피해 ${fmtNum(raid.damage)}`;
-  $('raid-form').hidden = !raid.submittable;
-  $('raid-result').textContent = raid.submittable ? '' : '이 빌드는 레이드에 보낼 수 없다';
-  $('raid-submit').disabled = false;
-  try {
-    $('raid-name').value = localStorage.getItem(RANK_NAME_KEY) ?? '';
-  } catch {}
-}
-$('raid-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('raid-name').value.trim();
-  if (!name) return;
-  try {
-    localStorage.setItem(RANK_NAME_KEY, name);
-  } catch {}
-  $('raid-submit').disabled = true;
-  $('raid-result').textContent = '보내는 중...';
-  const res = await window.promptBattle.raidSubmit(name);
-  if (res.error) {
-    $('raid-result').textContent = res.error;
-    $('raid-submit').disabled = false;
-    return;
-  }
-  $('raid-form').hidden = true;
-  const me = (res.top ?? []).findIndex((x) => x.name === name);
-  $('raid-result').textContent = `⚔️ 보냈다! 보스 HP ${fmtNum(res.boss?.hp)} / ${fmtNum(res.boss?.maxHp)}${me >= 0 ? ` · 기여 ${me + 1}위` : ''}`;
-  sfx('fanfare');
-});
-loadRaid();

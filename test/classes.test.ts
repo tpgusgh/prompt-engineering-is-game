@@ -7,7 +7,8 @@ import { SWORD_MAX_LEVEL } from '../src/forge.ts';
 test('three classes, each naming every weapon (model) and every enhance level', () => {
   assert.deepEqual(HERO_CLASSES.map((c) => c.id), ['swordsman', 'wizard', 'archer']);
   for (const c of HERO_CLASSES) {
-    for (const w of WEAPONS) assert.ok(c.weapons[w.model]?.name, `${c.id} names ${w.model}`);
+    for (const w of WEAPONS) assert.ok(weaponDisplayName(c.id, w.model, 0).length > 4, `${c.id} names ${w.model}`);
+    for (const w of WEAPONS.filter((x) => x.provider === 'claude')) assert.ok(c.weapons[w.model]?.name, `${c.id} names ${w.model}`);
     assert.equal(c.modifiers.length, SWORD_MAX_LEVEL + 1, `${c.id} has a prefix for +0..+${SWORD_MAX_LEVEL}`);
   }
 });

@@ -1,4 +1,4 @@
-import { modelFamily, WEAPONS, DEFAULT_WEAPON_ID } from './weapons.ts';
+import { nameFamily, WEAPONS, DEFAULT_WEAPON_ID } from './weapons.ts';
 import { SWORD_MAX_LEVEL } from './forge.ts';
 import type { EffortLevel } from './claude-settings.ts';
 
@@ -89,12 +89,12 @@ export function getHeroClass(id: string | undefined): HeroClass {
 // e.g. wizard + Sonnet at +1 → "그냥 마법지팡이".
 export function weaponDisplayName(classId: string | undefined, model: string | undefined, level: number): string {
   const hero = getHeroClass(classId);
-  const weapon = hero.weapons[modelFamily(model) ?? ''] ?? hero.weapons[DEFAULT_WEAPON_ID];
+  const weapon = hero.weapons[nameFamily(model) ?? ''] ?? hero.weapons[DEFAULT_WEAPON_ID];
   const prefix = hero.modifiers[Math.max(0, Math.min(SWORD_MAX_LEVEL, level))];
   return `${prefix} ${weapon.name}`;
 }
 
 // Keep the class tables and the weapon list in step.
 for (const c of HERO_CLASSES) {
-  for (const w of WEAPONS) if (!c.weapons[w.model]) throw new Error(`${c.id} is missing a name for ${w.model}`);
+  for (const w of WEAPONS) if (w.provider === 'claude' && !c.weapons[w.model]) throw new Error(`${c.id} is missing a name for ${w.model}`);
 }

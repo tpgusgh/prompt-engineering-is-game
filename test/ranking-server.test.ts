@@ -133,28 +133,6 @@ test('boards: a run goes on all-time and this week; a daily run also on that day
   assert.equal((await get({ board: 'nope' })).status, 400);
 });
 
-test('weekly raid: signed runs add their damage once each; the boss loses HP; GET shows the top', async () => {
-  const run = fakeRedis();
-  const t0 = Date.UTC(2026, 9, 1, 3);
-  const now = t0 + 10 * 60_000;
-  const hit = async (name: string, damage: number, ip: string, token?: string) => {
-    const runToken = token ?? (await startRun(run, t0));
-    const body = { ts: now, runToken, name, damage };
-    return { res: await handle({ method: 'POST', query: { action: 'raid' }, ip, ...signed(body) }, { run, env, now }), runToken };
-  };
-  const a = await hit('미르', 12_000, '1.1.1.1');
-  assert.equal(a.res.status, 200);
-  assert.equal((await hit('미르', 12_000, '1.1.1.2', a.runToken)).res.status, 409, 'one contribution per run');
-  assert.equal((await hit('용사', 3_000, '1.1.1.3')).res.status, 200);
-  assert.equal((await hit('치터', 10_000_000, '1.1.1.4')).res.status, 400, 'too much for 10 minutes');
-  assert.equal((await handle({ method: 'POST', query: { action: 'raid' }, ip: '9', body: { ts: now, runToken: 'x', name: 'n', damage: 5 }, headers: {} }, { run, env, now })).status, 401);
-  const raid = (await handle({ method: 'GET', query: { board: 'raid' } }, { run, env, now })).body;
-  assert.equal(raid.week, '2026-W40');
-  assert.ok(raid.boss.name);
-  assert.equal(raid.boss.hp, raid.boss.maxHp - 15_000);
-  assert.deepEqual(raid.top.map((e: { name: string; damage: number }) => [e.name, e.damage]), [['미르', 12_000], ['용사', 3_000]]);
-});
-
 test('only the top 100 are kept', async () => {
   const run = fakeRedis();
   const t0 = 1_800_000_000_000;

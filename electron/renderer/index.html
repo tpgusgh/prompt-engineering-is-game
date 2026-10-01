@@ -27,22 +27,25 @@
         </div>
       </header>
 
-      <div id="raid-card" class="setup-card raid-card" hidden>
-        <div class="raid-head"><strong>⚔️ 주간 레이드</strong> <span id="raid-boss" class="raid-boss"></span> <span id="raid-week" class="option-sub"></span></div>
-        <div class="hp-bar-track raid-track"><div id="raid-fill" class="hp-bar-fill raid-fill"></div></div>
-        <p id="raid-info" class="choice-hint"></p>
-      </div>
-      <div class="setup-card folder-card">
-        <button id="pick-folder-btn">📁 프로젝트 폴더 선택</button>
-        <p id="folder-path" class="folder-path">AI가 작업할 폴더를 골라줘</p>
+      <div class="setup-card folder-card step-card">
+        <h2 class="step-title"><span class="step-num">1</span> 어디서 일할까? <span class="step-hint">AI가 읽고 고칠 프로젝트 폴더</span></h2>
+        <div class="folder-row">
+          <button id="pick-folder-btn">📁 프로젝트 폴더 선택</button>
+          <p id="folder-path" class="folder-path">AI가 작업할 폴더를 골라줘</p>
+        </div>
         <label id="session-picker" class="continue-label" hidden>
           Claude 세션 <select id="session-select"></select>
           <span id="session-hint" class="option-sub"></span>
         </label>
       </div>
 
-      <div class="setup-card">
-        <h2 class="card-title">⚔️ 새 모험</h2>
+      <div class="setup-card step-card">
+        <h2 class="step-title"><span class="step-num">2</span> 누구와 싸울까? <span class="step-hint">게임 중에도 바꿀 수 있고, 대화는 이어진다</span></h2>
+        <div id="ai-options" class="ai-options"></div>
+      </div>
+
+      <div class="setup-card step-card">
+        <h2 class="step-title"><span class="step-num">3</span> 어떤 모험? <span class="step-hint">테마 · 직업 · 동료</span></h2>
         <div class="choice-row">
           <span class="choice-label">테마</span>
           <div>
@@ -61,31 +64,34 @@
             <p id="pet-hint" class="choice-hint"></p>
           </div>
         </div>
-        <div class="choice-row">
-          <span class="choice-label">무기</span>
-          <div>
-            <div id="weapon-options" class="choice-grid"></div>
-            <p class="choice-hint">토큰 ●가 많을수록 세게 때리지만 Claude 사용량 한도가 빨리 줄어든다.</p>
-          </div>
-        </div>
-        <div class="choice-row">
-          <span class="choice-label">스킬</span>
-          <div>
-            <div id="hero-skill-options" class="choice-grid hero-skill-grid"></div>
-            <p class="choice-hint">스킬 = Claude가 얼마나 깊게 생각하는지(effort). 상위 스킬일수록 느리지만 세게 때리고 토큰을 더 쓴다. 전투 중에도 무기 옆에서 바꿀 수 있다.</p>
-          </div>
-        </div>
-        <div class="choice-row">
-          <span class="choice-label">난이도</span>
-          <div>
-            <div class="choice-grid difficulty-grid">
-              <label class="choice"><input type="radio" name="difficulty" value="easy" /><strong>쉬움</strong></label>
-              <label class="choice"><input type="radio" name="difficulty" value="normal" checked /><strong>보통</strong></label>
-              <label class="choice"><input type="radio" name="difficulty" value="hard" /><strong>어려움</strong></label>
+        <details class="battle-details">
+          <summary>⚙️ 전투 세부 설정 <span id="battle-details-summary" class="step-hint"></span></summary>
+          <div class="choice-row">
+            <span class="choice-label">무기</span>
+            <div>
+              <div id="weapon-options" class="choice-grid"></div>
+              <p class="choice-hint">무기 = AI 모델. 토큰 ●가 많을수록 세게 때리지만 사용량 한도가 빨리 줄어든다.</p>
             </div>
-            <p id="difficulty-info" class="choice-hint"></p>
           </div>
-        </div>
+          <div class="choice-row">
+            <span class="choice-label">스킬</span>
+            <div>
+              <div id="hero-skill-options" class="choice-grid hero-skill-grid"></div>
+              <p class="choice-hint">스킬 = AI가 얼마나 깊게 생각하는지(effort). 상위 스킬일수록 느리지만 세게 때리고 토큰을 더 쓴다. 전투 중에도 무기 옆에서 바꿀 수 있다.</p>
+            </div>
+          </div>
+          <div class="choice-row">
+            <span class="choice-label">난이도</span>
+            <div>
+              <div class="choice-grid difficulty-grid">
+                <label class="choice"><input type="radio" name="difficulty" value="easy" /><strong>쉬움</strong></label>
+                <label class="choice"><input type="radio" name="difficulty" value="normal" checked /><strong>보통</strong></label>
+                <label class="choice"><input type="radio" name="difficulty" value="hard" /><strong>어려움</strong></label>
+              </div>
+              <p id="difficulty-info" class="choice-hint"></p>
+            </div>
+          </div>
+        </details>
         <button id="start-btn" class="start-btn" disabled>▶ 던전 입장</button>
         <div class="daily-run">
           <button type="button" id="daily-btn" class="daily-btn">📅 오늘의 도전</button>
@@ -174,6 +180,10 @@
           <span id="contract-badge" class="contract-badge" hidden></span>
           <span id="pet-badge" class="pet-badge" hidden></span>
           <span id="equipment-badges" class="equipment-badges"></span>
+          <span class="ai-switch" role="group" aria-label="AI">
+            <button type="button" data-provider="claude">🤖 Claude</button>
+            <button type="button" data-provider="codex">⚡ Codex</button>
+          </span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
           <label class="weapon-select" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
         </div>
@@ -308,15 +318,6 @@
           <div class="xp-row"><span class="xp-level" data-xp-level></span><div class="hp-bar-track xp"><div class="xp-fill" data-xp-fill></div></div><span class="xp-label" data-xp-label></span></div>
         </div>
         <div id="summary-rewards" class="summary-rewards"></div>
-        <div id="summary-raid" class="summary-ranking summary-raid" hidden>
-          <strong>⚔️ 주간 레이드</strong>
-          <p id="raid-damage-line" class="summary-sub"></p>
-          <form id="raid-form" class="rank-form">
-            <input id="raid-name" maxlength="16" placeholder="이름 (최대 16자)" autocomplete="off" />
-            <button type="submit" id="raid-submit">레이드에 보내기</button>
-          </form>
-          <p id="raid-result" class="summary-sub"></p>
-        </div>
         <div id="summary-ranking" class="summary-ranking" hidden>
           <strong>🏆 랭킹 등록</strong>
           <p id="summary-rank-score" class="summary-sub"></p>

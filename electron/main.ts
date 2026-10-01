@@ -10,7 +10,7 @@ import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } 
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
 import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachments.ts';
-import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, submitRaid, fetchRaid, scoreFor, type RankedRun } from '../src/ranking.ts';
+import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, parseMcpEntry, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
@@ -26,7 +26,8 @@ import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, XP_PE
 import { ACHIEVEMENTS, DAILY_QUESTS, currentDaily, localDate } from '../src/progress.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
-import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon } from '../src/weapons.ts';
+import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon, providerOf, type Provider } from '../src/weapons.ts';
+import { runCodexTurn, codexModels, codexLoginStatus, codexLogin } from '../src/codex.ts';
 import { ITEMS, BOSS_ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
@@ -49,6 +50,17 @@ if (app.isPackaged) {
     `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`,
     process.platform === 'win32' ? 'claude.exe' : 'claude',
   );
+}
+
+// Codex's native binary, likewise, sits in its platform package outside the asar.
+if (app.isPackaged) {
+  const triple = { 'darwin-arm64': 'aarch64-apple-darwin', 'darwin-x64': 'x86_64-apple-darwin', 'linux-x64': 'x86_64-unknown-linux-musl', 'linux-arm64': 'aarch64-unknown-linux-musl', 'win32-x64': 'x86_64-pc-windows-msvc' }[`${process.platform}-${process.arch}`];
+  if (triple) {
+    process.env.PROMPTBATTLE_CODEX_EXECUTABLE = path.join(
+      process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@openai', `codex-${process.platform}-${process.arch}`,
+      'vendor', triple, 'bin', process.platform === 'win32' ? 'codex.exe' : 'codex',
+    );
+  }
 }
 
 // The released app has no DevTools and no remote debugging, so the page
@@ -218,37 +230,6 @@ function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
 
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
-// Weekly raid: the finished run's damage, waiting to be sent (once).
-let pendingRaid: { runToken: string; damage: number } | null = null;
-ipcMain.handle('raid-get', async () => {
-  if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
-  try {
-    return await fetchRaid(rankingConfig.url);
-  } catch (err) {
-    return { error: `레이드 정보를 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
-  }
-});
-ipcMain.handle('raid-submit', async (_event, name: unknown) => {
-  if (!rankingConfig?.secret || !pendingRaid) return { error: '이 판은 레이드에 보낼 수 없다' };
-  const clean = String(name ?? '').trim().slice(0, 16);
-  if (!clean) return { error: '이름을 입력해 줘' };
-  try {
-    const result = await submitRaid(rankingConfig, { ...pendingRaid, name: clean });
-    pendingRaid = null;
-    return result;
-  } catch (err) {
-    return { error: `보내지 못했다: ${err instanceof Error ? err.message : err}` };
-  }
-});
-ipcMain.handle('ranking-list', async (_event, board: unknown) => {
-  if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
-  const which = board === 'weekly' || board === 'daily' ? board : 'all';
-  try {
-    return { entries: await fetchRanking(rankingConfig.url, which, which === 'daily' ? localDate() : undefined) };
-  } catch (err) {
-    return { error: `랭킹을 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
-  }
-});
 ipcMain.handle('ranking-submit', async (_event, name: unknown) => {
   if (!rankingConfig?.secret || !pendingRank) return { error: '이 기록은 등록할 수 없다' };
   const clean = String(name ?? '').trim().slice(0, 16);
@@ -425,14 +406,24 @@ ipcMain.handle('get-usage', async () => {
 // to the page — the page only learns whether one is set (and its last 4).
 const SECRETS_FILE = path.join(dataHome(), '.promptbattle', 'secrets.json');
 let apiKey: string | undefined;
+// A saved key the keychain couldn't open (entry gone, access refused): said once, not retried.
+let keyUnreadable = false;
+// The keychain is only touched when a key was actually saved: asking it for
+// nothing made macOS pop its access prompt again and again.
 async function loadApiKey(): Promise<void> {
+  let saved: unknown;
   try {
-    const { anthropicApiKey } = JSON.parse(await fs.readFile(SECRETS_FILE, 'utf-8'));
-    if (typeof anthropicApiKey === 'string' && safeStorage.isEncryptionAvailable()) {
-      apiKey = safeStorage.decryptString(Buffer.from(anthropicApiKey, 'base64'));
-    }
+    saved = JSON.parse(await fs.readFile(SECRETS_FILE, 'utf-8')).anthropicApiKey;
+  } catch {
+    return; // no key saved: nothing to look up
+  }
+  if (typeof saved !== 'string') return;
+  try {
+    apiKey = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(saved, 'base64')) : undefined;
+    keyUnreadable = !apiKey;
   } catch {
     apiKey = undefined;
+    keyUnreadable = true;
   }
 }
 // The key and the saved auth mode must be loaded before any claude process spawns.
@@ -446,17 +437,19 @@ function claudeEnv(): Record<string, string | undefined> {
 const keyInfo = () => ({ hasKey: Boolean(apiKey), last4: apiKey ? apiKey.slice(-4) : null });
 ipcMain.handle('api-key-info', async () => {
   await authReady;
-  return { ...keyInfo(), encryption: safeStorage.isEncryptionAvailable() };
+  return { ...keyInfo(), unreadable: keyUnreadable };
 });
 ipcMain.handle('set-api-key', async (_event, key: string | null) => {
   await fs.mkdir(path.dirname(SECRETS_FILE), { recursive: true });
   const trimmed = key?.trim();
   if (!trimmed) {
     apiKey = undefined;
+    keyUnreadable = false;
     await fs.rm(SECRETS_FILE, { force: true });
   } else {
     if (!safeStorage.isEncryptionAvailable()) return { ok: false, message: '이 컴퓨터에서 키체인 암호화를 쓸 수 없어 저장하지 않았다' };
     apiKey = trimmed;
+    keyUnreadable = false;
     const encrypted = safeStorage.encryptString(trimmed).toString('base64');
     await writeJsonAtomic(SECRETS_FILE, { anthropicApiKey: encrypted }, 0o600);
   }
@@ -584,19 +577,43 @@ ipcMain.handle(
       if (event.type === 'turnStart') void flushJournal({ turns: 1, prompts: [event.prompt] });
       else if (event.type === 'agentEvent' && event.agentEvent.type === 'file') journalFiles.push(path.relative(cwd, path.resolve(cwd, event.agentEvent.value)) || event.agentEvent.value);
     };
-    // Weekly raid: every hit this run lands on a monster or a chest.
-    let raidDamage = 0;
-    const trackRaid = (event: BattleEvent) => {
-      if (event.type === 'attack' || event.type === 'partialHit' || event.type === 'typingHit' || event.type === 'bombHit' || event.type === 'reflectHit' || event.type === 'chestHit') raidDamage += event.damage;
-      else if (event.type === 'petHelped' && event.pet === 'drake') raidDamage += event.amount;
+    // Claude and Codex each keep their own session; switching AI hands the new
+    // one what was said since it last worked (the files are shared anyway).
+    const sessions: Record<Provider, string | undefined> = { claude: undefined, codex: undefined };
+    if (options.sessionId?.startsWith('codex:')) sessions.codex = options.sessionId.slice('codex:'.length);
+    else sessions.claude = options.sessionId;
+    let lastReturned: string | undefined = options.sessionId;
+    const convo: { provider: Provider; role: 'user' | 'assistant'; text: string }[] = [];
+    const seen: Record<Provider, number> = { claude: 0, codex: 0 };
+    const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex' };
+    const handoff = (provider: Provider) => {
+      const missed = convo.slice(seen[provider]).filter((e) => e.provider !== provider);
+      if (!missed.length) return '';
+      const other = NAME[missed[0].provider];
+      let budget = 6000;
+      const lines: string[] = [];
+      for (const e of missed.slice(-12).reverse()) {
+        const line = `${e.role === 'user' ? 'User' : other}: ${e.text.replace(/\s+/g, ' ').slice(0, 700)}`;
+        if ((budget -= line.length) < 0) break;
+        lines.unshift(line);
+      }
+      return `[Game note: until now another AI (${other}) was working on this project in this folder. Its files and changes are already here. What was said meanwhile:\n${lines.join('\n')}\n— Pick up from there.]\n\n`;
     };
+    // Codex reads text attachments inline; pictures and PDFs only go to Claude.
+    const withTextAttachments = (text: string, files: typeof attachments) => {
+      const texts = files.filter((a) => a.kind === 'text').map((a) => `첨부 파일 ${a.name}:\n\`\`\`\n${(a as { text: string }).text}\n\`\`\``);
+      const skipped = files.filter((a) => a.kind !== 'text').map((a) => a.name);
+      return [...texts, ...(skipped.length ? [`(Codex에는 이미지·PDF 첨부를 보낼 수 없어 뺐다: ${skipped.join(', ')})`] : []), text].join('\n\n');
+    };
+
     const trackHistory = (event: BattleEvent) => {
       trackJournal(event);
-      trackRaid(event);
       if (event.type === 'turnStart') folder.history = appendHistory(folder.history, { role: 'user', text: event.prompt });
       else if (event.type === 'agentSummary') folder.history = appendHistory(folder.history, { role: 'assistant', text: event.summary });
       else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
-      else if (event.type === 'sessionSaved') folder.sessionId = event.sessionId;
+      else if (event.type === 'sessionSaved') {
+        if (!event.sessionId.startsWith('codex:')) folder.sessionId = event.sessionId; // the folder's Claude session
+      }
       else if (event.type === 'sessionReset') delete folder.sessionId;
       else if (event.type === 'sessionSwitched') folder.sessionId = event.sessionId;
       else return;
@@ -608,12 +625,30 @@ ipcMain.handle(
         const stop = new AbortController();
         currentTurnStop = stop;
         try {
-          // The folder picked now (it may have changed since the run began).
+          // /new (or a failed first turn) cleared the battle's session: both AIs start fresh.
+          if (sessionId === undefined && lastReturned !== undefined) {
+            sessions.claude = sessions.codex = undefined;
+            convo.length = 0;
+          }
+          const provider = providerOf(currentModel);
           const sent = attachments;
           attachments = [];
-          return await runAgentTurn(prompt, cwd, sessionId, onEvent, {
-            model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
-          });
+          const full = handoff(provider) + prompt;
+          const turn =
+            provider === 'codex'
+              ? await runCodexTurn(withTextAttachments(full, sent), cwd, sessions.codex, onEvent, {
+                  model: (await codexModels())[currentModel.slice('codex:'.length) as 'luna'],
+                  effort: (currentClaude ?? profile.claude).effort,
+                  signal: stop.signal,
+                })
+              : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
+                  model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
+                });
+          if (turn.sessionId) sessions[provider] = turn.sessionId;
+          convo.push({ provider, role: 'user', text: prompt }, { provider, role: 'assistant', text: turn.summary || turn.error || '' });
+          seen[provider] = convo.length;
+          lastReturned = provider === 'codex' && turn.sessionId ? `codex:${turn.sessionId}` : turn.sessionId;
+          return { ...turn, sessionId: lastReturned };
         } finally {
           if (currentTurnStop === stop) currentTurnStop = null;
         }
@@ -692,9 +727,7 @@ ipcMain.handle(
 
     const { unlocked, dailyCompleted, rewardCoins } = finished.progress;
     // A defeat can go on the ranking (if the server issued this run a token).
-    const anyToken = await runTokenPromise;
-    pendingRaid = anyToken && raidDamage > 0 ? { runToken: anyToken, damage: Math.round(raidDamage) } : null;
-    const runToken = summary.defeated ? anyToken : null;
+    const runToken = summary.defeated ? await runTokenPromise : null;
     // Ranked by how far the run got (chapter/floor), not just this sitting's
     // floors: a run continued from a save still counts from the beginning.
     const rankStats = { floors: summary.nextFloor, bosses: summary.chaptersCleared, xp: summary.xpGained, difficulty: options.difficulty };
@@ -706,8 +739,7 @@ ipcMain.handle(
         : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
-    const raid = pendingRaid ? { damage: pendingRaid.damage, submittable: Boolean(rankingConfig?.secret) } : null;
-    return { summary, profile: updated, ranking, raid, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
+    return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
   },
 );
 
@@ -721,6 +753,9 @@ function insideCwd(filePath: string): string | null {
 const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
 // 스킬북 (src/skills.ts): the run's project skills plus the user's.
 ipcMain.handle('journal-get', () => loadJournal());
+// Codex: sign-in (ChatGPT, in the browser) and its model families.
+ipcMain.handle('codex-status', async () => ({ ...(await codexLoginStatus()), models: await codexModels() }));
+ipcMain.handle('codex-login', () => codexLogin());
 ipcMain.handle('skills-list', () => (currentCwd ? listSkills(currentCwd) : []));
 ipcMain.handle('skill-save', (_event, skill: { name: string; description: string; body: string }) =>
   currentCwd ? saveSkill(currentCwd, { name: String(skill?.name ?? ''), description: String(skill?.description ?? ''), body: String(skill?.body ?? '') }) : { error: noProject.message },

@@ -74,29 +74,6 @@ const daily = (date) => ({ board: `ranking:daily:${date}:board`, entries: `ranki
 // A daily dungeon date the player's clock could show right now (any time zone).
 const dailyOk = (date, now) => isDate(date) && Math.abs(Date.parse(`${date}T12:00:00Z`) - now) <= 1.6 * DAY_MS;
 
-// Weekly raid: one boss a week that everyone hits together. Each run adds its
-// total damage once (single-use per run token), capped by the time it took.
-export const RAID_HP = 300_000;
-const RAID_DAMAGE_PER_MINUTE = 6_000; // generous: a strong turn lands a few thousand
-const RAID_BOSSES = ['주간 에러 대마왕', '레거시 모놀리스 타이탄', '끝나지 않는 회의룡', '무한 리렌더 히드라', '배포 금요일의 악몽', '기술부채 고대룡', '프로덕션 버그신', '머지 충돌 키메라'];
-const raidKeys = (now) => {
-  const week = isoWeek(now);
-  return { week, board: `raid:${week}:dmg`, total: `raid:${week}:total`, ttl: String(21 * 24 * 3600) };
-};
-const raidBoss = (week) => {
-  let h = 0;
-  for (const ch of week) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return RAID_BOSSES[h % RAID_BOSSES.length];
-};
-async function raidState(run, now) {
-  const k = raidKeys(now);
-  const [total, top] = await run([['GET', k.total], ['ZREVRANGE', k.board, '0', '19', 'WITHSCORES']]);
-  const dealt = Number(total ?? 0);
-  const list = [];
-  for (let i = 0; i < (top?.length ?? 0); i += 2) list.push({ name: top[i], damage: Number(top[i + 1]) });
-  return { week: k.week, boss: { name: raidBoss(k.week), maxHp: RAID_HP, hp: Math.max(0, RAID_HP - dealt), dealt }, top: list };
-}
-
 async function top(run, { board, entries } = allTime) {
   const [ids] = await run([['ZREVRANGE', board, '0', String(TOP_N - 1), 'WITHSCORES']]);
   const pairs = [];
@@ -121,7 +98,6 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   if (method === 'GET') {
     const which = query.board ?? 'all';
     if (which === 'all') return { status: 200, body: { entries: await top(run) } };
-    if (which === 'raid') return { status: 200, body: await raidState(run, now) };
     if (which === 'weekly') return { status: 200, body: { entries: await top(run, weekly(now)), week: isoWeek(now) } };
     if (which === 'daily' && isDate(query.date)) return { status: 200, body: { entries: await top(run, daily(query.date)) } };
     return { status: 400, body: { error: 'unknown board' } };
@@ -134,7 +110,6 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   if (!Number.isFinite(body.ts) || Math.abs(now - body.ts) > MAX_SKEW_MS) return { status: 401, body: { error: 'stale request' } };
 
   if (query.action === 'start') return { status: 200, body: { runToken: issueRunToken(serverSecret, now) } };
-  if (query.action === 'raid') return raidHit(body, run, serverSecret, now);
 
   const run0 = readRunToken(serverSecret, body.runToken);
   if (!run0) return { status: 401, body: { error: 'bad run token' } };
@@ -183,23 +158,6 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
   const weeklyRank = await addToBoard(run, weekly(now), id, score, entry);
   const dailyRank = body.daily !== undefined ? await addToBoard(run, daily(body.daily), id, score, entry) : undefined;
   return { status: 200, body: { rank, score, kept: rank !== null, weeklyRank, ...(dailyRank !== undefined ? { dailyRank } : {}) } };
-}
-
-async function raidHit(body, run, serverSecret, now) {
-  const run0 = readRunToken(serverSecret, body.runToken);
-  if (!run0) return { status: 401, body: { error: 'bad run token' } };
-  const age = now - run0.iat;
-  if (age < MIN_RUN_MS || age > MAX_RUN_MS) return { status: 400, body: { error: 'run too short or too old' } };
-  const name = cleanName(body.name);
-  if (!name) return { status: 400, body: { error: 'name required' } };
-  const damage = body.damage;
-  if (!isCount(damage, 10_000_000) || damage <= 0) return { status: 400, body: { error: 'bad damage' } };
-  if (damage > (age / 60_000) * RAID_DAMAGE_PER_MINUTE + 2_000) return { status: 400, body: { error: 'impossible damage' } };
-  const k = raidKeys(now);
-  const [fresh] = await run([['SET', `raid:used:${run0.rid}`, '1', 'NX', 'EX', String(Math.ceil(MAX_RUN_MS / 1000))]]);
-  if (fresh !== 'OK') return { status: 409, body: { error: 'run already sent to the raid' } };
-  await run([['ZINCRBY', k.board, String(damage), name], ['INCRBY', k.total, String(damage)], ['EXPIRE', k.board, k.ttl], ['EXPIRE', k.total, k.ttl]]);
-  return { status: 200, body: await raidState(run, now) };
 }
 
 // Only a top-100 score is stored on a board: anything lower is compared, then

@@ -3352,9 +3352,73 @@ body.a11y-calm .fx-number {
 .tour-row button { padding: 5px 12px; border-radius: 6px; border: 1px solid #ebcb8b; background: rgba(235, 203, 139, 0.15); color: #ebcb8b; cursor: pointer; }
 .tour-row .tour-skip { border-color: #4c566a; background: transparent; color: #a9b1c2; }
 
-.raid-card { padding: 12px 16px; }
-.raid-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.raid-boss { color: #bf616a; font-weight: 700; }
-.raid-track { margin: 8px 0 4px; }
-.raid-fill { background: linear-gradient(90deg, #bf616a, #d08770) !important; }
-.summary-raid { border-color: #bf616a; background: rgba(191, 97, 106, 0.08); }
+
+/* ---- Start screen in steps ---- */
+.step-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ebcb8b;
+  color: #1d222d;
+  font-size: 13px;
+  font-weight: 800;
+}
+.step-hint { color: #8f99ab; font-size: 12px; font-weight: 400; }
+.folder-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.folder-row .folder-path { margin: 0; }
+.ai-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ai-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid #3b4252;
+  background: #1d222d;
+  color: #eceff4;
+  cursor: pointer;
+  text-align: left;
+}
+.ai-tile strong { font-size: 16px; }
+.ai-tile small { color: #8f99ab; }
+.ai-tile .ai-note { font-size: 12px; color: #a3be8c; }
+.ai-tile.active { border-color: #88c0d0; background: rgba(136, 192, 208, 0.1); box-shadow: 0 0 0 1px #88c0d0 inset; }
+.ai-login {
+  margin-top: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #ebcb8b;
+  background: rgba(235, 203, 139, 0.12);
+  color: #ebcb8b;
+  cursor: pointer;
+}
+.battle-details {
+  margin: 8px 0 4px;
+  border: 1px dashed #3b4252;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.battle-details > summary { cursor: pointer; color: #d8dee9; font-weight: 600; }
+.battle-details[open] > summary { margin-bottom: 10px; }
+/* In battle: Claude | Codex next to the weapon */
+.ai-switch { display: inline-flex; border: 1px solid #4c566a; border-radius: 999px; overflow: hidden; }
+.ai-switch button {
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  color: #a9b1c2;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ai-switch button.active { background: #88c0d0; color: #1d222d; font-weight: 700; }

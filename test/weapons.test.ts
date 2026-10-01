@@ -1,14 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WEAPONS, getWeapon, DEFAULT_WEAPON_ID } from '../src/weapons.ts';
+import { WEAPONS, getWeapon, DEFAULT_WEAPON_ID, sameTierOn, providerOf } from '../src/weapons.ts';
 
-test('weapons are ordered weakest to strongest by multiplier', () => {
-  const multipliers = WEAPONS.map((w) => w.multiplier);
-  assert.deepEqual(multipliers, [...multipliers].sort((a, b) => a - b));
+test('each AI\'s weapons are ordered weakest to strongest by multiplier', () => {
+  for (const p of ['claude', 'codex']) {
+    const multipliers = WEAPONS.filter((w) => w.provider === p).map((w) => w.multiplier);
+    assert.deepEqual(multipliers, [...multipliers].sort((a, b) => a - b));
+  }
 });
 
-test('weapons are Claude model families (no version numbers: the latest one is always used)', () => {
-  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable']);
+test('weapons are model families (no version numbers: the latest one is always used), Claude and Codex in matching tiers', () => {
+  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable', 'codex:luna', 'codex:terra', 'codex:sol', 'codex:astra']);
+  assert.equal(sameTierOn('opus', 'codex'), 'codex:sol');
+  assert.equal(sameTierOn('codex:luna', 'claude'), 'haiku');
+  assert.equal(sameTierOn('sonnet', 'claude'), 'sonnet');
+  assert.equal(providerOf('codex:astra'), 'codex');
+  assert.equal(getWeapon('codex:sol').multiplier, getWeapon('opus').multiplier);
 });
 
 test('getWeapon returns the matching weapon; an old versioned id maps to its family; unknown falls back', () => {
