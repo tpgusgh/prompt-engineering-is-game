@@ -78,7 +78,7 @@ const dailyOk = (date, now) => isDate(date) && Math.abs(Date.parse(`${date}T12:0
 // total damage once (single-use per run token), capped by the time it took.
 export const RAID_HP = 300_000;
 const RAID_DAMAGE_PER_MINUTE = 6_000; // generous: a strong turn lands a few thousand
-const RAID_BOSSES = ['주간 장애 대마왕', '레거시 모놀리스 타이탄', '끝나지 않는 회의룡', '무한 리렌더 히드라', '배포 금요일의 악몽', '기술부채 고대룡', '프로덕션 버그신', '머지 충돌 키메라'];
+const RAID_BOSSES = ['주간 에러 대마왕', '레거시 모놀리스 타이탄', '끝나지 않는 회의룡', '무한 리렌더 히드라', '배포 금요일의 악몽', '기술부채 고대룡', '프로덕션 버그신', '머지 충돌 키메라'];
 const raidKeys = (now) => {
   const week = isoWeek(now);
   return { week, board: `raid:${week}:dmg`, total: `raid:${week}:total`, ttl: String(21 * 24 * 3600) };
