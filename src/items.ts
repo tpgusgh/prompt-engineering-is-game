@@ -27,8 +27,8 @@ export interface Item {
 }
 
 export const ITEMS: Item[] = [
-  { id: 'bandage', name: '붕대', price: 12, description: 'HP 15 회복 (싸고 가벼운 응급처치)' },
-  { id: 'potion', name: '회복 물약', price: 30, description: 'HP 40 회복' },
+  { id: 'bandage', name: '붕대', price: 12, description: '최대 HP의 15% 회복 (싸고 가벼운 응급처치)' },
+  { id: 'potion', name: '회복 물약', price: 30, description: '최대 HP의 40% 회복' },
   { id: 'whetstone', name: '숫돌', price: 40, description: '다음 공격 피해 2배' },
   { id: 'amulet', name: '수호의 부적', price: 35, description: '몬스터의 다음 반격 1회 무효' },
   { id: 'smoke', name: '연막탄', price: 25, description: '도망 100% 성공 (보스 제외)' },
@@ -67,6 +67,12 @@ export const BOSS_ITEMS: Item[] = [
 export const bossItemFor = (roster: number) => BOSS_ITEMS.find((i) => i.boss === roster);
 
 export const SHOP_SIZE = 5;
+// How many of each the merchant sells you per visit.
+export const MERCHANT_LIMIT: Partial<Record<ItemId, number>> = {
+  bandage: 5, potion: 3, bomb: 3, whetstone: 2, amulet: 2, smoke: 2, scroll: 2,
+  crystal: 1, elixir: 1, contract: 1, devilContract: 1, coinCharm: 1,
+};
+export const merchantLimit = (id: ItemId) => MERCHANT_LIMIT[id] ?? 1;
 
 // 야시장: a rare stall of NIGHT_MARKET_SIZE different goods — boss relics and
 // contracts included — each 30-70% off today's price, one of each.
@@ -131,8 +137,9 @@ export function rollChestItem(grade: keyof typeof DROP_CHANCE, random: () => num
   return getItem(table[Math.min(table.length - 1, Math.floor(random() * table.length))]) ?? null;
 }
 
-export const POTION_HEAL = 40;
-export const BANDAGE_HEAL = 15;
+// Heals, as a share of max HP (so they keep up with vitality and crystals).
+export const POTION_HEAL = 0.4;
+export const BANDAGE_HEAL = 0.15;
 export const CRYSTAL_MAX_HP = 10;
 
 export function getItem(id: string): Item | undefined {

@@ -1099,6 +1099,27 @@ test('boss drops: each boss has its own relic, dropped 30% of the time, and it w
   assert.equal(shield.events.filter((e) => e.type === 'monsterAttack').length, 1);
 });
 
+test('bandages and potions heal a share of max HP (15% / 40%)', async () => {
+  const { deps, events } = makeFakeDeps(['/use bandage', '/use potion', '/quit']);
+  await runDungeon({ ...deps, playerMaxHp: 300, playerHp: 10, bag: { bandage: 1, potion: 1 } });
+  const hp = events.filter((e) => e.type === 'playerHpChanged').map((e) => (e.type === 'playerHpChanged' ? e.hp : 0));
+  assert.deepEqual(hp.slice(-2), [10 + 45, 10 + 45 + 120]);
+});
+
+test('merchant: each item has its own purchase limit per visit', async () => {
+  const { MERCHANT_LIMIT } = await import('../src/items.ts');
+  assert.equal(MERCHANT_LIMIT.bandage, 5);
+  assert.equal(MERCHANT_LIMIT.elixir, 1);
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, ...Array(7).fill('/buy bandage'), '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 1000, random: seq(0.1, 0.99) });
+  assert.equal(summary.bag.bandage, 5);
+  const fails = events.filter((e) => e.type === 'purchaseFailed');
+  assert.equal(fails.length, 2);
+  assert.ok(fails.every((e) => e.type === 'purchaseFailed' && e.reason.includes('5개')));
+  const open = events.find((e) => e.type === 'merchantOpen');
+  assert.ok(open?.type === 'merchantOpen' && open.items.find((i) => i.id === 'bandage')?.limit === 5);
+});
+
 test('night market: a rare stop; each good sells once at its discount', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, 'BUY_FIRST', 'BUY_FIRST', '/leave', '/quit']);
   let offerFirst = '';

@@ -3,7 +3,7 @@ import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFIC
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { rollPet, PET_HEAL_RATIO, PET_FIRE_RATIO, PET_XP_BONUS, type PetId } from './pets.ts';
-import { bossItemFor, BOSS_DROP_CHANCE, nightMarketOffer, type NightGood, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
+import { merchantLimit, bossItemFor, BOSS_DROP_CHANCE, nightMarketOffer, type NightGood, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
@@ -73,8 +73,8 @@ export type BattleEvent =
   | { type: 'fleeAttempt'; success: boolean }
   | { type: 'fleeBlocked' }
   | { type: 'coinsChanged'; coins: number; gained: number }
-  | { type: 'merchantOpen'; coins: number; items: Item[]; priceMult: number }
-  | { type: 'purchased'; itemId: string; coins: number }
+  | { type: 'merchantOpen'; coins: number; items: (Item & { limit: number })[]; priceMult: number }
+  | { type: 'purchased'; itemId: string; coins: number; left?: number }
   | { type: 'purchaseFailed'; itemId: string; reason: string }
   | { type: 'merchantClosed' }
   | { type: 'sold'; itemId: string; gained: number; coins: number }
@@ -491,7 +491,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       return;
     }
     if (id === 'potion' || id === 'bandage' || id === 'elixir') {
-      playerHp = id === 'elixir' ? playerMaxHp : Math.min(playerMaxHp, playerHp + (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL));
+      playerHp = id === 'elixir' ? playerMaxHp : Math.min(playerMaxHp, playerHp + Math.round(playerMaxHp * (id === 'potion' ? POTION_HEAL : BANDAGE_HEAL)));
       emitPlayerHp();
     } else if (id === 'whetstone') {
       sharpenMult = Math.max(sharpenMult, 2);
@@ -764,7 +764,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   };
 
   const visitMerchant = () => {
-    const offer = shopOffer(shopVisits++, relics, shopRandom).map((i) => ({ ...i, price: priceAt(i, floor) }));
+    const offer = shopOffer(shopVisits++, relics, shopRandom).map((i) => ({ ...i, price: priceAt(i, floor), limit: merchantLimit(i.id) }));
+    const bought: Record<string, number> = {};
     deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer, priceMult: priceMultiplier(floor) });
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
@@ -792,12 +793,15 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: getItem(id) ? '오늘은 안 파는 물건이다' : '그런 물건은 없다' });
       } else if (relics.includes(item.id)) {
         deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '이미 가지고 있다 (한 번만 살 수 있다)' });
+      } else if ((bought[item.id] ?? 0) >= item.limit) {
+        deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: `이번 방문엔 ${item.limit}개까지만 판다` });
       } else if (coins < item.price) {
         deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
       } else {
         coins -= item.price;
+        bought[item.id] = (bought[item.id] ?? 0) + 1;
         grantItem(item);
-        deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins });
+        deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins, left: item.limit - bought[item.id] });
       }
       return true;
     }, () => deps.onBattleEvent({ type: 'merchantClosed' }));

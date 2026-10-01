@@ -3155,3 +3155,14 @@ body {
 .night-price s { color: #7b88a1; }
 .night-price em { color: #ff8a3d; font-style: normal; font-weight: 700; }
 .night-good small { color: #a9b1c2; font-size: 11px; }
+
+.merchant-item .limit {
+  font-size: 11px;
+  color: #a3be8c;
+}
+.merchant-item.sold-out {
+  opacity: 0.5;
+}
+.merchant-item.sold-out .limit {
+  color: #bf616a;
+}

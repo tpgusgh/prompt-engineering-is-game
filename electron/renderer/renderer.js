@@ -727,7 +727,12 @@ function openMerchant(event) {
     const price = document.createElement('span');
     price.className = 'price';
     price.textContent = `🪙 ${item.price}`;
-    btn.append(name, desc, price);
+    const limit = document.createElement('span');
+    limit.className = 'limit';
+    limit.dataset.limitFor = item.id;
+    limit.textContent = item.limit ? `남은 ${item.limit}개` : '';
+    btn.dataset.itemId = item.id;
+    btn.append(name, desc, price, limit);
     btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${item.id}`));
     merchantItemsEl.append(btn);
   }
@@ -1633,6 +1638,12 @@ function renderBattleEvent(event) {
       if (nightGoods.length) {
         nightSold.add(event.itemId);
         renderNightGoods();
+      }
+      if (event.left !== undefined) {
+        const tag = merchantItemsEl.querySelector(`[data-limit-for="${event.itemId}"]`);
+        if (tag) tag.textContent = event.left > 0 ? `남은 ${event.left}개` : '품절';
+        const btn = merchantItemsEl.querySelector(`[data-item-id="${event.itemId}"]`);
+        if (btn && event.left <= 0) btn.classList.add('sold-out');
       }
       appendLog(`${itemName(event.itemId)}을(를) 샀다! (남은 코인 ${event.coins})`, 'victory');
       break;
