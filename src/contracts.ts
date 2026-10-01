@@ -11,8 +11,8 @@ export interface Contract {
 
 // Everything a contract can change in battle; NO_CONTRACT_MODS is neutral.
 export interface ContractMods {
-  flat: number; // added to every hit
-  actionBonus: number; // added to each work hit
+  hitMult: number; // every hit (work hits and the closing blow)
+  actionMult: number; // each work hit
   noActionHits: boolean; // work hits deal nothing
   closingMult: number;
   critMult: number; // closing blow multiplier on a crit
@@ -21,16 +21,16 @@ export interface ContractMods {
   counterMult: number; // counterattacks taken
   reflect: number; // share of a counter dealt back to the monster
   fleeChance?: number;
-  typingDamage: number;
+  typingDamage: number; // typing mini-game hit multiplier
   coinMult: number;
   clearHealMult: number;
-  clearHealBonus: number;
-  healPerTurn: number;
+  clearHealRatio: number; // extra floor-clear heal, share of max HP
+  healPerTurnRatio: number; // heal at the end of every turn, share of max HP
 }
 
 export const NO_CONTRACT_MODS: ContractMods = {
-  flat: 0, actionBonus: 0, noActionHits: false, closingMult: 1, critMult: 1, lowHpMult: 1, bossMult: 1,
-  counterMult: 1, reflect: 0, typingDamage: 1, coinMult: 1, clearHealMult: 1, clearHealBonus: 0, healPerTurn: 0,
+  hitMult: 1, actionMult: 1, noActionHits: false, closingMult: 1, critMult: 1, lowHpMult: 1, bossMult: 1,
+  counterMult: 1, reflect: 0, typingDamage: 1, coinMult: 1, clearHealMult: 1, clearHealRatio: 0, healPerTurnRatio: 0,
 };
 
 interface Pact {
@@ -43,10 +43,10 @@ export type Demon = Pact & { hpCost: number };
 
 export const GODS: Pact[] = [
   { id: 'fire', name: '화염신 이그니스', text: '크리티컬 피해 +30%', mods: { critMult: 1.3 } },
-  { id: 'water', name: '수신 운디네', text: '매 턴이 끝날 때 HP 3 회복', mods: { healPerTurn: 3 } },
-  { id: 'wind', name: '풍신 실프', text: '도망 성공률 75%, 작업 타격 +1', mods: { fleeChance: 0.75, actionBonus: 1 } },
+  { id: 'water', name: '수신 운디네', text: '매 턴이 끝날 때 최대 HP의 3% 회복', mods: { healPerTurnRatio: 0.03 } },
+  { id: 'wind', name: '풍신 실프', text: '도망 성공률 75%, 작업 타격 +15%', mods: { fleeChance: 0.75, actionMult: 1.15 } },
   { id: 'earth', name: '지신 노움', text: '받는 반격 -15%', mods: { counterMult: 0.85 } },
-  { id: 'thunder', name: '뇌신 라이쥬', text: '작업 타격 +2', mods: { actionBonus: 2 } },
+  { id: 'thunder', name: '뇌신 라이쥬', text: '작업 타격 +30%', mods: { actionMult: 1.3 } },
   { id: 'light', name: '광신 루멘', text: '층 클리어 회복 2배, 보스에게 주는 피해 +20%', mods: { clearHealMult: 2, bossMult: 1.2 } },
 ];
 
@@ -55,11 +55,12 @@ export const DEMONS: Demon[] = [
   { id: 'greed', name: '탐욕의 마몬', hpCost: 0.15, text: '얻는 코인 +50%', mods: { coinMult: 1.5 } },
   { id: 'wrath', name: '분노의 사탄', hpCost: 0.2, text: 'HP가 절반 이하일 때 주는 피해 +60%', mods: { lowHpMult: 1.6 } },
   { id: 'envy', name: '질투의 레비아탄', hpCost: 0.2, text: '받은 반격의 30%를 몬스터에게 되돌려 준다', mods: { reflect: 0.3 } },
-  { id: 'lust', name: '색욕의 아스모데우스', hpCost: 0.1, text: '코딩 타자 한 줄이 3 피해', mods: { typingDamage: 3 } },
-  { id: 'gluttony', name: '폭식의 벨제붑', hpCost: 0.15, text: '층을 클리어할 때마다 HP 20 추가 회복', mods: { clearHealBonus: 20 } },
+  { id: 'lust', name: '색욕의 아스모데우스', hpCost: 0.1, text: '코딩 타자 피해 3배', mods: { typingDamage: 3 } },
+  { id: 'gluttony', name: '폭식의 벨제붑', hpCost: 0.15, text: '층을 클리어할 때마다 최대 HP의 20% 추가 회복', mods: { clearHealRatio: 0.2 } },
   { id: 'sloth', name: '나태의 벨페고르', hpCost: 0.1, text: '작업 타격이 사라지는 대신 마무리 일격 2배', mods: { noActionHits: true, closingMult: 2 } },
 ];
 
+export const GOD_HIT_MULT = 1.05; // every god pact: all hits +5%
 export const BREAK_PENALTY = 10; // max HP lost for good when contracts break
 
 export function pactOf(contract: Contract | null | undefined): Pact | Demon | undefined {
@@ -70,7 +71,7 @@ export function pactOf(contract: Contract | null | undefined): Pact | Demon | un
 export function contractMods(contract: Contract | null | undefined): ContractMods {
   const pact = pactOf(contract);
   if (!pact) return NO_CONTRACT_MODS;
-  return { ...NO_CONTRACT_MODS, ...(contract!.kind === 'god' ? { flat: 1 } : {}), ...pact.mods };
+  return { ...NO_CONTRACT_MODS, ...(contract!.kind === 'god' ? { hitMult: GOD_HIT_MULT } : {}), ...pact.mods };
 }
 
 // Using a contract scroll: a fresh pact if none is held, otherwise all break.

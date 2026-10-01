@@ -21,6 +21,7 @@ function makeFakeDeps(inputs: string[], turnResult: TurnResult = { summary: 'ok'
       cwd: '/fake/cwd',
       difficulty: 'normal' as const,
       random: () => 0.99, // no merchant, flee fails — override per test
+      shopRandom: () => 0.99, // no contract on the shelf
       chests: false, // treasure chests have their own tests below
     },
     events,
@@ -1070,15 +1071,16 @@ test('contracts: sloth removes work hits and doubles the closing blow; greed add
 });
 
 test('shop: 5 items per visit; the coin charm is a one-time relic that boosts coins', async () => {
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
-  const summary = await runDungeon({ ...deps, coins: 500, random: seq(0.1, 0.1, 0.1, 0.99), getDamageMultiplier: () => 10 });
+  // The charm is on the second visit's shelf (10 items rotate, contracts aside).
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 500, random: seq(0.1, 0.1, 0.99), getDamageMultiplier: () => 10 });
   const shelves = events.filter((e) => e.type === 'merchantOpen');
   assert.ok(shelves.every((e) => e.type === 'merchantOpen' && e.items.length === 5));
   assert.ok(events.some((e) => e.type === 'relicGained' && e.itemId === 'coinCharm'));
   assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'coinCharm'), 'only once');
   assert.deepEqual(summary.relics, ['coinCharm']);
   const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : 0));
-  assert.equal(gains.at(-1), Math.round((10 + 3 * 2) * 1.25), 'the floor after buying pays 25% more');
+  assert.equal(gains.at(-1), Math.round((10 + 2 * 2) * 1.25), 'the floor after buying (floor 3) pays 25% more');
 });
 
 test('save/load XP dupe: floors and scrolls already paid for this run line give no XP again', async () => {

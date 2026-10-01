@@ -17,7 +17,7 @@ import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, authEnv, type Claude
 import os from 'node:os';
 import { loadSlots, writeSlot, deleteSlot } from '../src/saves.ts';
 import { PETS, isPetId } from '../src/pets.ts';
-import { dailyDungeon, dailyRandom } from '../src/daily.ts';
+import { dailyDungeon, dailyRandom, seededRandom, dateSeed } from '../src/daily.ts';
 import { listSkills, saveSkill, deleteSkill } from '../src/skills.ts';
 import { ROSTER_NAMES } from '../src/monsters.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
@@ -575,7 +575,7 @@ ipcMain.handle(
       ...(profile.activePet ? { pet: profile.activePet } : {}),
       ownedPets: profile.pets ?? [],
       prestige: profile.prestige ?? 0,
-      ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date) } : {}),
+      ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date), shopRandom: seededRandom(dateSeed(day.date) ^ 0x5bd1e995) } : {}),
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
         if (event.type !== 'snapshot') {

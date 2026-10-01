@@ -22,7 +22,7 @@ export const ITEMS: Item[] = [
   { id: 'elixir', name: '엘릭서', price: 70, description: 'HP 완전 회복' },
   { id: 'bomb', name: '폭탄', price: 45, description: '몬스터 최대 HP의 20% 피해 (보스는 5%, 최소 30)' },
   { id: 'scroll', name: '지혜의 두루마리', price: 50, description: '경험치 +30' },
-  { id: 'contract', name: '계약서', price: 120, description: '6원소신 중 하나와 무작위 계약 — 모든 타격 +1과 신의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
+  { id: 'contract', name: '계약서', price: 120, description: '6원소신 중 하나와 무작위 계약 — 모든 타격 +5%와 신의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
   { id: 'devilContract', name: '악마의 계약서', price: 90, description: '7대 악마 중 하나와 무작위 계약 — 서명에 최대 HP 일부를 바치고 악마의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
   { id: 'coinCharm', name: '코인의 부적', price: 150, description: '얻는 코인 영구 +25% (단 한 번만 살 수 있다)' },
 ];
@@ -41,10 +41,16 @@ export const SCROLL_XP = 30;
 
 // The merchant's shelf on a visit: SHOP_SIZE items, rotating through the
 // stock visit by visit; owned relics (the coin charm) aren't sold again.
-export function shopOffer(visit: number, relics: string[]): Item[] {
-  const stock = ITEMS.filter((i) => !relics.includes(i.id));
+// Contracts are off the rotation: rare, CONTRACT_SHOP_CHANCE a visit for one
+// (god or devil, even odds) on the last slot.
+export const CONTRACT_SHOP_CHANCE = 0.1;
+const CONTRACT_IDS = ['contract', 'devilContract'];
+export function shopOffer(visit: number, relics: string[], random: () => number = Math.random): Item[] {
+  const stock = ITEMS.filter((i) => !relics.includes(i.id) && !CONTRACT_IDS.includes(i.id));
   const start = (visit * SHOP_SIZE) % stock.length;
-  return Array.from({ length: Math.min(SHOP_SIZE, stock.length) }, (_, k) => stock[(start + k) % stock.length]);
+  const shelf = Array.from({ length: Math.min(SHOP_SIZE, stock.length) }, (_, k) => stock[(start + k) % stock.length]);
+  if (random() < CONTRACT_SHOP_CHANCE) shelf[shelf.length - 1] = getItem(random() < 0.5 ? 'contract' : 'devilContract')!;
+  return shelf;
 }
 
 // Chest loot: coins always; an item only by chance, better chests more often

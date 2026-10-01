@@ -215,6 +215,8 @@ export interface BattleDeps {
   // 일일 도전 (src/daily.ts): that day's areas per chapter; the run can't be saved.
   rosters?: number[];
   daily?: string;
+  // The merchant's contract roll (see shopOffer); defaults to Math.random.
+  shopRandom?: () => number;
 }
 
 export interface BattleSummary {
@@ -323,6 +325,8 @@ export function bestiary() {
 
 export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const random = deps.random ?? Math.random;
+  // The merchant's rare contract slot rolls on its own stream.
+  const shopRandom = deps.shopRandom ?? Math.random;
   const theme = themeRules(deps.themeId);
   let playerMaxHp = deps.playerMaxHp ?? 100;
   let playerHp = Math.min(playerMaxHp, deps.playerHp ?? playerMaxHp);
@@ -621,7 +625,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   };
 
   const visitMerchant = () => {
-    const offer = shopOffer(shopVisits++, relics);
+    const offer = shopOffer(shopVisits++, relics, shopRandom);
     deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer });
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
@@ -809,7 +813,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       // ones don't — and the prompt's full damage lands as the closing blow
       // when the turn ends normally (not on error or stop). So a short
       // prompt that makes the AI do a lot still hits hard.
-      const baseAction = actionDamage(damage) + mods.actionBonus + mods.flat;
+      const baseAction = Math.max(1, Math.round(actionDamage(damage) * mods.actionMult * mods.hitMult));
       const actionHit = mods.noActionHits ? 0 : trait === 'armor' ? Math.max(1, Math.round(baseAction / 2)) : baseAction;
       const calls = new Map<string, AgentEvent>();
       const onAgentEvent = (event: AgentEvent) => {
@@ -904,7 +908,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (trait === 'keywordWeak' && crit) damage = Math.round(damage * 1.3);
         if (trait === 'testWeak' && turnTests > 0) damage = Math.round(damage * 1.5);
         if (turnTests > 0) damage = Math.round(damage * theme.testBonus);
-        damage = Math.round((damage + mods.flat) * mods.closingMult * (crit ? mods.critMult : 1) * (isBoss ? mods.bossMult : 1) * (playerHp <= playerMaxHp / 2 ? mods.lowHpMult : 1));
+        damage = Math.round(damage * mods.hitMult * mods.closingMult * (crit ? mods.critMult : 1) * (isBoss ? mods.bossMult : 1) * (playerHp <= playerMaxHp / 2 ? mods.lowHpMult : 1));
         if (chests) overkill += Math.max(0, damage - hp);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
@@ -952,8 +956,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'petHelped', pet: 'drake', amount });
         deps.onBattleEvent({ type: 'hpChanged', hp, maxHp });
       }
-      if (mods.healPerTurn > 0 && playerHp < playerMaxHp) {
-        playerHp = Math.min(playerMaxHp, playerHp + mods.healPerTurn);
+      if (mods.healPerTurnRatio > 0 && playerHp < playerMaxHp) {
+        playerHp = Math.min(playerMaxHp, playerHp + Math.max(1, Math.round(playerMaxHp * mods.healPerTurnRatio)));
         emitPlayerHp();
       }
       if (trait === 'regen' && hp > 0 && hp < maxHp) {
@@ -1013,7 +1017,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (currentFloorEngaged) modelRecord(floorModel).cleared += 1;
     deps.onBattleEvent({ type: 'floorCleared', monsterName: spawned.name, xpGained: gained });
     if (isBoss) deps.onBattleEvent({ type: 'chapterCleared', chapter });
-    playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL * mods.clearHealMult + mods.clearHealBonus);
+    playerHp = Math.min(playerMaxHp, playerHp + FLOOR_CLEAR_HEAL * mods.clearHealMult + Math.round(playerMaxHp * mods.clearHealRatio));
     emitPlayerHp();
     const coinsGained = coinGain(coinsForFloor(floor, isBoss) * rewardMult);
     coins += coinsGained;

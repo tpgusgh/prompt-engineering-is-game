@@ -1550,7 +1550,7 @@ function renderBattleEvent(event) {
       renderContract();
       appendLog(
         event.kind === 'god'
-          ? `🤝 ${event.name}와(과) 계약했다! 모든 타격 +1 · ${event.text}`
+          ? `🤝 ${event.name}와(과) 계약했다! 모든 타격 +5% · ${event.text}`
           : `💀 ${event.name}와(과) 계약했다... 최대 HP의 대가로 체력 ${event.hpCost}을(를) 바쳤다. ${event.text}`,
         event.kind === 'god' ? 'victory' : 'crit',
       );
@@ -2968,7 +2968,7 @@ function renderContract() {
   const head = document.createElement('strong');
   head.textContent = `${god ? '원소신의 계약' : '악마의 계약'} — ${pact.name}`;
   const list = document.createElement('ul');
-  const effects = [...(god ? ['모든 타격 +1'] : []), ...pact.text.split(/,\s*/)];
+  const effects = [...(god ? ['모든 타격 +5%'] : []), ...pact.text.split(/,\s*/)];
   if (!god && pact.hpCost) effects.push(`서명할 때 최대 HP의 ${Math.round(pact.hpCost * 100)}%를 바쳤다`);
   for (const e of effects) {
     const li = document.createElement('li');

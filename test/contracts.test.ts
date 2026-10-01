@@ -25,13 +25,16 @@ test('any second contract (same kind or the other) breaks them all', () => {
   assert.equal(BREAK_PENALTY, 10);
 });
 
-test('a god contract adds +1 to every hit plus its trait; demons have their own', () => {
-  assert.equal(NO_CONTRACT_MODS.flat, 0);
-  assert.equal(contractMods({ kind: 'god', id: 'thunder' }).flat, 1);
-  assert.equal(contractMods({ kind: 'god', id: 'thunder' }).actionBonus, 2);
+test('a god contract adds +5% to every hit plus its trait; demons have their own (all as ratios)', () => {
+  assert.equal(NO_CONTRACT_MODS.hitMult, 1);
+  assert.equal(contractMods({ kind: 'god', id: 'thunder' }).hitMult, 1.05);
+  assert.equal(contractMods({ kind: 'god', id: 'thunder' }).actionMult, 1.3);
+  assert.equal(contractMods({ kind: 'god', id: 'wind' }).actionMult, 1.15);
+  assert.equal(contractMods({ kind: 'god', id: 'water' }).healPerTurnRatio, 0.03);
+  assert.equal(contractMods({ kind: 'demon', id: 'gluttony' }).clearHealRatio, 0.2);
   assert.equal(contractMods({ kind: 'god', id: 'fire' }).critMult, 1.3);
   assert.equal(contractMods({ kind: 'demon', id: 'greed' }).coinMult, 1.5);
-  assert.equal(contractMods({ kind: 'demon', id: 'greed' }).flat, 0);
+  assert.equal(contractMods({ kind: 'demon', id: 'greed' }).hitMult, 1);
   assert.equal(contractMods({ kind: 'demon', id: 'sloth' }).noActionHits, true);
   assert.equal(contractMods(undefined), NO_CONTRACT_MODS);
 });
