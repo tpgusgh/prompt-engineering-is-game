@@ -32,7 +32,7 @@ export const ITEMS: Item[] = [
   { id: 'whetstone', name: '숫돌', price: 40, description: '다음 공격 피해 2배' },
   { id: 'amulet', name: '수호의 부적', price: 35, description: '몬스터의 다음 반격 1회 무효' },
   { id: 'smoke', name: '연막탄', price: 25, description: '도망 100% 성공 (보스 제외)' },
-  { id: 'crystal', name: '생명의 결정', price: 80, description: '최대 HP +10 (이번 판 동안, 즉시 적용)' },
+  { id: 'crystal', name: '생명의 결정', price: 80, description: '최대 HP +10% (이번 판 동안, 즉시 적용)' },
   { id: 'elixir', name: '엘릭서', price: 110, description: 'HP 완전 회복' },
   { id: 'bomb', name: '폭탄', price: 45, description: '몬스터 최대 HP의 20% 피해 (보스는 5%, 최소 30)' },
   { id: 'scroll', name: '지혜의 두루마리', price: 50, description: '경험치 +30' },
@@ -140,7 +140,7 @@ export function rollChestItem(grade: keyof typeof DROP_CHANCE, random: () => num
 // Heals, as a share of max HP (so they keep up with vitality and crystals).
 export const POTION_HEAL = 0.4;
 export const BANDAGE_HEAL = 0.15;
-export const CRYSTAL_MAX_HP = 10;
+export const CRYSTAL_MAX_HP = 0.1; // of the current max HP
 
 export function getItem(id: string): Item | undefined {
   return ITEMS.find((item) => item.id === id) ?? BOSS_ITEMS.find((item) => item.id === id);

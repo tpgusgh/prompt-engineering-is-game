@@ -727,8 +727,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // A bought item: the crystal and the coin charm apply now, the rest go in the bag.
   const grantItem = (item: Item) => {
     if (item.id === 'crystal') {
-      playerMaxHp += CRYSTAL_MAX_HP;
-      playerHp += CRYSTAL_MAX_HP;
+      const gain = Math.max(1, Math.round(playerMaxHp * CRYSTAL_MAX_HP));
+      playerMaxHp += gain;
+      playerHp += gain;
       emitPlayerHp();
     } else if (item.id === 'coinCharm') {
       relics.push(item.id);
@@ -1141,8 +1142,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       coins += chestCoins;
       const loot = rollChestItem(grade.id, random);
       if (loot?.id === 'crystal') {
-        playerMaxHp += CRYSTAL_MAX_HP;
-        playerHp += CRYSTAL_MAX_HP;
+        const gain = Math.max(1, Math.round(playerMaxHp * CRYSTAL_MAX_HP));
+        playerMaxHp += gain;
+        playerHp += gain;
         emitPlayerHp();
       } else if (loot) {
         bag[loot.id] = (bag[loot.id] ?? 0) + 1;

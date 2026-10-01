@@ -1099,6 +1099,13 @@ test('boss drops: each boss has its own relic, dropped 30% of the time, and it w
   assert.equal(shield.events.filter((e) => e.type === 'monsterAttack').length, 1);
 });
 
+test('the life crystal raises max HP by 10% of the current max HP', async () => {
+  // The crystal is on the second visit's shelf.
+  const { deps } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy crystal', '/leave', '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 1000, playerMaxHp: 250, random: seq(0.1, 0.1, 0.99) });
+  assert.equal(summary.playerMaxHp, 275);
+});
+
 test('bandages and potions heal a share of max HP (15% / 40%)', async () => {
   const { deps, events } = makeFakeDeps(['/use bandage', '/use potion', '/quit']);
   await runDungeon({ ...deps, playerMaxHp: 300, playerHp: 10, bag: { bandage: 1, potion: 1 } });
