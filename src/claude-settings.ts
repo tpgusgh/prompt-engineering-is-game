@@ -60,7 +60,7 @@ function coerceMcpServers(v: unknown): Record<string, GameMcpServer> {
   return out;
 }
 
-export const DEFAULT_CLAUDE_SETTINGS: ClaudeSettings = { effort: 'high', skillsMode: 'all', enabledSkills: [], disabledMcp: [], auth: 'cli' };
+export const DEFAULT_CLAUDE_SETTINGS: ClaudeSettings = { effort: 'medium', skillsMode: 'all', enabledSkills: [], disabledMcp: [], auth: 'cli' };
 
 // Claude Code names MCP tools mcp__<server>__<tool>, with the server name's
 // characters outside [A-Za-z0-9_-] turned into "_". Disallowing the bare

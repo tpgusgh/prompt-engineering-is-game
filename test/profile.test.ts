@@ -7,7 +7,7 @@ import { loadProfile, saveProfile, levelForXp, addXp, applyRun, rebirth, startin
 import type { BattleSummary } from '../src/battle.ts';
 import { emptyRecords, emptyRunStats } from '../src/progress.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'high' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
+const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'medium' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));

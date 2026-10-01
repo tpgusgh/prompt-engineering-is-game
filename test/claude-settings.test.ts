@@ -11,7 +11,7 @@ test('MCP server names map to the tool prefix Claude Code uses', () => {
 });
 
 test('settings become query options: effort, skills filter, blocked MCP servers', () => {
-  assert.deepEqual(toQueryOptions(DEFAULT_CLAUDE_SETTINGS), { effort: 'high', disallowedTools: [] }, 'all skills = CLI default (skills omitted)');
+  assert.deepEqual(toQueryOptions(DEFAULT_CLAUDE_SETTINGS), { effort: 'medium', disallowedTools: [] }, 'all skills = CLI default (skills omitted)');
   assert.deepEqual(toQueryOptions({ ...DEFAULT_CLAUDE_SETTINGS, skillsMode: 'none' }).skills, []);
   assert.deepEqual(
     toQueryOptions({ effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf', 'ecc:tdd'], disabledMcp: ['plugin:github:github'], auth: 'cli' }),
