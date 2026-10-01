@@ -1,3 +1,4 @@
+import { coerceContract } from './contracts.ts';
 import path from 'node:path';
 import { SAVE_SLOTS, AUTO_SAVE_SLOT, type RunState } from './battle.ts';
 import { readStore, writeStore } from './store.ts';
@@ -36,7 +37,8 @@ export function isSaveSlot(v: any): v is SaveSlot {
     isCounts(v.stats) &&
     (v.sessionId === undefined || typeof v.sessionId === 'string') &&
     (v.monsterHp === undefined || isCount(v.monsterHp)) &&
-    (v.runId === undefined || typeof v.runId === 'string')
+    (v.runId === undefined || typeof v.runId === 'string') &&
+    (v.contract === undefined || coerceContract(v.contract) !== undefined)
   );
 }
 

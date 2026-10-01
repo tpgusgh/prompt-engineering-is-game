@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { loadProfile, saveProfile, levelForXp, addXp, applyRun, rebirth, startingStatPoints, PRESTIGE_LEVEL, type Profile } from '../src/profile.ts';
+import { loadProfile, saveProfile, levelForXp, addXp, applyRun, rebirth, startingStatPoints, withRunKit, PRESTIGE_LEVEL, type Profile } from '../src/profile.ts';
 import type { BattleSummary } from '../src/battle.ts';
 import { emptyRecords, emptyRunStats } from '../src/progress.ts';
 
-const EXTRA = { storyFloors: {}, coins: 0, bag: {}, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'medium' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
+const EXTRA = { storyFloors: {}, coins: 0, maxHp: 100, swordLevel: 0, heroClass: 'swordsman' as const, claude: { effort: 'medium' as const, skillsMode: 'all' as const, enabledSkills: [], disabledMcp: [], auth: 'cli' as const }, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
 
 test('loadProfile returns defaults when no file exists', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
@@ -17,9 +17,9 @@ test('loadProfile returns defaults when no file exists', async () => {
 
 test('saveProfile then loadProfile round-trips', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'promptbattle-'));
-  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, contract: { kind: 'god', id: 'fire' }, relics: ['coinCharm'], maxHpPenalty: 0 }, dir);
+  await saveProfile({ level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, runKits: { r1: { bag: { potion: 2 }, contract: { kind: 'god', id: 'fire' } } }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, relics: ['coinCharm'], maxHpPenalty: 0 }, dir);
   const profile = await loadProfile(dir);
-  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, bag: { potion: 2 }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, contract: { kind: 'god', id: 'fire' }, relics: ['coinCharm'], maxHpPenalty: 0 });
+  assert.deepEqual(profile, { level: 3, xp: 250, totalWins: 5, totalBattles: 6, storyFloors: { adventure: 8 }, coins: 42, runKits: { r1: { bag: { potion: 2 }, contract: { kind: 'god', id: 'fire' } } }, maxHp: 100, swordLevel: 3, heroClass: 'wizard', claude: { effort: 'low', skillsMode: 'custom', enabledSkills: ['pdf'], disabledMcp: ['fusion360'], auth: 'api' }, records: { ...emptyRecords(), turns: 7, seen: [3] }, achievements: ['first-win'], daily: { date: '2026-09-30', questId: 'tests-3', progress: 1, done: false }, relics: ['coinCharm'], maxHpPenalty: 0 });
 });
 
 test('loadProfile falls back to defaults on corrupted JSON', async () => {
@@ -84,12 +84,12 @@ test('bad coins/bag/maxHp fall back', async () => {
   await mkdir(path.join(dir, '.promptbattle'), { recursive: true });
   await writeFile(
     path.join(dir, '.promptbattle', 'profile.json'),
-    JSON.stringify({ coins: -3, bag: { potion: 2, smoke: -1, amulet: 'x' }, maxHp: 50 }),
+    JSON.stringify({ coins: -3, runKits: { r1: { bag: { potion: 2, smoke: -1, amulet: 'x' }, contract: { kind: 'god', id: 'nope' } }, r2: 'x' }, maxHp: 50 }),
     'utf-8',
   );
   const profile = await loadProfile(dir);
   assert.equal(profile.coins, 0);
-  assert.deepEqual(profile.bag, { potion: 2 });
+  assert.deepEqual(profile.runKits, { r1: { bag: { potion: 2 } } });
   assert.equal(profile.maxHp, 100);
 });
 
@@ -101,14 +101,15 @@ function summary(overrides: Partial<BattleSummary>): BattleSummary {
 }
 const base: Profile = { level: 1, xp: 80, totalWins: 1, totalBattles: 1, ...EXTRA };
 
-test('applyRun records xp, stats, coins, bag, max HP and the exact floor to resume from', () => {
-  const p = applyRun(base, summary({}), 'adventure');
+test('applyRun records xp, stats, coins, the run\'s bag, max HP and the exact floor to resume from', () => {
+  const p = applyRun(base, summary({ runId: 'r1' }), 'adventure');
   assert.equal(p.xp, 125);
   assert.equal(p.level, 2);
   assert.equal(p.totalWins, 3);
   assert.equal(p.totalBattles, 4);
   assert.equal(p.coins, 70);
-  assert.deepEqual(p.bag, { potion: 1 });
+  assert.deepEqual(p.runKits, { r1: { bag: { potion: 1 } } }, 'the bag belongs to its run: a new one starts empty');
+  assert.equal('bag' in p, false);
   assert.deepEqual(p.storyFloors, { adventure: 9 });
   assert.equal(p.swordLevel, 4);
   assert.equal('stats' in p, false, 'stats are per-run, never saved to the profile');
@@ -217,13 +218,24 @@ test('older profiles fill the bestiary from the story floors already reached', a
   assert.equal(profile.records.turns, 3);
 });
 
-test('applyRun keeps the contract and relics; a broken-pact max HP cut lasts only that run', () => {
-  const p = applyRun(base, summary({ contract: { kind: 'demon', id: 'greed' }, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
-  assert.deepEqual(p.contract, { kind: 'demon', id: 'greed' });
+test('applyRun: the contract belongs to its run (not the next one), relics stay; a broken-pact max HP cut lasts only that run', () => {
+  const p = applyRun(base, summary({ runId: 'r1', contract: { kind: 'demon', id: 'greed' }, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
+  assert.equal('contract' in p, false, 'a new run starts without a pact');
+  assert.deepEqual(p.runKits?.r1.contract, { kind: 'demon', id: 'greed' }, 'its own save still has it');
   assert.deepEqual(p.relics, ['coinCharm']);
   assert.equal(p.maxHpPenalty, 0);
   assert.equal(p.maxHp, 100, 'the next run starts at full base max HP');
-  const broken = applyRun(p, summary({ contract: null, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
-  assert.equal(broken.contract, undefined);
+  const broken = applyRun(p, summary({ runId: 'r1', contract: null, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
+  assert.equal(broken.runKits?.r1.contract, undefined);
   assert.equal(broken.maxHp, 100);
+});
+
+test('withRunKit keeps each run\'s latest bag and pact (a reloaded old save gets them, not its stale copy), the latest 50 runs', () => {
+  let p: Profile = base;
+  for (let i = 0; i < 55; i++) p = withRunKit(p, `r${i}`, { potion: i }, { kind: 'god', id: 'fire' });
+  p = withRunKit(p, 'r54', {}, null);
+  assert.equal(Object.keys(p.runKits!).length, 50);
+  assert.deepEqual(p.runKits!.r54, { bag: {} }, 'an emptied bag and a broken pact are kept too');
+  assert.deepEqual(p.runKits!.r53, { bag: { potion: 53 }, contract: { kind: 'god', id: 'fire' } });
+  assert.equal(p.runKits!.r0, undefined);
 });

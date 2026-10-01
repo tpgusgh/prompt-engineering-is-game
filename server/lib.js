@@ -52,15 +52,8 @@ function readRunToken(serverSecret, token) {
   }
 }
 
-// The hero's look: only slot → item id pairs ("hair" → "hair/hair_afro_black").
-const cleanAvatar = (v) => {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-  const out = {};
-  for (const [slot, id] of Object.entries(v).slice(0, 12)) {
-    if (/^[a-z]{2,8}$/.test(slot) && typeof id === 'string' && id.length <= 64 && /^[a-z]+\/[a-z0-9_]+$/.test(id)) out[slot] = id;
-  }
-  return out;
-};
+// A title bought in the game's 칭호 상점: just its id ("bug-hunter").
+const cleanBadge = (v) => (typeof v === 'string' && /^[a-z0-9-]{1,24}$/.test(v) ? v : undefined);
 
 const cleanName = (name) =>
   typeof name === 'string' ? name.normalize('NFC').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 16) : '';
@@ -161,7 +154,7 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
     heroClass: typeof body.heroClass === 'string' ? body.heroClass.slice(0, 16) : '',
     level: isCount(body.level, 100_000) ? body.level : 1,
     prestige: isCount(body.prestige, 1000) ? body.prestige : 0,
-    avatar: cleanAvatar(body.avatar),
+    ...(cleanBadge(body.badge) ? { badge: cleanBadge(body.badge) } : {}),
     ...(body.daily !== undefined ? { daily: body.daily } : {}),
     at: now,
   });

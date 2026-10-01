@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { runDungeon, bestiary, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import type { TurnResult } from '../src/agent.ts';
 
-const ONE_SHOT_PROMPT = 'test refactor ' + 'x'.repeat(700); // crits at 225 damage, one-shots floors 0-2
+// All 7 prompt criteria + 320 characters: 40 x (1 + 7 x 0.5) x 1.5 = 270, one-shots floors 0-2.
+const ONE_SHOT_PROMPT = 'src/app.ts 건드리지 말고 왜 그런지 단계별로 테스트 예시 엣지 케이스 ' + 'x'.repeat(320);
 
 function makeFakeDeps(inputs: string[], turnResult: TurnResult = { summary: 'ok', filesChanged: [], commandsRun: [] }) {
   let i = 0;
@@ -585,6 +586,13 @@ test('/save N snapshots the run as a free action (no turn, no counter)', async (
   assert.equal(events.filter((e) => e.type === 'monsterAttack').length, 1);
 });
 
+test('/save keeps the run\'s pact in the save (it belongs to the run, not the profile)', async () => {
+  const { deps, events } = makeFakeDeps(['/save 2', '/quit']);
+  await runDungeon({ ...deps, contract: { kind: 'demon', id: 'greed' } });
+  const snap = events.find((e) => e.type === 'snapshot' && e.slot === 2);
+  assert.ok(snap && snap.type === 'snapshot' && snap.state.contract?.id === 'greed');
+});
+
 test('/save with a bad slot is refused', async () => {
   const { deps, events } = makeFakeDeps(['/save 9', '/quit']);
   await runDungeon(deps);
@@ -711,13 +719,13 @@ test('every successful tool result lands its own hit (25% of the prompt damage, 
   ]);
   await runDungeon(deps);
   const hits = events.filter((e) => e.type === 'partialHit').map((e) => (e.type === 'partialHit' ? e.damage : -1));
-  assert.deepEqual(hits, [12, 12], '225 * 0.25 capped at 12, once per successful action');
+  assert.deepEqual(hits, [12, 12], '270 * 0.25 capped at 12, once per successful action');
   const attack = events.find((e) => e.type === 'attack');
-  assert.ok(attack && attack.type === 'attack' && attack.damage === 225, 'the closing blow is the whole prompt damage');
+  assert.ok(attack && attack.type === 'attack' && attack.damage === 270, 'the closing blow is the whole prompt damage');
 });
 
 test('more work = more damage: a short prompt still wins by doing many actions', async () => {
-  const SHORT = 'x'.repeat(50); // 20 prompt damage → 5 per action
+  const SHORT = 'x'.repeat(80); // 20 prompt damage → 5 per action
   const actions = Array.from({ length: 10 }, (_, i) => [
     { type: 'command', value: `step ${i}`, toolId: `t${i}` },
     { type: 'toolResult', toolId: `t${i}`, output: 'ok', isError: false },
@@ -744,7 +752,7 @@ test('failed tool results do not hit; calls alone do not hit; text and party eve
 });
 
 test('action hits land even if the turn later errors; only the closing blow is skipped', async () => {
-  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action
+  const { deps, events } = makeFakeDeps(['x'.repeat(240), '/quit']); // 40 damage → 10 per action
   deps.runTurn = scriptedTurn(
     [{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }],
     { summary: '', filesChanged: [], commandsRun: [], error: 'rate limited' },
@@ -756,7 +764,7 @@ test('action hits land even if the turn later errors; only the closing blow is s
 });
 
 test('a stopped (interrupted) turn keeps its hits, skips the closing blow, and the monster waits (no counter)', async () => {
-  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']);
+  const { deps, events } = makeFakeDeps(['x'.repeat(240), '/quit']);
   deps.runTurn = scriptedTurn(
     [{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }],
     { summary: 'partial', filesChanged: [], commandsRun: [], interrupted: true, sessionId: 's-int' },
@@ -789,7 +797,7 @@ test('the run reports its stats: turns, tokens, tests passed, edits, crits, best
   assert.equal(s.testsPassed, 1, 'the failed test run does not count');
   assert.equal(s.filesEdited, 1);
   assert.equal(s.crits, 1);
-  assert.equal(s.bestHit, 225);
+  assert.equal(s.bestHit, 270);
   assert.equal(s.floorsCleared, 1);
   assert.deepEqual(s.byModel, { sonnet: { engaged: 1, cleared: 1 } });
   assert.deepEqual(s.seen, [0, 1], 'floor 0 fought, floor 1 met before quitting');
@@ -817,7 +825,7 @@ test('boss gimmicks: chapter 1 boss heals when a tool fails', async () => {
 });
 
 test('boss gimmicks: the chapter 2 boss only takes damage from a turn whose tests passed', async () => {
-  const blocked = makeFakeDeps(['x'.repeat(150), '/quit']);
+  const blocked = makeFakeDeps(['x'.repeat(240), '/quit']);
   blocked.deps.runTurn = scriptedTurn([{ type: 'file', value: 'a.ts', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
   await runDungeon({ ...blocked.deps, startFloor: 11 });
   const start = blocked.events.find((e) => e.type === 'floorStart');
@@ -827,7 +835,7 @@ test('boss gimmicks: the chapter 2 boss only takes damage from a turn whose test
   const lastHp = blocked.events.filter((e) => e.type === 'hpChanged').at(-1);
   assert.ok(lastHp && lastHp.type === 'hpChanged' && lastHp.hp === lastHp.maxHp, 'the edit hit was undone');
 
-  const passed = makeFakeDeps(['x'.repeat(150), '/quit']);
+  const passed = makeFakeDeps(['x'.repeat(240), '/quit']);
   passed.deps.runTurn = scriptedTurn([{ type: 'command', value: 'npm test', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
   await runDungeon({ ...passed.deps, startFloor: 11 });
   assert.equal(passed.events.filter((e) => e.type === 'gimmickBlocked').length, 0);
@@ -871,7 +879,7 @@ test('traits: the bug goblin (thorns) hurts the hero for each failed tool result
 });
 
 test('traits: the type-error slime (armor) takes half work hits', async () => {
-  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action, halved
+  const { deps, events } = makeFakeDeps(['x'.repeat(240), '/quit']); // 40 damage → 10 per action, halved
   deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
   await runDungeon({ ...deps, startFloor: 1 });
   assert.deepEqual(events.filter((e) => e.type === 'partialHit').map((e) => (e.type === 'partialHit' ? e.damage : -1)), [5]);
@@ -947,11 +955,11 @@ test('difficulty scales rewards: easy x0.7, hard x1.5 coins and XP', async () =>
   assert.equal(easy.coins, Math.round(10 * 0.7));
 });
 
-test('treasure chest: the overkill of the killing blow picks the grade (goblin 60 HP, 225 blow = 165 → gold)', async () => {
+test('treasure chest: the overkill of the killing blow picks the grade (goblin 60 HP, 270 blow = 210 → legend)', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
   const summary = await runDungeon({ ...deps, chests: true });
   const chest = events.find((e) => e.type === 'chestOpened');
-  assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'diamond' && chest.overkill === 165, '165 past a 60-HP goblin = 275% → diamond');
+  assert.ok(chest && chest.type === 'chestOpened' && chest.grade === 'legend' && chest.overkill === 210, '210 past a 60-HP goblin = 350% → legend');
   assert.deepEqual(chest.items, [], 'no item on a 0.99 roll (gold drops 50% of the time)');
   assert.ok(summary.coins > 10, 'floor coins plus the chest');
   const lucky = makeFakeDeps([ONE_SHOT_PROMPT, '/quit']);
@@ -1029,7 +1037,7 @@ test('pets: a good chest can hold a pet you do not own yet', async () => {
 });
 
 test('treasure chest: once the monster is down mid-turn, later work hits pile onto the chest', async () => {
-  const { deps, events } = makeFakeDeps(['x'.repeat(150), '/quit']); // 40 damage → 10 per action; goblin has 60
+  const { deps, events } = makeFakeDeps(['x'.repeat(240), '/quit']); // 40 damage → 10 per action; goblin has 60
   const calls = Array.from({ length: 7 }, (_, i) => [
     { type: 'command', value: `echo ${i}`, toolId: `t${i}` },
     { type: 'toolResult', toolId: `t${i}`, output: 'ok', isError: false },
@@ -1095,7 +1103,7 @@ test('contracts: an existing contract from the profile breaks on the next scroll
 });
 
 test('contracts: sloth removes work hits and doubles the closing blow; greed adds 50% coins', async () => {
-  const sloth = makeFakeDeps(['x'.repeat(150), '/quit']);
+  const sloth = makeFakeDeps(['x'.repeat(240), '/quit']);
   sloth.deps.runTurn = scriptedTurn([{ type: 'command', value: 'ls', toolId: 't1' }, { type: 'toolResult', toolId: 't1', output: 'ok', isError: false }]);
   await runDungeon({ ...sloth.deps, contract: { kind: 'demon', id: 'sloth' } });
   assert.equal(sloth.events.filter((e) => e.type === 'partialHit').length, 0);

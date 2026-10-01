@@ -1,27 +1,18 @@
+import { PROMPT_CRITERIA, CRITERIA_BONUS, CRIT_AT } from '../electron/renderer/prompt-criteria.js';
+
 export interface DamageResult {
   damage: number;
   crit: boolean;
+  // The prompt criteria met (electron/renderer/prompt-criteria.js), by label.
   matchedKeywords: string[];
 }
 
-// Each group counts once toward crit; the first form found is reported.
-const KEYWORD_GROUPS = [
-  ['step by step', '단계별', '차근차근', '순서대로', '하나씩'],
-  ['test', '테스트', '검증'],
-  ['edge case', '엣지 케이스', '엣지케이스', '예외 상황', '예외 케이스', '경계값'],
-  ['refactor', '리팩토링', '리팩터링', '리팩터'],
-  ['why', '왜', '이유'],
-  ['example', '예시', '예제'],
-];
-
+// Length sets a base (10 + 1 per 8 characters, up to 40); each criterion met
+// adds +50%; three or more crit (x1.5).
 export function calculateDamage(prompt: string): DamageResult {
-  const length = prompt.length;
-  const base = Math.min(150, Math.max(10, 10 + Math.floor(length / 5)));
-  const lower = prompt.toLowerCase();
-  const matchedKeywords = KEYWORD_GROUPS
-    .map((group) => group.find((keyword) => lower.includes(keyword)))
-    .filter((keyword): keyword is string => keyword !== undefined);
-  const crit = matchedKeywords.length >= 2;
-  const damage = crit ? Math.round(base * 1.5) : base;
+  const base = Math.min(40, 10 + Math.floor(prompt.length / 8));
+  const matchedKeywords = PROMPT_CRITERIA.filter((c) => c.test.test(prompt)).map((c) => c.label);
+  const crit = matchedKeywords.length >= CRIT_AT;
+  const damage = Math.round(base * (1 + CRITERIA_BONUS * matchedKeywords.length) * (crit ? 1.5 : 1));
   return { damage, crit, matchedKeywords };
 }

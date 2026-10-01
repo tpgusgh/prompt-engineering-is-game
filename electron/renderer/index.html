@@ -10,7 +10,6 @@
     <section id="setup-screen">
       <header class="setup-header">
         <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
-        <button type="button" id="hero-avatar-btn" class="hero-avatar-btn" title="꾸미기: 코인으로 옷·머리·펫을 사서 입힌다"></button>
         <div class="setup-hero">
           <p id="profile-line" class="profile-line"></p>
           <button type="button" id="rebirth-btn" class="rebirth-btn" hidden>🌟 환생하기</button>
@@ -20,6 +19,7 @@
         </div>
         <div class="setup-actions">
           <button type="button" class="settings-btn" id="update-check-btn" title="새 버전이 있는지 확인">🔄 업데이트</button>
+          <button type="button" class="settings-btn" id="title-shop-btn" title="칭호 상점: 코인으로 칭호를 사서 랭킹에 단다">👑 칭호</button>
           <button type="button" class="settings-btn" id="ranking-btn" title="온라인 랭킹 (상위 100명)">🏆 랭킹</button>
           <button type="button" class="settings-btn" id="bestiary-btn" title="몬스터 도감">📖 도감</button>
           <button type="button" class="settings-btn" id="records-btn" title="기록 · 업적 · 오늘의 퀘스트">📊 기록</button>
@@ -301,6 +301,7 @@
           <button type="button" id="session-btn">세션</button>
           <button type="button" id="exit-btn">나가기</button>
         </form>
+        <div id="prompt-meter" class="prompt-meter" title="좋은 프롬프트 기준: 하나마다 피해 +50%, 3개 이상이면 크리티컬 ×1.5"></div>
         <p class="usage-bar" data-usage title="클릭해서 새로고침"></p>
       </div>
     </section>
@@ -427,23 +428,15 @@
       </div>
     </div>
 
-    <div id="wardrobe-overlay" class="file-viewer-overlay" hidden>
-      <div class="settings-panel wardrobe-panel" role="dialog" aria-label="꾸미기">
+    <div id="title-shop-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel title-shop-panel" role="dialog" aria-label="칭호 상점">
         <div class="settings-head">
-          <h2>👕 꾸미기 <span id="wardrobe-coins" class="coin-label"></span></h2>
-          <button type="button" id="wardrobe-close" aria-label="닫기">✕</button>
+          <h2>👑 칭호 상점 <span id="title-shop-coins" class="coin-label"></span></h2>
+          <button type="button" id="title-shop-close" aria-label="닫기">✕</button>
         </div>
-        <div class="wardrobe-body">
-          <div class="wardrobe-preview">
-            <div id="wardrobe-avatar"></div>
-            <p class="option-sub">업적과 모험이 끝나서 얻은 코인으로 산다. 랭킹에도 이 모습이 나온다.</p>
-          </div>
-          <div class="wardrobe-shop">
-            <nav id="wardrobe-tabs" class="settings-tabs wardrobe-tabs"></nav>
-            <div id="wardrobe-items" class="wardrobe-items"></div>
-            <p id="wardrobe-msg" class="choice-hint"></p>
-          </div>
-        </div>
+        <p class="option-sub">업적과 모험이 끝나서 얻은 코인으로 산다. 단 칭호는 랭킹에서 레벨 칭호 대신 보인다.</p>
+        <div id="title-shop-items" class="title-shop-items"></div>
+        <p id="title-shop-msg" class="choice-hint"></p>
       </div>
     </div>
 
@@ -530,7 +523,6 @@
           <button type="button" id="rank-detail-close" aria-label="닫기">✕</button>
         </div>
         <div class="rank-detail-body">
-          <div id="rank-detail-avatar"></div>
           <dl id="rank-detail-stats" class="rank-detail-stats"></dl>
         </div>
       </div>

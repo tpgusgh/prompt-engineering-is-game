@@ -29,7 +29,6 @@ async function main(): Promise<void> {
       cwd: process.cwd(),
       difficulty,
       coins: profile.coins,
-      bag: profile.bag,
       playerMaxHp: profile.maxHp,
       swordLevel: profile.swordLevel,
       statPoints: startingStatPoints(profile),

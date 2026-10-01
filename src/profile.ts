@@ -3,7 +3,7 @@ import path from 'node:path';
 import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
 import type { BattleSummary, PaidXp } from './battle.ts';
 import { isPetId, type PetId } from './pets.ts';
-import { cleanAvatar } from './wardrobe.ts';
+import { BADGE_ID } from './titles.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
@@ -20,7 +20,10 @@ export interface Profile {
   // exactly where "오늘 모험 종료하기" left it.
   storyFloors: Record<string, number>;
   coins: number;
-  bag: Record<string, number>;
+  // Each run's bag and pact, by run id (the latest 50, like xpClaims): a new
+  // run starts with neither, and a reloaded save gets its run's current ones,
+  // not its stale copy (no selling the same item twice).
+  runKits?: Record<string, RunKit>;
   maxHp: number;
   // Permanent: the blacksmith's +N. (Hero stats are per-run, not saved here.)
   swordLevel: number;
@@ -32,9 +35,7 @@ export interface Profile {
   records: Records;
   achievements: string[];
   daily?: DailyState;
-  // Kept across runs: the hero's pact, relics (the coin charm), and max HP
-  // lost for good to broken contracts.
-  contract?: Contract;
+  // Kept across runs: relics (the coin charm).
   relics: string[];
   maxHpPenalty: number;
   // What XP each recent run line has banked (save/load dupe guard, see PaidXp).
@@ -46,13 +47,13 @@ export interface Profile {
   prestige?: number;
   // Boss relics worn (2 slots), kept between runs.
   equipment?: string[];
-  // 꾸미기 (src/wardrobe.ts): cosmetics owned, and the look worn.
-  wardrobe?: string[];
-  avatar?: Record<string, string>;
+  // 칭호 상점 (src/titles.ts): titles owned, and the one worn in the ranking.
+  titles?: string[];
+  badge?: string;
 }
 
 const BASE_MAX_HP = 100;
-const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, bag: {}, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
+const DEFAULT_PROFILE: Profile = { level: 1, xp: 0, totalWins: 0, totalBattles: 0, storyFloors: {}, coins: 0, maxHp: BASE_MAX_HP, swordLevel: 0, heroClass: DEFAULT_CLASS_ID, claude: DEFAULT_CLAUDE_SETTINGS, records: emptyRecords(), achievements: [], relics: [], maxHpPenalty: 0 };
 
 function profilePath(homeDir: string): string {
   return path.join(homeDir, '.promptbattle', 'profile.json');
@@ -119,6 +120,27 @@ function coerceClaims(v: unknown): Record<string, PaidXp> {
   return out;
 }
 
+export interface RunKit {
+  bag: Record<string, number>;
+  contract?: Contract;
+}
+function coerceKits(v: unknown): Record<string, RunKit> | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out: Record<string, RunKit> = {};
+  for (const [id, kit] of Object.entries(v as Record<string, any>)) {
+    if (!kit || typeof kit !== 'object' || Array.isArray(kit)) continue;
+    const contract = coerceContract(kit.contract);
+    out[id] = { bag: coerceCounts(kit.bag, 1), ...(contract ? { contract } : {}) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+export function withRunKit(profile: Profile, runId: string, bag: Record<string, number>, contract: Contract | null | undefined): Profile {
+  const { [runId]: _old, ...others } = profile.runKits ?? {};
+  const kept = Object.entries(others).slice(-(MAX_XP_CLAIMS - 1));
+  return { ...profile, runKits: { ...Object.fromEntries(kept), [runId]: { bag: { ...bag }, ...(contract ? { contract: { ...contract } } : {}) } } };
+}
+
 // ponytail: keeps the latest 50 run lines; a save older than that could be
 // paid again, bump it if anyone hoards 50+ runs of saves.
 const MAX_XP_CLAIMS = 50;
@@ -132,7 +154,6 @@ function coerceProfile(parsed: unknown): Profile {
     totalBattles: isValidCount(p?.totalBattles, 0) ? p.totalBattles : DEFAULT_PROFILE.totalBattles,
     storyFloors: coerceStoryFloors(p),
     coins: isValidCount(p?.coins, 0) ? p.coins : DEFAULT_PROFILE.coins,
-    bag: coerceCounts(p?.bag, 1),
     // Broken-pact max HP cuts used to last forever; now they last one run,
     // so any old saved penalty is dropped.
     maxHp: BASE_MAX_HP,
@@ -143,13 +164,13 @@ function coerceProfile(parsed: unknown): Profile {
     records: withLegacyBestiary(p?.records ? coerceRecords(p.records) : legacyRecords(p), p),
     achievements: Array.isArray(p?.achievements) ? p.achievements.filter((a): a is string => typeof a === 'string') : [],
     ...(coerceDaily(p?.daily) ? { daily: coerceDaily(p?.daily) } : {}),
-    ...(coerceContract(p?.contract) ? { contract: coerceContract(p?.contract) } : {}),
     relics: Array.isArray(p?.relics) ? p.relics.filter((r): r is string => r === 'coinCharm') : [],
     maxHpPenalty: 0,
+    ...(coerceKits(p?.runKits) ? { runKits: coerceKits(p?.runKits) } : {}),
     ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
     ...(isValidCount(p?.prestige, 0) && p.prestige > 0 ? { prestige: p.prestige } : {}),
-    ...(Array.isArray(p?.wardrobe) && p.wardrobe.length ? { wardrobe: [...new Set(p.wardrobe.filter((x): x is string => typeof x === 'string' && /^[a-z]+\/[a-z0-9_]+$/.test(x)))] } : {}),
-    ...(Object.keys(cleanAvatar(p?.avatar)).length ? { avatar: cleanAvatar(p?.avatar) } : {}),
+    ...(Array.isArray(p?.titles) && p.titles.length ? { titles: [...new Set(p.titles.filter((x): x is string => typeof x === 'string' && BADGE_ID.test(x)))] } : {}),
+    ...(typeof p?.badge === 'string' && BADGE_ID.test(p.badge) && p.titles?.includes(p.badge) ? { badge: p.badge } : {}),
     ...(Array.isArray(p?.equipment) && p.equipment.length ? { equipment: p.equipment.filter((x): x is string => typeof x === 'string' && /^boss-\d+$/.test(x)).slice(0, 2) } : {}),
     ...(Array.isArray(p?.pets) && p.pets.some(isPetId) ? { pets: [...new Set(p.pets.filter(isPetId))] } : {}),
     ...(isPetId(p?.activePet) && Array.isArray(p?.pets) && p.pets.includes(p.activePet) ? { activePet: p.activePet } : {}),
@@ -164,7 +185,7 @@ export async function loadProfile(homeDir: string = dataHome()): Promise<Profile
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       await fs.copyFile(profilePath(homeDir), `${profilePath(homeDir)}.broken-${Date.now()}`).catch(() => {});
     }
-    return { ...DEFAULT_PROFILE, storyFloors: {}, bag: {}, records: emptyRecords(), achievements: [], relics: [] };
+    return { ...DEFAULT_PROFILE, storyFloors: {}, records: emptyRecords(), achievements: [], relics: [] };
   }
 }
 
@@ -223,15 +244,11 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.totalWins += summary.floorsCleared;
   updated.totalBattles += summary.floorsEngaged;
   updated.coins = summary.coins;
-  updated.bag = { ...summary.bag };
+  if (summary.runId) updated.runKits = withRunKit(profile, summary.runId, summary.bag, summary.contract).runKits;
   // Max HP bonuses (vitality, life crystals) last one run: the next starts at
   // base, minus what broken contracts took for good.
   updated.maxHpPenalty = 0; // a broken pact's cut lasts only the run it happened in
   updated.maxHp = BASE_MAX_HP;
-  if (summary.contract !== undefined) {
-    if (summary.contract) updated.contract = summary.contract;
-    else delete updated.contract;
-  }
   updated.relics = [...(summary.relics ?? profile.relics ?? [])];
   updated.swordLevel = summary.swordLevel;
   if (summary.equipment) updated.equipment = [...summary.equipment];

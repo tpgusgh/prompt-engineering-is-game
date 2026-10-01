@@ -16,7 +16,8 @@ import { MONSTER_LINES } from './monster-lines.js';
 import { fatigueOf } from './fatigue.js';
 import { fx } from './fx.js';
 import { startTour, resetTutorial } from './tutorial.js';
-import { CATALOG, SLOTS, OPTIONAL, avatarNode, itemName as cosmeticName, itemImage, slotName } from './avatar.js';
+import { TITLE_SHOP } from './title-shop.js';
+import { PROMPT_CRITERIA, CRITERIA_BONUS, CRIT_AT, metCriteria } from './prompt-criteria.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -352,10 +353,9 @@ async function loadSetup() {
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
   renderDailyInfo();
-  renderHeroAvatar();
   chosenPet = profile.activePet ?? '';
   renderPetOptions();
-  heroContract = profile.contract ?? null;
+  heroContract = null; // pacts last one run
   renderContract();
   renderDailyLine();
   runXp = 0;
@@ -387,13 +387,12 @@ async function loadSetup() {
 loadSetup();
 
 function renderProfileLine() {
-  const pact = pactInfo(profile.contract);
   const charm = profile.relics?.includes('coinCharm') ? ' · 코인의 부적' : '';
   const stars = profile.prestige ? `${'★'.repeat(Math.min(profile.prestige, 5))}${profile.prestige > 5 ? `×${profile.prestige}` : ''} ` : '';
   const btn = $('rebirth-btn');
   btn.hidden = profile.level < prestigeLevel;
-  btn.title = `레벨 1로 돌아가는 대신 환생 ★ 하나: 피해·코인 +10%, 시작 능력치 포인트 +2 (영구, 누적). 코인·무기·동료·계약은 그대로.`;
-  profileLineEl.textContent = `🎖 ${stars}${titleOf(profile.level)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}${pact ? ` · 계약: ${pact.name}` : ''}${charm}`;
+  btn.title = `레벨 1로 돌아가는 대신 환생 ★ 하나: 피해·코인 +10%, 시작 능력치 포인트 +2 (영구, 누적). 코인·무기·동료는 그대로.`;
+  profileLineEl.textContent = `🎖 ${stars}${shownTitle(profile.level, profile.badge)} · 레벨 ${profile.level} · 총 ${profile.xp} XP · ${profile.totalWins}승 · ${profile.coins} 코인 · 최대 HP ${profile.maxHp} · 무기 +${profile.swordLevel}${charm}`;
 }
 
 // Battle stat panel: unspent points + one button per stat (a free action).
@@ -1348,6 +1347,7 @@ weaponSelect.addEventListener('change', async () => {
 
 sessionBannerUse.addEventListener('click', () => {
   promptInput.value = sessionBannerPrompt.textContent;
+  autoGrowInput();
   promptInput.focus();
 });
 
@@ -1675,7 +1675,7 @@ function renderBattleEvent(event) {
         appendLog(`『${skillName()}』 ${pick(ATTACK_LINES[chosenClass] ?? ATTACK_LINES.swordsman)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
         flashMonster();
       }
-      if (event.matchedKeywords.length > 0) appendLog(`(키워드: ${event.matchedKeywords.join(', ')})`);
+      if (event.matchedKeywords.length > 0) appendLog(`(기준: ${event.matchedKeywords.join(', ')} → +${Math.round(event.matchedKeywords.length * CRITERIA_BONUS * 100)}%)`);
       turnConcluded(chest.active || chest.opened ? `${currentMonsterName}을(를) 쓰러뜨렸다! 다음 명령을 내려줘.` : `『${skillName()}』 작업 완료 — 다음 명령을 내려줘.`);
       break;
     }
@@ -2332,9 +2332,13 @@ async function startGame({ loadSlot, slot, daily = false }) {
   logEl.textContent = '';
   setLastPrompt('');
   const startCoins = profile.coins; // for the summary's "coins gained"
-  // Coins and the bag are always the profile's wallet (see main.ts), even when loading a save.
+  // Coins are always the profile's wallet (see main.ts), even when loading a save;
+  // the bag is the run's: empty for a new game, the run's latest for a save.
   coins = profile.coins;
-  bag = { ...profile.bag };
+  const kit = slot?.runId ? profile.runKits?.[slot.runId] : undefined;
+  bag = slot ? { ...(kit?.bag ?? slot.bag) } : {};
+  heroContract = slot ? ((kit ? kit.contract : slot.contract) ?? null) : null;
+  renderContract();
   runXp = 0;
   renderXp();
   // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
@@ -2465,6 +2469,7 @@ attackForm.addEventListener('submit', (e) => {
   const text = promptInput.value;
   const trimmed = text.trim();
   promptInput.value = '';
+  autoGrowInput();
   // Only a real agent turn (or an empty hesitate) waits on an event that
   // re-enables input; slash commands (/new alone, /use, /buy, /flee...)
   // resolve instantly, so disabling for them would lock the input.
@@ -2534,6 +2539,26 @@ playAgainBtn.addEventListener('click', async () => {
 function autoGrowInput() {
   promptInput.style.height = 'auto';
   promptInput.style.height = `${Math.min(promptInput.scrollHeight, window.innerHeight * 0.4)}px`;
+  renderPromptMeter();
+}
+// The prompt criteria (prompt-criteria.js) light up as you type: each one met
+// is +50% damage, three or more crit.
+const meterChips = PROMPT_CRITERIA.map((c) => {
+  const chip = document.createElement('span');
+  chip.className = 'meter-chip';
+  chip.textContent = `${c.icon} ${c.label}`;
+  chip.title = c.hint;
+  return chip;
+});
+const meterTotal = document.createElement('span');
+meterTotal.className = 'meter-total';
+$('prompt-meter').append(...meterChips, meterTotal);
+function renderPromptMeter() {
+  const text = promptInput.value;
+  const met = new Set(text.startsWith('/') ? [] : metCriteria(text).map((c) => c.id));
+  PROMPT_CRITERIA.forEach((c, i) => meterChips[i].classList.toggle('on', met.has(c.id)));
+  meterTotal.textContent = met.size ? `+${Math.round(met.size * CRITERIA_BONUS * 100)}%${met.size >= CRIT_AT ? ' · 크리티컬 ×1.5' : ''}` : '';
+  meterTotal.classList.toggle('crit', met.size >= CRIT_AT);
 }
 promptInput.addEventListener('input', autoGrowInput);
 promptInput.addEventListener('keydown', (e) => {
@@ -3519,7 +3544,7 @@ function renderRankingTable() {
   $('ranking-status').textContent = shown.length ? '' : rankingEntries.length ? '조건에 맞는 기록이 없다' : empty;
   if (!shown.length) return;
   const head = document.createElement('tr');
-  for (const h of ['순위', '', '이름', '칭호', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
+  for (const h of ['순위', '이름', '칭호', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
     const th = document.createElement('th');
     th.textContent = h;
     head.append(th);
@@ -3534,9 +3559,8 @@ function renderRankingTable() {
     tr.addEventListener('click', () => openRankDetail(e));
     const cells = [
       e.rank <= 3 ? ['1위', '2위', '3위'][e.rank - 1] : String(e.rank),
-      null, // the avatar
       e.name ?? '',
-      `${stars}${titleOf(e.level ?? 1)}`,
+      `${stars}${shownTitle(e.level ?? 1, e.badge)}`,
       fmtNum(e.score),
       CLASS_NAME[e.heroClass] ?? '',
       THEMES.find((t) => t.id === e.theme)?.title ?? '',
@@ -3546,8 +3570,7 @@ function renderRankingTable() {
     ];
     for (const c of cells) {
       const td = document.createElement('td');
-      if (c === null) td.append(avatarNode(e.avatar ?? {}, 36));
-      else td.textContent = c;
+      td.textContent = c;
       tr.append(td);
     }
     table.append(tr);
@@ -3718,6 +3741,7 @@ async function openSkillbook() {
     load.addEventListener('click', () => {
       const rest = promptInput.value.replace(/^\/[a-z0-9-]+\s*/, '');
       promptInput.value = `/${skill.name} ${rest}`;
+      autoGrowInput();
       $('skillbook-overlay').hidden = true;
       promptInput.focus();
       autoGrowInput();
@@ -3792,7 +3816,7 @@ $('skill-form').addEventListener('submit', async (e) => {
 // Keyboard shortcuts (the ? key lists them).
 {
   const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
-  const OVERLAYS = ['shortcuts-overlay', 'rank-detail-overlay', 'wardrobe-overlay', 'skillbook-overlay', 'journal-overlay', 'ranking-overlay', 'records-overlay', 'bestiary-overlay'];
+  const OVERLAYS = ['shortcuts-overlay', 'rank-detail-overlay', 'title-shop-overlay', 'skillbook-overlay', 'journal-overlay', 'ranking-overlay', 'records-overlay', 'bestiary-overlay'];
   const openOverlay = () => OVERLAYS.map((id) => $(id)).find((el) => el && !el.hidden);
   $('shortcuts-close').addEventListener('click', () => ($('shortcuts-overlay').hidden = true));
   $('shortcuts-overlay').addEventListener('click', (e) => {
@@ -3936,102 +3960,71 @@ $('tutorial-replay').addEventListener('click', () => {
 
 
 // ---------------------------------------------------------------------------
-// 꾸미기: the hero's look, bought with the profile's coins (start screen only).
-let wardrobeSlot = 'hair';
-function renderHeroAvatar() {
-  const btn = $('hero-avatar-btn');
-  btn.textContent = '';
-  btn.append(avatarNode(profile?.avatar, 72));
+// 칭호 상점: titles bought with the profile's coins (start screen only); the
+// worn one shows instead of the level title, in the ranking too.
+function shownTitle(level, badge) {
+  return TITLE_SHOP.find((t) => t.id === badge)?.name ?? titleOf(level);
 }
-function renderWardrobe() {
-  $('wardrobe-coins').textContent = `🪙 ${fmtNum(profile.coins)}`;
-  const prev = $('wardrobe-avatar');
-  prev.textContent = '';
-  prev.append(avatarNode(profile.avatar, 240));
-  const tabs = $('wardrobe-tabs');
-  tabs.textContent = '';
-  for (const slot of SLOTS) {
+function renderTitleShop() {
+  $('title-shop-coins').textContent = `🪙 ${fmtNum(profile.coins)}`;
+  const list = $('title-shop-items');
+  list.textContent = '';
+  const owned = new Set(profile.titles ?? []);
+  const row = (name, tag, worn, locked, onClick) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.textContent = slotName(slot);
-    b.className = slot === wardrobeSlot ? 'active' : '';
-    b.addEventListener('click', () => {
-      wardrobeSlot = slot;
-      renderWardrobe();
-    });
-    tabs.append(b);
-  }
-  const grid = $('wardrobe-items');
-  grid.textContent = '';
-  const owned = new Set(profile.wardrobe ?? []);
-  const worn = (profile.avatar ?? {})[wardrobeSlot];
-  if (OPTIONAL.has(wardrobeSlot)) {
-    const none = document.createElement('button');
-    none.type = 'button';
-    none.className = `wardrobe-item${!worn ? ' worn' : ''}`;
-    none.textContent = '없음';
-    none.addEventListener('click', () => wardrobeAct(() => window.promptBattle.wardrobeWear(wardrobeSlot, null)));
-    grid.append(none);
-  }
-  for (const item of CATALOG.filter((i) => i.slot === wardrobeSlot)) {
-    const have = item.price === 0 || owned.has(item.id);
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = `wardrobe-item${worn === item.id ? ' worn' : ''}${have ? '' : ' locked'}`;
-    card.title = cosmeticName(item);
-    const img = document.createElement('img');
-    img.src = itemImage(item.id);
-    img.alt = '';
-    const name = document.createElement('small');
-    name.textContent = cosmeticName(item);
-    const tag = document.createElement('span');
-    tag.className = 'wardrobe-price';
-    tag.textContent = worn === item.id ? '착용 중' : have ? '입기' : `🪙 ${item.price}`;
-    card.append(img, name, tag);
-    card.addEventListener('click', () =>
-      wardrobeAct(async () => {
+    b.className = `title-shop-item${worn ? ' worn' : ''}${locked ? ' locked' : ''}`;
+    const n = document.createElement('strong');
+    n.textContent = name;
+    const t = document.createElement('span');
+    t.textContent = tag;
+    b.append(n, t);
+    b.addEventListener('click', onClick);
+    list.append(b);
+  };
+  row(`${titleOf(profile.level)} (레벨 칭호)`, profile.badge ? '달기' : '다는 중', !profile.badge, false, () => titleAct(() => window.promptBattle.titleWear(null)));
+  for (const t of TITLE_SHOP) {
+    const have = owned.has(t.id);
+    const worn = profile.badge === t.id;
+    row(t.name, worn ? '다는 중' : have ? '달기' : `🪙 ${fmtNum(t.price)}`, worn, !have, () =>
+      titleAct(async () => {
         if (!have) {
-          const r = await window.promptBattle.wardrobeBuy(item.id);
+          const r = await window.promptBattle.titleBuy(t.id);
           if (r.error) return r;
           sfx('coin');
         }
-        return window.promptBattle.wardrobeWear(item.slot, item.id);
+        return window.promptBattle.titleWear(t.id);
       }),
     );
-    grid.append(card);
   }
 }
-async function wardrobeAct(run) {
+async function titleAct(run) {
   const r = await run();
-  $('wardrobe-msg').textContent = r?.error ?? '';
+  $('title-shop-msg').textContent = r?.error ?? '';
   if (r?.profile) {
     profile = r.profile;
     renderProfileLine();
-    renderHeroAvatar();
   }
-  renderWardrobe();
+  renderTitleShop();
 }
-$('hero-avatar-btn').addEventListener('click', () => {
-  $('wardrobe-overlay').hidden = false;
-  $('wardrobe-msg').textContent = '';
-  renderWardrobe();
+$('title-shop-btn').addEventListener('click', () => {
+  $('title-shop-overlay').hidden = false;
+  $('title-shop-msg').textContent = '';
+  renderTitleShop();
 });
-$('wardrobe-close').addEventListener('click', () => ($('wardrobe-overlay').hidden = true));
-$('wardrobe-overlay').addEventListener('click', (e) => {
-  if (e.target === $('wardrobe-overlay')) $('wardrobe-overlay').hidden = true;
+$('title-shop-close').addEventListener('click', () => ($('title-shop-overlay').hidden = true));
+$('title-shop-overlay').addEventListener('click', (e) => {
+  if (e.target === $('title-shop-overlay')) $('title-shop-overlay').hidden = true;
 });
-// Ranking: a row's look and details.
+// Ranking: a row's details.
 function openRankDetail(e) {
   $('rank-detail-overlay').hidden = false;
   $('rank-detail-title').textContent = `${e.rank}위 · ${e.name ?? ''}`;
-  const av = $('rank-detail-avatar');
-  av.textContent = '';
-  av.append(avatarNode(e.avatar ?? {}, 200));
   const stats = $('rank-detail-stats');
   stats.textContent = '';
   const rows = [
     ['점수', fmtNum(e.score)],
-    ['칭호', `${e.prestige ? `★${e.prestige} ` : ''}${titleOf(e.level ?? 1)}`],
+    ['칭호', `${e.prestige ? `★${e.prestige} ` : ''}${shownTitle(e.level ?? 1, e.badge)}`],
     ['레벨', String(e.level ?? 1)],
     ['직업', CLASS_NAME[e.heroClass] ?? ''],
     ['테마', THEMES.find((t) => t.id === e.theme)?.title ?? ''],

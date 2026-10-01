@@ -2,52 +2,45 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateDamage } from '../src/damage.ts';
 
-test('short prompt deals minimum damage', () => {
+test('short prompt deals minimum damage, no criteria', () => {
   const result = calculateDamage('ok');
   assert.equal(result.damage, 10);
   assert.equal(result.crit, false);
   assert.deepEqual(result.matchedKeywords, []);
 });
 
-test('damage scales with length up to the cap', () => {
-  const medium = calculateDamage('x'.repeat(100));
-  assert.equal(medium.damage, 10 + Math.floor(100 / 5));
-
-  const huge = calculateDamage('x'.repeat(10000));
-  assert.equal(huge.damage, 150, 'damage must clamp at 150 for non-crit prompts');
+test('length counts less than before: 10 + 1 per 8 characters, capped at 40', () => {
+  assert.equal(calculateDamage('x'.repeat(160)).damage, 30);
+  assert.equal(calculateDamage('x'.repeat(10000)).damage, 40);
 });
 
-test('two or more matched keywords trigger a 1.5x crit', () => {
-  const prompt = 'please refactor this step by step and add a test for the edge case';
-  const result = calculateDamage(prompt);
-  assert.equal(result.crit, true);
-  assert.ok(result.matchedKeywords.includes('refactor'));
-  assert.ok(result.matchedKeywords.includes('test'));
-  const base = Math.min(150, Math.max(10, 10 + Math.floor(prompt.length / 5)));
-  assert.equal(result.damage, Math.round(base * 1.5));
+test('each criterion met adds +50%; the met ones are reported by name', () => {
+  const p = 'x'.repeat(149) + ' src/app.ts'; // 160 chars: base 30, one criterion
+  const r = calculateDamage(p);
+  assert.deepEqual(r.matchedKeywords, ['대상']);
+  assert.equal(r.damage, Math.round(30 * 1.5));
+  assert.equal(r.crit, false);
+  const two = calculateDamage('src/app.ts 고쳐줘, 테스트로 확인해');
+  assert.deepEqual(two.matchedKeywords, ['대상', '검증']);
+  assert.equal(two.crit, false);
 });
 
-test('a single matched keyword does not crit', () => {
-  const result = calculateDamage('please refactor this quickly');
-  assert.equal(result.matchedKeywords.length, 1);
-  assert.equal(result.crit, false);
+test('three or more criteria crit (x1.5)', () => {
+  const prompt = 'src/login.ts의 login()이 빈 값이면 터진다. 다른 파일은 건드리지 말고, 왜 그런지 설명한 뒤 단계별로 고치고 테스트로 확인해줘. 예: 빈 문자열이면 에러 메시지';
+  const r = calculateDamage(prompt);
+  assert.deepEqual(r.matchedKeywords, ['대상', '제약', '검증', '단계', '이유', '예시', '엣지 케이스']);
+  assert.equal(r.crit, true);
+  const base = Math.min(40, 10 + Math.floor(prompt.length / 8));
+  assert.equal(r.damage, Math.round(base * (1 + 7 * 0.5) * 1.5));
 });
 
-test('an extremely long prompt with keywords still clamps before the crit multiplier, never exceeding 225', () => {
-  const prompt = 'test refactor ' + 'x'.repeat(50000);
-  const result = calculateDamage(prompt);
-  assert.equal(result.crit, true);
-  assert.equal(result.damage, 225);
+test('a good prompt now beats a long vague one', () => {
+  const vague = calculateDamage('이거 좀 잘 고쳐줘 '.repeat(30));
+  const good = calculateDamage('src/cart.ts의 total()이 할인 후 음수가 된다. 경계값(0원) 처리하고 테스트로 확인해줘');
+  assert.ok(good.damage > vague.damage, `${good.damage} > ${vague.damage}`);
 });
 
-test('Korean keywords count toward crit', () => {
-  const result = calculateDamage('이 함수를 단계별로 리팩토링하고 테스트도 추가해줘');
-  assert.equal(result.crit, true);
-  assert.deepEqual(result.matchedKeywords, ['단계별', '테스트', '리팩토링']);
-});
-
-test('English and Korean forms of the same keyword count once', () => {
-  const result = calculateDamage('test 테스트');
-  assert.equal(result.matchedKeywords.length, 1);
-  assert.equal(result.crit, false);
+test('a numbered list counts as steps; English forms work too', () => {
+  assert.deepEqual(calculateDamage('1. read it\n2. fix it').matchedKeywords, ['단계']);
+  assert.deepEqual(calculateDamage('fix it step by step and verify with tests, because it breaks').matchedKeywords, ['검증', '단계', '이유']);
 });

@@ -6,7 +6,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
@@ -21,10 +20,11 @@ import { PETS, isPetId } from '../src/pets.ts';
 import { dailyDungeon, dailyRandom, seededRandom, dateSeed } from '../src/daily.ts';
 import { listSkills, saveSkill, deleteSkill } from '../src/skills.ts';
 import { loadJournal, recordJournal } from '../src/journal.ts';
-import { buyCosmetic, wearCosmetic, cleanAvatar, type CosmeticItem } from '../src/wardrobe.ts';
+import { buyTitle, wearTitle, cleanBadge } from '../src/titles.ts';
+import { TITLE_SHOP } from './renderer/title-shop.js';
 import { ROSTER_NAMES } from '../src/monsters.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
-import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, XP_PER_LEVEL, TITLES, PRESTIGE_LEVEL } from '../src/profile.ts';
+import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, withRunKit, XP_PER_LEVEL, TITLES, PRESTIGE_LEVEL } from '../src/profile.ts';
 import { ACHIEVEMENTS, DAILY_QUESTS, currentDaily, localDate } from '../src/progress.ts';
 import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession } from '../src/sessions.ts';
 import type { Difficulty } from '../src/monsters.ts';
@@ -676,15 +676,16 @@ ipcMain.handle(
       cwd,
       difficulty: options.difficulty,
       // The wallet is the profile's, never a save slot's: reloading a save
-      // can't copy coins or items back (it's kept up to date below).
+      // can't copy coins back (it's kept up to date below). The bag and the
+      // pact are the run's: none for a new one, the run's latest for a save.
       coins: profile.coins,
-      bag: profile.bag,
+      bag: slot ? (profile.runKits?.[runId]?.bag ?? slot.bag) : {},
       playerMaxHp: slot ? slot.playerMaxHp : profile.maxHp,
       playerHp: slot?.playerHp,
       monsterHp: slot?.monsterHp,
       bindExternalHit: (fn) => (externalHit = fn),
       getModel: () => currentModel,
-      contract: profile.contract ?? null,
+      contract: slot ? ((profile.runKits?.[runId] ? profile.runKits[runId].contract : slot.contract) ?? null) : null,
       relics: profile.relics,
       themeId: options.themeId,
       initialSessionId: options.sessionId,
@@ -713,7 +714,7 @@ ipcMain.handle(
         if (event.slot === 0) {
           // Every input wait: the live wallet goes to the profile (a crash keeps it).
           const { coins: liveCoins, bag: liveBag, swordLevel: liveSword } = event.state;
-          walletWrites = walletWrites.then(async () => saveProfile({ ...(await loadProfile()), coins: liveCoins, bag: { ...liveBag }, swordLevel: liveSword })).catch(() => {});
+          walletWrites = walletWrites.then(async () => saveProfile({ ...withRunKit(await loadProfile(), runId, liveBag, event.state.contract), coins: liveCoins, swordLevel: liveSword })).catch(() => {});
           if (data.sessionId) {
             // Autosave, keyed by Claude session; keep the 30 most recent.
             const all = { ...folder.runStates, [data.sessionId]: data };
@@ -763,7 +764,7 @@ ipcMain.handle(
     const startFloor = Math.min(summary.nextFloor, Math.max(0, Math.floor(options.startFloor || 0)));
     pendingRank =
       runToken && rankScore > 0
-        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, avatar: cleanAvatar(updated.avatar), ...(day ? { daily: day.date } : {}) }
+        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, ...(cleanBadge(updated.badge) ? { badge: updated.badge } : {}), ...(day ? { daily: day.date } : {}) }
         : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
@@ -782,19 +783,18 @@ function insideCwd(filePath: string): string | null {
 const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
 // 스킬북 (src/skills.ts): the run's project skills plus the user's.
 ipcMain.handle('journal-get', () => loadJournal());
-// 꾸미기: buy and wear cosmetics with the profile's coins — only between runs
+// 칭호 상점: buy and wear titles with the profile's coins — only between runs
 // (during one the live wallet is the run's).
-const COSMETICS: CosmeticItem[] = JSON.parse(readFileSync(path.join(__dirname, 'renderer', 'avatar', 'catalog.json'), 'utf-8')).items;
 let runActive = false;
-const wardrobeChange = async (change: (p: Awaited<ReturnType<typeof loadProfile>>) => ReturnType<typeof buyCosmetic>) => {
-  if (runActive) return { error: '모험 중에는 꾸밀 수 없다 — 시작 화면에서!' };
+const titleChange = async (change: (p: Awaited<ReturnType<typeof loadProfile>>) => ReturnType<typeof buyTitle>) => {
+  if (runActive) return { error: '모험 중에는 살 수 없다 — 시작 화면에서!' };
   const result = change(await loadProfile());
   if ('error' in result) return result;
   await saveProfile(result.profile);
   return { profile: result.profile };
 };
-ipcMain.handle('wardrobe-buy', (_event, id: unknown) => wardrobeChange((p) => buyCosmetic(p, COSMETICS, String(id))));
-ipcMain.handle('wardrobe-wear', (_event, slot: unknown, id: unknown) => wardrobeChange((p) => wearCosmetic(p, COSMETICS, String(slot), id === null ? null : String(id))));
+ipcMain.handle('title-buy', (_event, id: unknown) => titleChange((p) => buyTitle(p, TITLE_SHOP, String(id))));
+ipcMain.handle('title-wear', (_event, id: unknown) => titleChange((p) => wearTitle(p, id === null ? null : String(id))));
 // Codex: sign-in (ChatGPT, in the browser) and its model families.
 ipcMain.handle('codex-status', async () => ({ ...(await codexLoginStatus()), models: await codexModels() }));
 ipcMain.handle('codex-login', () => codexLogin());

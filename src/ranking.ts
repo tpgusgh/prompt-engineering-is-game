@@ -81,7 +81,7 @@ export interface RankedRun {
   heroClass: string;
   level: number;
   prestige?: number;
-  avatar?: Record<string, string>; // the hero's look (cosmetic, shown in the table)
+  badge?: string; // a title bought in the 칭호 상점, shown instead of the level title
   // 일일 도전 date: the run also goes on that day's board.
   daily?: string;
 }

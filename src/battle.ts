@@ -120,6 +120,8 @@ export interface RunState {
   monsterHp?: number;
   // The run line this save belongs to (see PaidXp).
   runId?: string;
+  // The run's pact (pacts last one run).
+  contract?: Contract;
 }
 
 // Highest floor whose clear XP, and whose scroll XP, a run line has already
@@ -621,6 +623,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     ...(sessionId ? { sessionId } : {}),
     ...(hp > 0 ? { monsterHp: hp } : {}),
     ...(deps.runId ? { runId: deps.runId } : {}),
+    ...(contract ? { contract: { ...contract } } : {}),
   });
   // Every wait for input: the per-session autosave (slot 0) and the auto slot
   // (4), both with the live state — a wounded monster stays wounded on load.

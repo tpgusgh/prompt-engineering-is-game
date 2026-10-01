@@ -3427,55 +3427,38 @@ body.a11y-calm .fx-number {
 }
 .ai-switch button.active { background: #88c0d0; color: #1d222d; font-weight: 700; }
 
-/* ---- Avatar (avatar.js) ---- */
-.avatar { position: relative; display: inline-block; flex-shrink: 0; }
-.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-.avatar .avatar-pet { inset: auto -18% 0 auto; width: 55%; height: 55%; }
-.hero-avatar-btn {
-  padding: 4px;
-  border-radius: 12px;
-  border: 1px solid #3b4252;
-  background: #1d222d;
-  cursor: pointer;
-}
-.hero-avatar-btn:hover { border-color: #ebcb8b; }
-.wardrobe-panel { width: min(940px, calc(100vw - 32px)); }
-.wardrobe-body { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: 0; }
-.wardrobe-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.wardrobe-preview > div { background: radial-gradient(circle at 50% 60%, #2e3440, #1a1d26); border-radius: 14px; padding: 10px; }
-.wardrobe-shop { display: flex; flex-direction: column; min-height: 0; }
-.wardrobe-tabs { flex-wrap: wrap; }
-.wardrobe-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
-  overflow-y: auto;
-  max-height: 52vh;
-  padding: 4px 2px;
-}
-.wardrobe-item {
+/* ---- 칭호 상점 ---- */
+.title-shop-panel { width: min(560px, calc(100vw - 32px)); }
+.title-shop-items { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 60vh; }
+.title-shop-item {
+  margin: 0;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  gap: 3px;
-  padding: 6px;
+  gap: 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid #3b4252;
   background: #1d222d;
-  color: #d8dee9;
+  color: #eceff4;
   cursor: pointer;
-  min-height: 60px;
+  text-align: left;
 }
-.wardrobe-item img { width: 80px; height: 80px; image-rendering: pixelated; }
-.wardrobe-item small { font-size: 11px; text-align: center; line-height: 1.2; }
-.wardrobe-item.worn { border-color: #88c0d0; box-shadow: 0 0 0 1px #88c0d0 inset; }
-.wardrobe-item.locked img { filter: grayscale(0.6) brightness(0.8); }
-.wardrobe-price { font-size: 11px; color: #ebcb8b; }
+.title-shop-item:hover { border-color: #ebcb8b; }
+.title-shop-item span { font-size: 12px; color: #ebcb8b; white-space: nowrap; }
+.title-shop-item.worn { border-color: #88c0d0; box-shadow: 0 0 0 1px #88c0d0 inset; }
+.title-shop-item.worn span { color: #88c0d0; }
+.title-shop-item.locked strong { color: #8f99ab; }
 .rank-row { cursor: pointer; }
 .rank-row:hover td { background: rgba(136, 192, 208, 0.08); }
-.ranking-table td .avatar { vertical-align: middle; }
 .rank-detail-panel { width: min(520px, calc(100vw - 32px)); }
-.rank-detail-body { display: flex; gap: 16px; align-items: center; }
 .rank-detail-stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; color: #d8dee9; }
 .rank-detail-stats dt { color: #8f99ab; }
 .rank-detail-stats dd { margin: 0; }
+
+/* ---- Prompt criteria meter (prompt-criteria.js) ---- */
+.prompt-meter { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0 0; font-size: 11px; }
+.meter-chip { padding: 1px 7px; border-radius: 10px; border: 1px solid #2e3440; color: #6b7385; cursor: help; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+.meter-chip.on { color: #eceff4; border-color: #a3be8c; background: rgba(163, 190, 140, 0.15); }
+.meter-total { margin-left: 4px; color: #a3be8c; font-weight: 600; }
+.meter-total.crit { color: #ebcb8b; }
