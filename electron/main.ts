@@ -204,10 +204,10 @@ ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boole
 
 // Online ranking: a defeated run can be submitted once (release builds only —
 // they carry the signing key). The run token is fetched when a run starts.
-// README screenshots only: PROMPTBATTLE_SHOWCASE=merchant|nightMarket|spring|shrine
+// README screenshots only: PROMPTBATTLE_SHOWCASE=merchant|blacksmith|nightMarket|spring|shrine
 // makes every floor clear lead there (and the shelf hold a devil's contract).
 // Ignored in packaged builds, so it can't be used to cheat.
-const SHOWCASE_ROLL: Record<string, number> = { merchant: 0.1, nightMarket: 0.7, spring: 0.77, shrine: 0.85 };
+const SHOWCASE_ROLL: Record<string, number> = { merchant: 0.1, blacksmith: 0.5, nightMarket: 0.7, spring: 0.77, shrine: 0.85 };
 function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
   const roll = SHOWCASE_ROLL[process.env.PROMPTBATTLE_SHOWCASE ?? ''];
   if (app.isPackaged || roll === undefined) return {};

@@ -13,15 +13,15 @@ test('three classes, each naming every weapon (model) and every enhance level', 
 });
 
 test('weapon names differ by class for the same model', () => {
-  const names = HERO_CLASSES.map((c) => c.weapons['claude-sonnet-5'].name);
+  const names = HERO_CLASSES.map((c) => c.weapons.sonnet.name);
   assert.equal(new Set(names).size, 3);
 });
 
 test('the enhance level puts a prefix on the class weapon name', () => {
-  assert.equal(weaponDisplayName('wizard', 'claude-sonnet-5', 0), '초라한 마법지팡이');
+  assert.equal(weaponDisplayName('wizard', 'sonnet', 0), '초라한 마법지팡이');
   assert.equal(weaponDisplayName('wizard', 'claude-sonnet-5', 1), '그냥 마법지팡이');
-  assert.equal(weaponDisplayName('archer', 'claude-haiku-4-5-20251001', 1), '그냥 단궁');
-  assert.equal(weaponDisplayName('swordsman', 'claude-opus-5-5', 99), `${getHeroClass('swordsman').modifiers[SWORD_MAX_LEVEL]} 마검`, 'clamps above the max');
+  assert.equal(weaponDisplayName('archer', 'haiku', 1), '그냥 단궁');
+  assert.equal(weaponDisplayName('swordsman', 'opus', 99), `${getHeroClass('swordsman').modifiers[SWORD_MAX_LEVEL]} 마검`, 'clamps above the max');
 });
 
 test('unknown classes and models fall back to defaults', () => {

@@ -7,16 +7,16 @@ test('weapons are ordered weakest to strongest by multiplier', () => {
   assert.deepEqual(multipliers, [...multipliers].sort((a, b) => a - b));
 });
 
-test('every weapon maps to a distinct Claude model id', () => {
-  const models = WEAPONS.map((w) => w.model);
-  assert.equal(new Set(models).size, models.length);
-  assert.ok(models.every((m) => m.startsWith('claude-')));
+test('weapons are Claude model families (no version numbers: the latest one is always used)', () => {
+  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable']);
 });
 
-test('getWeapon returns the matching weapon, falling back to the default for unknown ids', () => {
-  const opus = WEAPONS.find((w) => w.model === 'claude-opus-5-5');
+test('getWeapon returns the matching weapon; an old versioned id maps to its family; unknown falls back', () => {
+  const opus = WEAPONS.find((w) => w.model === 'opus');
   assert.ok(opus);
-  assert.equal(getWeapon('claude-opus-5-5'), opus);
+  assert.equal(getWeapon('opus'), opus);
+  assert.equal(getWeapon('claude-opus-5-5'), opus, 'a save from before keeps its weapon');
+  assert.equal(getWeapon('claude-haiku-4-5-20251001').model, 'haiku');
   assert.equal(getWeapon('nope').model, DEFAULT_WEAPON_ID);
   assert.equal(getWeapon(undefined).model, DEFAULT_WEAPON_ID);
 });

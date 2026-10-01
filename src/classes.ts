@@ -1,4 +1,4 @@
-import { WEAPONS, DEFAULT_WEAPON_ID } from './weapons.ts';
+import { modelFamily, WEAPONS, DEFAULT_WEAPON_ID } from './weapons.ts';
 import { SWORD_MAX_LEVEL } from './forge.ts';
 import type { EffortLevel } from './claude-settings.ts';
 
@@ -26,10 +26,10 @@ export const HERO_CLASSES: HeroClass[] = [
     name: '검사',
     icon: '🗡',
     weapons: {
-      'claude-haiku-4-5-20251001': { name: '단검', flavor: '가볍고 빠른 Haiku의 단검' },
-      'claude-sonnet-5': { name: '장검', flavor: '균형 잡힌 Sonnet의 장검' },
-      'claude-opus-5-5': { name: '마검', flavor: '묵직한 Opus의 마검' },
-      'claude-fable-5-1': { name: '성검', flavor: '최강의 Fable이 깃든 성검' },
+      haiku: { name: '단검', flavor: '가볍고 빠른 Haiku의 단검' },
+      sonnet: { name: '장검', flavor: '균형 잡힌 Sonnet의 장검' },
+      opus: { name: '마검', flavor: '묵직한 Opus의 마검' },
+      fable: { name: '성검', flavor: '최강의 Fable이 깃든 성검' },
     },
     modifiers: [...COMMON_LOW, '단단한', '예리한', '빛나는', '영롱한', ...COMMON_HIGH],
     skills: {
@@ -45,10 +45,10 @@ export const HERO_CLASSES: HeroClass[] = [
     name: '마법사',
     icon: '🧙',
     weapons: {
-      'claude-haiku-4-5-20251001': { name: '나무 완드', flavor: '가볍고 빠른 Haiku의 완드' },
-      'claude-sonnet-5': { name: '마법지팡이', flavor: '균형 잡힌 Sonnet의 마법지팡이' },
-      'claude-opus-5-5': { name: '현자의 지팡이', flavor: '묵직한 Opus의 지혜가 담긴 지팡이' },
-      'claude-fable-5-1': { name: '대마도사의 오브', flavor: '최강의 Fable이 깃든 오브' },
+      haiku: { name: '나무 완드', flavor: '가볍고 빠른 Haiku의 완드' },
+      sonnet: { name: '마법지팡이', flavor: '균형 잡힌 Sonnet의 마법지팡이' },
+      opus: { name: '현자의 지팡이', flavor: '묵직한 Opus의 지혜가 담긴 지팡이' },
+      fable: { name: '대마도사의 오브', flavor: '최강의 Fable이 깃든 오브' },
     },
     modifiers: [...COMMON_LOW, '마력이 흐르는', '마력이 깃든', '빛나는', '별빛이 서린', ...COMMON_HIGH],
     skills: {
@@ -64,10 +64,10 @@ export const HERO_CLASSES: HeroClass[] = [
     name: '궁수',
     icon: '🏹',
     weapons: {
-      'claude-haiku-4-5-20251001': { name: '단궁', flavor: '가볍고 빠른 Haiku의 단궁' },
-      'claude-sonnet-5': { name: '장궁', flavor: '균형 잡힌 Sonnet의 장궁' },
-      'claude-opus-5-5': { name: '마궁', flavor: '묵직한 Opus의 마궁' },
-      'claude-fable-5-1': { name: '천궁', flavor: '최강의 Fable이 깃든 천궁' },
+      haiku: { name: '단궁', flavor: '가볍고 빠른 Haiku의 단궁' },
+      sonnet: { name: '장궁', flavor: '균형 잡힌 Sonnet의 장궁' },
+      opus: { name: '마궁', flavor: '묵직한 Opus의 마궁' },
+      fable: { name: '천궁', flavor: '최강의 Fable이 깃든 천궁' },
     },
     modifiers: [...COMMON_LOW, '팽팽한', '바람을 가르는', '빛나는', '매의 눈이 깃든', ...COMMON_HIGH],
     skills: {
@@ -89,7 +89,7 @@ export function getHeroClass(id: string | undefined): HeroClass {
 // e.g. wizard + Sonnet at +1 → "그냥 마법지팡이".
 export function weaponDisplayName(classId: string | undefined, model: string | undefined, level: number): string {
   const hero = getHeroClass(classId);
-  const weapon = hero.weapons[model ?? ''] ?? hero.weapons[DEFAULT_WEAPON_ID];
+  const weapon = hero.weapons[modelFamily(model) ?? ''] ?? hero.weapons[DEFAULT_WEAPON_ID];
   const prefix = hero.modifiers[Math.max(0, Math.min(SWORD_MAX_LEVEL, level))];
   return `${prefix} ${weapon.name}`;
 }

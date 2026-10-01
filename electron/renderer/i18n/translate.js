@@ -31,7 +31,11 @@ export function makeTranslator(dict) {
       }
       if (key === null) continue;
       const names = [...key.matchAll(PLACEHOLDER)].map((m) => m[1]);
-      const source = key.split(/\{\w+\}/).map(escape).join('(.+?)');
+      // A merged {0}{1} group is greedy: it's usually a whole phrase, the rest are numbers.
+      const literals = key.split(/\{\w+\}/).map(escape);
+      // A trailing placeholder may be empty (an optional suffix like "{0}" = "").
+      const group = (i) => (names[i - 1].length > 1 ? '(.+)' : i === literals.length - 1 && !literals[i] ? '(.*?)' : '(.+?)');
+      const source = literals.reduce((acc, lit, i) => acc + (i ? group(i) : '') + lit, '');
       const literal = key.replace(PLACEHOLDER, '');
       // A template that is only placeholders and symbols would match anything.
       if (HANGUL.test(literal)) patterns.push({ re: new RegExp(`^${source}$`, 's'), names, out: tr, weight: literal.length });
@@ -46,7 +50,7 @@ export function makeTranslator(dict) {
       const m = p.re.exec(text);
       if (!m) continue;
       const values = Object.fromEntries(p.names.map((n, i) => [n, m[i + 1]]));
-      return p.out.replace(PLACEHOLDER, (all, n) => (n in values ? piece(values[n]) : all));
+      return p.out.replace(PLACEHOLDER, (all, n) => (n in values ? (n.length > 1 ? joined(values[n]) : piece(values[n])) : all));
     }
     return null;
   };
@@ -83,6 +87,16 @@ export function makeTranslator(dict) {
     }
     const joined = out.join('');
     return joined === text ? null : joined;
+  };
+  // A merged {0}{1} value: two known texts back to back ("버그 고블린" + "의 반격!").
+  const joined = (v) => {
+    for (let k = 1; k < v.length; k++) {
+      const a = v.slice(0, k), b = v.slice(k);
+      const ta = HANGUL.test(a) ? exact.get(a.trim()) : a;
+      const tb = HANGUL.test(b) ? exact.get(b.trim()) : b;
+      if (ta != null && tb != null) return (a.match(/^\s*/)[0]) + ta + (b.match(/^\s*/)[0]) + tb;
+    }
+    return piece(v);
   };
   const piece = (v) => {
     if (!HANGUL.test(v)) return v;

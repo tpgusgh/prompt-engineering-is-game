@@ -92,7 +92,7 @@ let usageFetchedAt = 0;
 let profile = null;
 let chosenFolder = null;
 let chosenThemeId = THEMES[0].id;
-let chosenWeapon = 'claude-sonnet-5';
+let chosenWeapon = 'sonnet';
 let heroClasses = [];
 let chosenClass = 'swordsman';
 let activeTheme = THEMES[0];
@@ -103,7 +103,9 @@ const touchedFiles = new Set();
 // Weapon names depend on the hero's class; the enhance level (+N) adds the
 // class's prefix: e.g. wizard + Sonnet at +1 = "그냥 마법지팡이".
 const heroClass = () => heroClasses.find((c) => c.id === chosenClass) ?? heroClasses[0];
-const classWeapon = (model) => heroClass()?.weapons[model] ?? { name: '무기', flavor: '' };
+// Old saves hold versioned ids ("claude-opus-5-5"): match them to their family.
+const familyOf = (model) => ['haiku', 'sonnet', 'opus', 'fable'].find((f) => model === f || model?.includes(`-${f}-`)) ?? model;
+const classWeapon = (model) => heroClass()?.weapons[familyOf(model)] ?? { name: '무기', flavor: '' };
 const enhancedName = (model, level) =>
   `${heroClass()?.modifiers[Math.max(0, Math.min(level, swordMax))] ?? ''} ${classWeapon(model).name}`.trim();
 
@@ -2168,7 +2170,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
   if (slot) {
     chosenFolder = slot.cwd;
     chosenThemeId = slot.themeId;
-    chosenWeapon = slot.model;
+    chosenWeapon = familyOf(slot.model);
     if (slot.heroClass) chosenClass = slot.heroClass;
     renderWeaponOptions();
   }
@@ -3001,7 +3003,13 @@ async function openRecords() {
   }
   const models = $('records-models');
   models.textContent = '';
-  const entries = Object.entries(r.byModel ?? {}).filter(([, m]) => m.engaged > 0);
+  // One row per weapon: records from before were kept per versioned model id.
+  const merged = {};
+  for (const [id, m] of Object.entries(r.byModel ?? {})) {
+    const f = familyOf(id);
+    merged[f] = { engaged: (merged[f]?.engaged ?? 0) + m.engaged, cleared: (merged[f]?.cleared ?? 0) + m.cleared };
+  }
+  const entries = Object.entries(merged).filter(([, m]) => m.engaged > 0);
   if (!entries.length) models.textContent = '아직 기록이 없어요. 한 판 싸우면 채워진다.';
   for (const [model, m] of entries.sort((a, b) => b[1].engaged - a[1].engaged)) {
     const known = weapons.find((w) => w.model === model);
@@ -3009,7 +3017,7 @@ async function openRecords() {
     row.className = 'model-row';
     const name = document.createElement('span');
     name.textContent = known ? classWeapon(model).name : model;
-    name.title = model;
+    name.title = model.replace(/^./, (c) => c.toUpperCase()); // the family: Haiku · Sonnet · Opus · Fable
     const bar = document.createElement('div');
     bar.className = 'hp-bar-track xp';
     const fill = document.createElement('div');

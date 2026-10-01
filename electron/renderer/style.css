@@ -3203,3 +3203,28 @@ body {
   border-radius: 6px;
   padding: 3px 6px;
 }
+
+/* Other languages run longer than Korean: a touch smaller where space is tight. */
+:lang(en) .setup-hero .profile-line,
+:lang(ja) .setup-hero .profile-line {
+  font-size: 13px;
+  line-height: 1.45;
+}
+:lang(en) .choice small,
+:lang(ja) .choice small,
+:lang(en) .choice .choice-sub,
+:lang(ja) .choice .choice-sub {
+  font-size: 11px;
+}
+:lang(en) #battle-actions button,
+:lang(ja) #battle-actions button {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+/* Longer labels: the header buttons fold into two rows, the hero line gets the room. */
+:lang(en) .setup-actions,
+:lang(ja) .setup-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 330px;
+}

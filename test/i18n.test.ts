@@ -52,3 +52,14 @@ test('i18n: a line glued from pieces with " · " is translated piece by piece', 
   assert.equal(tr('모험을 떠나기 · 챕터 1 · 1층'), 'Off on an Adventure · Chapter 1 · floor 1');
   assert.equal(tr('세션 3% · 14:00 초기화'), '세션 3% · 14:00 reset');
 });
+
+test('i18n: a {0}{1} piece made of two known texts is split back into them', () => {
+  const tr = makeTranslator({ '{0}{1} {2}의 피해를 받았다!': '{0}{1} Took {2} damage!', '버그 고블린': 'Bug Goblin', '의 반격!': "'s counter!" });
+  assert.equal(tr('버그 고블린의 반격! 4의 피해를 받았다!'), "Bug Goblin's counter! Took 4 damage!");
+});
+
+test('i18n: an empty trailing placeholder still matches', () => {
+  const tr = makeTranslator({ '프로세스 1개 (용사 단독){0}': '1 process (hero alone){0}' });
+  assert.equal(tr('프로세스 1개 (용사 단독)'), '1 process (hero alone)');
+  assert.equal(tr('프로세스 1개 (용사 단독) · 백그라운드 1'), '1 process (hero alone) · 백그라운드 1');
+});

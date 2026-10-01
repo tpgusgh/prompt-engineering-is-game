@@ -76,7 +76,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 ## Tour
 
 ### 1. Setup
-![Setup screen](docs/screenshots/setup.png)
+![Setup screen](docs/screenshots/en/setup.png)
 
 Everything fits on one screen: pick a 📁 project folder, then in the **New adventure** card a theme, a **class** (🗡 swordsman / 🧙 wizard / 🏹 archer — it renames your weapons), a **pet** (🐾 one of those you've found), a weapon (Claude model — the **token ●** dots show how fast it uses up your plan limits), a **skill** (effort) and a difficulty, then ▶ enter. Below it, **📅 Daily dungeon** is the same one-day dungeon for everyone. From level 20 a **🌟 Rebirth** button appears. **Continue** below loads the 3 save slots and the per-floor autosave. After picking a folder, its Claude sessions are listed too (with 💾 the autosaved floor/HP). In **⚙️ Settings** (top right — the same window in battle), the Claude tab has:
 
@@ -87,22 +87,22 @@ Everything fits on one screen: pick a 📁 project folder, then in the **New adv
 These apply only to the game's sessions; your Claude Code settings are untouched.
 
 ### Bestiary
-![Bestiary](docs/screenshots/bestiary.png)
+![Bestiary](docs/screenshots/en/bestiary.png)
 
 Every monster you've met: art, HP, counterattack, boss rule, phase-2 awakening and kills, filterable by chapter (area). **📖 Bestiary** at the top right of the start screen.
 
 ### Ranking
-![Ranking](docs/screenshots/ranking.png)
+![Ranking](docs/screenshots/en/ranking.png)
 
 **All-time · This week · 📅 Daily** tabs with theme and difficulty filters, showing the chapter/floor reached, titles and rebirth stars. **🏆 Ranking** at the top right of the start screen.
 
 ### Prologue
-![Prologue](docs/screenshots/prologue.png)
+![Prologue](docs/screenshots/en/prologue.png)
 
 A new adventure (or the daily dungeon) opens with the theme's story, one line at a time. Clearing a chapter shows the next story card; bosses speak when they appear and when they awaken.
 
 ### 2. Battle
-![Battle screen](docs/screenshots/battle.png)
+![Battle screen](docs/screenshots/en/battle.png)
 
 - **Top left, inventory**: the project's file tree — drag to move, drop files from Finder, `+📄` `+📁` to create, click to view/edit (⌘S saves; closing with unsaved edits asks first).
 - **Bottom left, 🎒 bag**: bandages, potions, whetstones, amulets, smoke bombs — `사용` (use) is a free action.
@@ -111,49 +111,49 @@ A new adventure (or the daily dungeon) opens with the theme's story, one line at
 - **Bottom**: a multi-line input (Enter attacks, Shift+Enter newline), `공격` attack · `도망` flee (50%) · `저장` save · `세션` switch session · `나가기` exit, and a small usage line (5-hour/weekly plan limits, context tokens).
 
 ### 3. While the AI works: party + typing drills
-![Party and typing drills](docs/screenshots/typing.png)
+![Party and typing drills](docs/screenshots/en/typing.png)
 
 A live timer, the **AI party** (🧙 wizard explores · 🗡 swordsman implements · 🏹 archer verifies) with how many processes run at once, and how many background tasks are pending. Long jobs go to the 🦅 **courier** subagent in the background, and Claude follows up with the result when it's done. Meanwhile, **type a line of code** exactly for 1 damage plus an explanation of that code (tap for more).
 
 The **👥 agents** tab (top right) lists the last 10 subagents: how long running ones have been going, how long finished ones ran, and on click their job, actions (✓/✗) and final report.
 
 ### 4. Quests (when the AI asks you something)
-![Quest](docs/screenshots/quest.png)
+![Quest](docs/screenshots/en/quest.png)
 
 When the AI needs your answer, a large quest window opens. Pick a choice or write your own, and **attack with that answer**.
 
 ### 5. Merchant goblin
-![Merchant goblin](docs/screenshots/merchant.png)
+![Merchant goblin](docs/screenshots/en/merchant.png)
 
 Appears after 35% of clears (40% in the adventure theme). Four goods sit side by side, rotating each visit, each with a per-visit limit (shown as "left"), priced higher the deeper you go (+10% a floor). 10% of the time a contract is shelved, and a **devil's contract** first poses as a plain one, then corrupts a second later. Sell bag items back (half today's price) or gamble on 🎲 odd/even (win double; `올인` = all-in). Typing a prompt here closes the shop and attacks the next monster.
 
 ### 🏮 Night market
-![Night market](docs/screenshots/night-market.png)
+![Night market](docs/screenshots/en/night-market.png)
 
 10% of clears: 4 goods, boss relics and contracts included, 30–70% off, one of each.
 
 ### Shrine & spring
-![Shrine](docs/screenshots/shrine.png)
+![Shrine](docs/screenshots/en/shrine.png)
 
 While bound, a shrine appears 10% of the time to renounce your pact with no max-HP penalty. The healing spring (5%, not in the adventure theme) restores 50% of max HP once.
 
 ### 📜 Skillbook
-![Skillbook](docs/screenshots/skillbook.png)
+![Skillbook](docs/screenshots/en/skillbook.png)
 
 📜 by the input. Write frequent instructions as Claude skill files (`.claude/skills/<name>/SKILL.md`); **Load** puts `/<name>` in front of the prompt and Claude runs it.
 
 ### 6. Blacksmith
-![Blacksmith](docs/screenshots/blacksmith.png)
+![Blacksmith](docs/screenshots/en/blacksmith.png)
 
 Enhance your weapon with coins (up to +10). Success gets less likely as it climbs, and from +3 a failure can break it back to +0 (shabby). Each level changes the weapon's prefix (초라한 shabby → 그냥 plain → … → 신화의 mythic).
 
 ### When you fall
-![Fallen](docs/screenshots/death.png)
+![Fallen](docs/screenshots/en/death.png)
 
 The killing blow (who, how much, the HP you had) stays on screen until **Next ▶** opens the summary (and the ranking).
 
 ### 7. Exit
-![Exit](docs/screenshots/exit.png)
+![Exit](docs/screenshots/en/exit.png)
 
 "End today's adventure" or "keep playing". Ending saves your floor, coins, bag, weapon level, and this folder's Claude session and chat history. Each session also autosaves the game state, so resuming a session resumes the run.
 
