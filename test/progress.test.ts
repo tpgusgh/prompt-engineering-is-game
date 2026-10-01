@@ -63,3 +63,15 @@ test('the bestiary merges seen monsters and kill counts across runs', () => {
   assert.deepEqual(b.records.kills, { 0: 3, 6: 1 });
   assert.deepEqual(coerceRecords(JSON.parse(JSON.stringify(b.records))).kills, { 0: 3, 6: 1 });
 });
+
+test('new achievements unlock from their records; typing speed and coins held keep the best, not a sum', async () => {
+  const { ACHIEVEMENTS, emptyRecords, mergeRecords, emptyRunStats } = await import('../src/progress.ts');
+  const run = { ...emptyRunStats(), contractsBroken: 1, deathsByContract: 1, bestTypingCpm: 720, richest: 3100, shelvesCleared: 1, nightBuys: 3, springsDrunk: 3, dailyRuns: 1, awakenedBossKills: 1, gearWorn: 2, bothAis: 1 };
+  const r = mergeRecords(mergeRecords(emptyRecords(), run, { swordLevel: 0, level: 1 }), { ...emptyRunStats(), bestTypingCpm: 300, richest: 100 }, { swordLevel: 0, level: 1 });
+  assert.equal(r.bestTypingCpm, 720);
+  assert.equal(r.richest, 3100);
+  for (const id of ['pact-breaker', 'pact-victim', 'typing-god', 'rich', 'shelf-sweep', 'night-regular', 'spring-lover', 'daily-runner', 'awakened-slayer', 'fully-geared', 'two-ais']) {
+    assert.ok(ACHIEVEMENTS.find((a) => a.id === id)?.done(r), id);
+  }
+  assert.equal(ACHIEVEMENTS.find((a) => a.id === 'typing-god')?.done({ ...r, bestTypingCpm: 699 }), false);
+});

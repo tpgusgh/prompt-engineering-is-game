@@ -1195,6 +1195,28 @@ test('encounter table after a clear: merchant, blacksmith, night market, spring,
   assert.deepEqual(odds('adventure', false), { merchant: 40, blacksmith: 30, nightMarket: 10, nothing: 20 });
 });
 
+test('run stats for the new achievements: broken pacts, a demon-bound defeat, springs, shelves, gear, daily', async () => {
+  const broke = makeFakeDeps(['/use contract', '/use contract', '/quit']);
+  const s1 = await runDungeon({ ...broke.deps, bag: { contract: 2 } });
+  assert.equal(s1.runStats.contractsBroken, 1);
+  const doomed = makeFakeDeps([WEAK_PROMPT, WEAK_PROMPT, WEAK_PROMPT, '/quit']);
+  const s2 = await runDungeon({ ...doomed.deps, playerMaxHp: 100, playerHp: 10, contract: { kind: 'demon', id: 'greed' } });
+  assert.equal(s2.defeated, true);
+  assert.equal(s2.runStats.deathsByContract, 1);
+  const spring = makeFakeDeps([ONE_SHOT_PROMPT, '/drink', '/leave', '/quit']);
+  const s3 = await runDungeon({ ...spring.deps, playerHp: 20, random: seq(0.77, 0.99) });
+  assert.equal(s3.runStats.springsDrunk, 1);
+  // The first shelf: bandage, potion, whetstone, amulet — buy each once.
+  const sweep = makeFakeDeps([ONE_SHOT_PROMPT, '/buy bandage', '/buy potion', '/buy whetstone', '/buy amulet', '/leave', '/quit']);
+  const s4 = await runDungeon({ ...sweep.deps, coins: 1000, random: seq(0.1, 0.99) });
+  assert.equal(s4.runStats.shelvesCleared, 1);
+  assert.ok(s4.runStats.richest >= 1000);
+  const gear = await runDungeon({ ...makeFakeDeps(['/quit']).deps, equipment: ['boss-0', 'boss-1'] });
+  assert.equal(gear.runStats.gearWorn, 2);
+  const day = await runDungeon({ ...makeFakeDeps(['/quit']).deps, daily: '2026-10-01' });
+  assert.equal(day.runStats.dailyRuns, 1);
+});
+
 test('rest stop: the spring heals half of max HP once', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/drink', '/drink', '/leave', '/quit']);
   const summary = await runDungeon({ ...deps, playerHp: 20, random: seq(0.77, 0.99) });

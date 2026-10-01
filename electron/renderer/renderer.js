@@ -16,6 +16,7 @@ import { MONSTER_LINES } from './monster-lines.js';
 import { fatigueOf } from './fatigue.js';
 import { fx } from './fx.js';
 import { startTour, resetTutorial } from './tutorial.js';
+import { CATALOG, SLOTS, OPTIONAL, avatarNode, itemName as cosmeticName, itemImage, slotName } from './avatar.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -351,6 +352,7 @@ async function loadSetup() {
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
   renderDailyInfo();
+  renderHeroAvatar();
   chosenPet = profile.activePet ?? '';
   renderPetOptions();
   heroContract = profile.contract ?? null;
@@ -2329,9 +2331,10 @@ async function startGame({ loadSlot, slot, daily = false }) {
   dungeonScreen.hidden = false;
   logEl.textContent = '';
   setLastPrompt('');
-  const from = slot ?? profile;
-  coins = from.coins;
-  bag = { ...from.bag };
+  const startCoins = profile.coins; // for the summary's "coins gained"
+  // Coins and the bag are always the profile's wallet (see main.ts), even when loading a save.
+  coins = profile.coins;
+  bag = { ...profile.bag };
   runXp = 0;
   renderXp();
   // Hero stats are per-run: a new game starts from zero; a save slot restores its own.
@@ -2339,7 +2342,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
   // Level bonus: a new run starts with one stat point per hero level.
   const startPoints = profile.level + 2 * (profile.prestige ?? 0); // 환생 ★: +2 each
   statPoints = slot ? slot.statPoints : startPoints;
-  swordLevel = from.swordLevel;
+  swordLevel = profile.swordLevel;
   renderCoins();
   renderSwordLevel();
   closeMerchant();
@@ -2386,7 +2389,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;
-    renderSummary(summary, updated, progress, { difficulty, startCoins: from.coins });
+    renderSummary(summary, updated, progress, { difficulty, startCoins });
     renderRankingCard(ranking);
   } catch (err) {
     // An unexpected main-process error (agent-turn errors never reject this
@@ -3516,7 +3519,7 @@ function renderRankingTable() {
   $('ranking-status').textContent = shown.length ? '' : rankingEntries.length ? '조건에 맞는 기록이 없다' : empty;
   if (!shown.length) return;
   const head = document.createElement('tr');
-  for (const h of ['순위', '이름', '칭호', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
+  for (const h of ['순위', '', '이름', '칭호', '점수', '직업', '테마', '도달', '난이도', '날짜']) {
     const th = document.createElement('th');
     th.textContent = h;
     head.append(th);
@@ -3526,8 +3529,12 @@ function renderRankingTable() {
     const tr = document.createElement('tr');
     if (e.rank <= 3) tr.className = `top${e.rank}`;
     const stars = e.prestige ? `${'★'.repeat(Math.min(e.prestige, 5))}${e.prestige > 5 ? `×${e.prestige}` : ''} ` : '';
+    tr.classList.add('rank-row');
+    tr.title = '눌러서 자세히 보기';
+    tr.addEventListener('click', () => openRankDetail(e));
     const cells = [
       e.rank <= 3 ? ['1위', '2위', '3위'][e.rank - 1] : String(e.rank),
+      null, // the avatar
       e.name ?? '',
       `${stars}${titleOf(e.level ?? 1)}`,
       fmtNum(e.score),
@@ -3539,7 +3546,8 @@ function renderRankingTable() {
     ];
     for (const c of cells) {
       const td = document.createElement('td');
-      td.textContent = c;
+      if (c === null) td.append(avatarNode(e.avatar ?? {}, 36));
+      else td.textContent = c;
       tr.append(td);
     }
     table.append(tr);
@@ -3784,7 +3792,7 @@ $('skill-form').addEventListener('submit', async (e) => {
 // Keyboard shortcuts (the ? key lists them).
 {
   const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
-  const OVERLAYS = ['shortcuts-overlay', 'skillbook-overlay', 'journal-overlay', 'ranking-overlay', 'records-overlay', 'bestiary-overlay'];
+  const OVERLAYS = ['shortcuts-overlay', 'rank-detail-overlay', 'wardrobe-overlay', 'skillbook-overlay', 'journal-overlay', 'ranking-overlay', 'records-overlay', 'bestiary-overlay'];
   const openOverlay = () => OVERLAYS.map((id) => $(id)).find((el) => el && !el.hidden);
   $('shortcuts-close').addEventListener('click', () => ($('shortcuts-overlay').hidden = true));
   $('shortcuts-overlay').addEventListener('click', (e) => {
@@ -3926,3 +3934,121 @@ $('tutorial-replay').addEventListener('click', () => {
   startTour(dungeonScreen.hidden ? 'setup' : 'battle', { force: true });
 });
 
+
+// ---------------------------------------------------------------------------
+// 꾸미기: the hero's look, bought with the profile's coins (start screen only).
+let wardrobeSlot = 'hair';
+function renderHeroAvatar() {
+  const btn = $('hero-avatar-btn');
+  btn.textContent = '';
+  btn.append(avatarNode(profile?.avatar, 72));
+}
+function renderWardrobe() {
+  $('wardrobe-coins').textContent = `🪙 ${fmtNum(profile.coins)}`;
+  const prev = $('wardrobe-avatar');
+  prev.textContent = '';
+  prev.append(avatarNode(profile.avatar, 240));
+  const tabs = $('wardrobe-tabs');
+  tabs.textContent = '';
+  for (const slot of SLOTS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = slotName(slot);
+    b.className = slot === wardrobeSlot ? 'active' : '';
+    b.addEventListener('click', () => {
+      wardrobeSlot = slot;
+      renderWardrobe();
+    });
+    tabs.append(b);
+  }
+  const grid = $('wardrobe-items');
+  grid.textContent = '';
+  const owned = new Set(profile.wardrobe ?? []);
+  const worn = (profile.avatar ?? {})[wardrobeSlot];
+  if (OPTIONAL.has(wardrobeSlot)) {
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = `wardrobe-item${!worn ? ' worn' : ''}`;
+    none.textContent = '없음';
+    none.addEventListener('click', () => wardrobeAct(() => window.promptBattle.wardrobeWear(wardrobeSlot, null)));
+    grid.append(none);
+  }
+  for (const item of CATALOG.filter((i) => i.slot === wardrobeSlot)) {
+    const have = item.price === 0 || owned.has(item.id);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `wardrobe-item${worn === item.id ? ' worn' : ''}${have ? '' : ' locked'}`;
+    card.title = cosmeticName(item);
+    const img = document.createElement('img');
+    img.src = itemImage(item.id);
+    img.alt = '';
+    const name = document.createElement('small');
+    name.textContent = cosmeticName(item);
+    const tag = document.createElement('span');
+    tag.className = 'wardrobe-price';
+    tag.textContent = worn === item.id ? '착용 중' : have ? '입기' : `🪙 ${item.price}`;
+    card.append(img, name, tag);
+    card.addEventListener('click', () =>
+      wardrobeAct(async () => {
+        if (!have) {
+          const r = await window.promptBattle.wardrobeBuy(item.id);
+          if (r.error) return r;
+          sfx('coin');
+        }
+        return window.promptBattle.wardrobeWear(item.slot, item.id);
+      }),
+    );
+    grid.append(card);
+  }
+}
+async function wardrobeAct(run) {
+  const r = await run();
+  $('wardrobe-msg').textContent = r?.error ?? '';
+  if (r?.profile) {
+    profile = r.profile;
+    renderProfileLine();
+    renderHeroAvatar();
+  }
+  renderWardrobe();
+}
+$('hero-avatar-btn').addEventListener('click', () => {
+  $('wardrobe-overlay').hidden = false;
+  $('wardrobe-msg').textContent = '';
+  renderWardrobe();
+});
+$('wardrobe-close').addEventListener('click', () => ($('wardrobe-overlay').hidden = true));
+$('wardrobe-overlay').addEventListener('click', (e) => {
+  if (e.target === $('wardrobe-overlay')) $('wardrobe-overlay').hidden = true;
+});
+// Ranking: a row's look and details.
+function openRankDetail(e) {
+  $('rank-detail-overlay').hidden = false;
+  $('rank-detail-title').textContent = `${e.rank}위 · ${e.name ?? ''}`;
+  const av = $('rank-detail-avatar');
+  av.textContent = '';
+  av.append(avatarNode(e.avatar ?? {}, 200));
+  const stats = $('rank-detail-stats');
+  stats.textContent = '';
+  const rows = [
+    ['점수', fmtNum(e.score)],
+    ['칭호', `${e.prestige ? `★${e.prestige} ` : ''}${titleOf(e.level ?? 1)}`],
+    ['레벨', String(e.level ?? 1)],
+    ['직업', CLASS_NAME[e.heroClass] ?? ''],
+    ['테마', THEMES.find((t) => t.id === e.theme)?.title ?? ''],
+    ['도달', `${Math.floor((e.floors ?? 0) / 6) + 1}챕터 ${((e.floors ?? 0) % 6) + 1}층`],
+    ['보스', String(e.bosses ?? 0)],
+    ['난이도', DIFFICULTY_LABEL[e.difficulty] ?? ''],
+    ['날짜', e.at ? new Date(e.at).toLocaleDateString() : ''],
+  ];
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    stats.append(dt, dd);
+  }
+}
+$('rank-detail-close').addEventListener('click', () => ($('rank-detail-overlay').hidden = true));
+$('rank-detail-overlay').addEventListener('click', (e) => {
+  if (e.target === $('rank-detail-overlay')) $('rank-detail-overlay').hidden = true;
+});

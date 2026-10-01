@@ -1,0 +1,3093 @@
+{
+ "slots": [
+  "body",
+  "eyes",
+  "mouth",
+  "hair",
+  "outfit",
+  "socks",
+  "shoes",
+  "hat",
+  "face",
+  "weapon",
+  "pet"
+ ],
+ "items": [
+  {
+   "id": "accessories/beanie",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "beanie"
+   ]
+  },
+  {
+   "id": "accessories/bonnet_blue",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "bonnet",
+    "blue"
+   ]
+  },
+  {
+   "id": "accessories/bonnet_gothic",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "bonnet",
+    "gothic"
+   ]
+  },
+  {
+   "id": "accessories/bonnet_lavender",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "bonnet",
+    "lavender"
+   ]
+  },
+  {
+   "id": "accessories/bonnet_pink",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "bonnet",
+    "pink"
+   ]
+  },
+  {
+   "id": "accessories/crown",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "crown"
+   ]
+  },
+  {
+   "id": "accessories/hat_mini_top",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "mini",
+    "top"
+   ]
+  },
+  {
+   "id": "accessories/round_glasses",
+   "slot": "face",
+   "price": 150,
+   "parts": [
+    "round",
+    "glasses"
+   ]
+  },
+  {
+   "id": "accessories/sunglasses",
+   "slot": "face",
+   "price": 150,
+   "parts": [
+    "sunglasses"
+   ]
+  },
+  {
+   "id": "accessories/wizard_hat",
+   "slot": "hat",
+   "price": 200,
+   "parts": [
+    "wizard",
+    "hat"
+   ]
+  },
+  {
+   "id": "characters/b_f_brown",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "brown"
+   ]
+  },
+  {
+   "id": "characters/b_f_dark",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "dark"
+   ]
+  },
+  {
+   "id": "characters/b_f_deep",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "deep"
+   ]
+  },
+  {
+   "id": "characters/b_f_fair",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "fair"
+   ]
+  },
+  {
+   "id": "characters/b_f_medium",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "medium"
+   ]
+  },
+  {
+   "id": "characters/b_f_olive",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "olive"
+   ]
+  },
+  {
+   "id": "characters/b_f_pale",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "pale"
+   ]
+  },
+  {
+   "id": "characters/b_f_tan",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "f",
+    "tan"
+   ]
+  },
+  {
+   "id": "characters/b_m_brown",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "brown"
+   ]
+  },
+  {
+   "id": "characters/b_m_dark",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "dark"
+   ]
+  },
+  {
+   "id": "characters/b_m_deep",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "deep"
+   ]
+  },
+  {
+   "id": "characters/b_m_fair",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "fair"
+   ]
+  },
+  {
+   "id": "characters/b_m_medium",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "medium"
+   ]
+  },
+  {
+   "id": "characters/b_m_olive",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "olive"
+   ]
+  },
+  {
+   "id": "characters/b_m_pale",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "pale"
+   ]
+  },
+  {
+   "id": "characters/b_m_tan",
+   "slot": "body",
+   "price": 0,
+   "parts": [
+    "m",
+    "tan"
+   ]
+  },
+  {
+   "id": "christmas/hat_elf",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "elf"
+   ]
+  },
+  {
+   "id": "christmas/hat_reindeer_headband",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "reindeer",
+    "headband"
+   ]
+  },
+  {
+   "id": "christmas/hat_santa",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "santa"
+   ]
+  },
+  {
+   "id": "christmas/hat_snowman_tophat",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "snowman",
+    "tophat"
+   ]
+  },
+  {
+   "id": "christmas/hat_xmas_crown",
+   "slot": "hat",
+   "price": 400,
+   "parts": [
+    "xmas",
+    "crown"
+   ]
+  },
+  {
+   "id": "christmas/weapon_candy_cane",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "candy",
+    "cane"
+   ]
+  },
+  {
+   "id": "christmas/weapon_gift_box",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "gift",
+    "box"
+   ]
+  },
+  {
+   "id": "christmas/weapon_gingerbread",
+   "slot": "weapon",
+   "price": 500,
+   "parts": [
+    "gingerbread"
+   ]
+  },
+  {
+   "id": "christmas/weapon_snowflake_staff",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "snowflake",
+    "staff"
+   ]
+  },
+  {
+   "id": "christmas/weapon_xmas_bell",
+   "slot": "weapon",
+   "price": 500,
+   "parts": [
+    "xmas",
+    "bell"
+   ]
+  },
+  {
+   "id": "christmas/xmas_elf_female",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "elf",
+    "female"
+   ]
+  },
+  {
+   "id": "christmas/xmas_elf_male",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "elf",
+    "male"
+   ]
+  },
+  {
+   "id": "christmas/xmas_gingerbread_female",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "gingerbread",
+    "female"
+   ]
+  },
+  {
+   "id": "christmas/xmas_gingerbread_male",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "gingerbread",
+    "male"
+   ]
+  },
+  {
+   "id": "christmas/xmas_party_dress",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "party",
+    "dress"
+   ]
+  },
+  {
+   "id": "christmas/xmas_party_suit",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "party",
+    "suit"
+   ]
+  },
+  {
+   "id": "christmas/xmas_reindeer_female",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "reindeer",
+    "female"
+   ]
+  },
+  {
+   "id": "christmas/xmas_reindeer_male",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "reindeer",
+    "male"
+   ]
+  },
+  {
+   "id": "christmas/xmas_santa_female",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "santa",
+    "female"
+   ]
+  },
+  {
+   "id": "christmas/xmas_santa_male",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "santa",
+    "male"
+   ]
+  },
+  {
+   "id": "christmas/xmas_snowman",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "snowman"
+   ]
+  },
+  {
+   "id": "christmas/xmas_tree",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "tree"
+   ]
+  },
+  {
+   "id": "christmas/xmas_ugly_sweater_f",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "ugly",
+    "sweater",
+    "f"
+   ]
+  },
+  {
+   "id": "christmas/xmas_ugly_sweater_m",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "ugly",
+    "sweater",
+    "m"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_berry",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "berry"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_black",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_coral",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "coral"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "bigsmile",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_mauve",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "mauve"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_nude",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "nude"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_orange",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "orange"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_pink",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_plum",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "plum"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_purple",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "purple"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_red",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_teal",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "teal"
+   ]
+  },
+  {
+   "id": "expressions/expr_bigsmile_wine",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "bigsmile",
+    "wine"
+   ]
+  },
+  {
+   "id": "expressions/expr_crying",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "crying"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_big_black",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "big",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_big_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "big",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_big_pink",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "big",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_big_red",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "big",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_black",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_pink",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_glitter_red",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "glitter",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_gradient_berry",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "gradient",
+    "berry"
+   ]
+  },
+  {
+   "id": "expressions/expr_gradient_coral",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "gradient",
+    "coral"
+   ]
+  },
+  {
+   "id": "expressions/expr_gradient_mermaid",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "gradient",
+    "mermaid"
+   ]
+  },
+  {
+   "id": "expressions/expr_gradient_red_pink",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "gradient",
+    "red",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_grin",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "grin"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_berry",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "berry"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_black",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_coral",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "coral"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "kiss",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_mauve",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "mauve"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_nude",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "nude"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_orange",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "orange"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_pink",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_plum",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "plum"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_purple",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "purple"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_red",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_teal",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "teal"
+   ]
+  },
+  {
+   "id": "expressions/expr_kiss_wine",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "kiss",
+    "wine"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_big_smile",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "big",
+    "smile"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_cat",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "cat"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_dot",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "dot"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_drool",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "drool"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_exclaim",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "exclaim"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_flat",
+   "slot": "mouth",
+   "price": 0,
+   "parts": [
+    "mouth",
+    "flat"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_frown",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "frown"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_heart",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "heart"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_kiss",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "kiss"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_lick",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "lick"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_open_o",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "open",
+    "o"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_pout_big",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "pout",
+    "big"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_smirk_l",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "smirk",
+    "l"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_smirk_r",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "smirk",
+    "r"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_stitch",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "stitch"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_teeth_grit",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "teeth",
+    "grit"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_uwu",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "uwu"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_wavy",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "wavy"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_x",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "x"
+   ]
+  },
+  {
+   "id": "expressions/expr_mouth_zipper",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "mouth",
+    "zipper"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_berry",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "berry"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_black",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_coral",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "coral"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "pout",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_mauve",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "mauve"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_nude",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "nude"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_orange",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "orange"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_pink",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_plum",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "plum"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_purple",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "purple"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_red",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_teal",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "teal"
+   ]
+  },
+  {
+   "id": "expressions/expr_pout_wine",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "pout",
+    "wine"
+   ]
+  },
+  {
+   "id": "expressions/expr_sad",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "sad"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile",
+   "slot": "mouth",
+   "price": 0,
+   "parts": [
+    "smile"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_berry",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "berry"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_black",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "black"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_coral",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "coral"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_gold",
+   "slot": "mouth",
+   "price": 80,
+   "parts": [
+    "smile",
+    "gold"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_mauve",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "mauve"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_nude",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "nude"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_orange",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "orange"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_pink",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "pink"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_plum",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "plum"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_purple",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "purple"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_red",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "red"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_teal",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "teal"
+   ]
+  },
+  {
+   "id": "expressions/expr_smile_wine",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smile",
+    "wine"
+   ]
+  },
+  {
+   "id": "expressions/expr_smirk",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "smirk"
+   ]
+  },
+  {
+   "id": "expressions/expr_surprised",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "surprised"
+   ]
+  },
+  {
+   "id": "expressions/expr_tongue",
+   "slot": "mouth",
+   "price": 40,
+   "parts": [
+    "tongue"
+   ]
+  },
+  {
+   "id": "eyes/eye_angry",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "angry"
+   ]
+  },
+  {
+   "id": "eyes/eye_big",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "big"
+   ]
+  },
+  {
+   "id": "eyes/eye_dot",
+   "slot": "eyes",
+   "price": 0,
+   "parts": [
+    "dot"
+   ]
+  },
+  {
+   "id": "eyes/eye_happy",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "happy"
+   ]
+  },
+  {
+   "id": "eyes/eye_heart",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "heart"
+   ]
+  },
+  {
+   "id": "eyes/eye_jiro_basic",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "jiro",
+    "basic"
+   ]
+  },
+  {
+   "id": "eyes/eye_jiro_cat",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "jiro",
+    "cat"
+   ]
+  },
+  {
+   "id": "eyes/eye_jiro_heavy",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "jiro",
+    "heavy"
+   ]
+  },
+  {
+   "id": "eyes/eye_normal",
+   "slot": "eyes",
+   "price": 0,
+   "parts": [
+    "normal"
+   ]
+  },
+  {
+   "id": "eyes/eye_sleepy",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "sleepy"
+   ]
+  },
+  {
+   "id": "eyes/eye_star",
+   "slot": "eyes",
+   "price": 60,
+   "parts": [
+    "star"
+   ]
+  },
+  {
+   "id": "hair/hair_afro_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "afro",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_afro_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "afro",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_bob_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "bob",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_bob_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "bob",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_bun_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "bun",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_bun_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "bun",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_curly_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "curly",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_curly_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "curly",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_halfup_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "halfup",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_halfup_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "halfup",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_long_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "long",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_long_blonde",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "long",
+    "blonde"
+   ]
+  },
+  {
+   "id": "hair/hair_long_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "long",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_long_pink",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "long",
+    "pink"
+   ]
+  },
+  {
+   "id": "hair/hair_long_silver",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "long",
+    "silver"
+   ]
+  },
+  {
+   "id": "hair/hair_medium_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "medium",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_medium_blonde",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "medium",
+    "blonde"
+   ]
+  },
+  {
+   "id": "hair/hair_medium_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "medium",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_medium_pink",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "medium",
+    "pink"
+   ]
+  },
+  {
+   "id": "hair/hair_mohawk_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "mohawk",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_mohawk_red",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "mohawk",
+    "red"
+   ]
+  },
+  {
+   "id": "hair/hair_pigtails_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "pigtails",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_ponytail_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "ponytail",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_ponytail_blonde",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "ponytail",
+    "blonde"
+   ]
+  },
+  {
+   "id": "hair/hair_ponytail_pink",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "ponytail",
+    "pink"
+   ]
+  },
+  {
+   "id": "hair/hair_short_black",
+   "slot": "hair",
+   "price": 0,
+   "parts": [
+    "short",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_short_blonde",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "short",
+    "blonde"
+   ]
+  },
+  {
+   "id": "hair/hair_short_brown",
+   "slot": "hair",
+   "price": 0,
+   "parts": [
+    "short",
+    "brown"
+   ]
+  },
+  {
+   "id": "hair/hair_short_pink",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "short",
+    "pink"
+   ]
+  },
+  {
+   "id": "hair/hair_short_red",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "short",
+    "red"
+   ]
+  },
+  {
+   "id": "hair/hair_short_silver",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "short",
+    "silver"
+   ]
+  },
+  {
+   "id": "hair/hair_sideswept_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "sideswept",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_sideswept_blonde",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "sideswept",
+    "blonde"
+   ]
+  },
+  {
+   "id": "hair/hair_twintails_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "twintails",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_twintails_pink",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "twintails",
+    "pink"
+   ]
+  },
+  {
+   "id": "hair/hair_wavy_black",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "wavy",
+    "black"
+   ]
+  },
+  {
+   "id": "hair/hair_wavy_brown",
+   "slot": "hair",
+   "price": 120,
+   "parts": [
+    "wavy",
+    "brown"
+   ]
+  },
+  {
+   "id": "outfits/casual_baseball_jersey",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "baseball",
+    "jersey"
+   ]
+  },
+  {
+   "id": "outfits/casual_blazer",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "blazer"
+   ]
+  },
+  {
+   "id": "outfits/casual_cargo_tee",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "cargo",
+    "tee"
+   ]
+  },
+  {
+   "id": "outfits/casual_check_shirt",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "check",
+    "shirt"
+   ]
+  },
+  {
+   "id": "outfits/casual_crop_highwaist",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "crop",
+    "highwaist"
+   ]
+  },
+  {
+   "id": "outfits/casual_denim_jacket",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "denim",
+    "jacket"
+   ]
+  },
+  {
+   "id": "outfits/casual_floral_dress",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "floral",
+    "dress"
+   ]
+  },
+  {
+   "id": "outfits/casual_hoodie_gray",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "hoodie",
+    "gray"
+   ]
+  },
+  {
+   "id": "outfits/casual_knit_sweater",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "knit",
+    "sweater"
+   ]
+  },
+  {
+   "id": "outfits/casual_polo",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "polo"
+   ]
+  },
+  {
+   "id": "outfits/casual_slip_dress",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "slip",
+    "dress"
+   ]
+  },
+  {
+   "id": "outfits/casual_stripe_shirt",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "stripe",
+    "shirt"
+   ]
+  },
+  {
+   "id": "outfits/casual_suit",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "suit"
+   ]
+  },
+  {
+   "id": "outfits/casual_tracksuit_navy",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "tracksuit",
+    "navy"
+   ]
+  },
+  {
+   "id": "outfits/hoodie",
+   "slot": "outfit",
+   "price": 0,
+   "parts": [
+    "hoodie"
+   ]
+  },
+  {
+   "id": "outfits/jiro_boy_black",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "boy",
+    "black"
+   ]
+  },
+  {
+   "id": "outfits/jiro_boy_layer",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "boy",
+    "layer"
+   ]
+  },
+  {
+   "id": "outfits/jiro_boy_punk",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "boy",
+    "punk"
+   ]
+  },
+  {
+   "id": "outfits/jiro_girl_black",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "girl",
+    "black"
+   ]
+  },
+  {
+   "id": "outfits/jiro_girl_pink",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "girl",
+    "pink"
+   ]
+  },
+  {
+   "id": "outfits/jiro_girl_white",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "jiro",
+    "girl",
+    "white"
+   ]
+  },
+  {
+   "id": "outfits/lolita_blue",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "blue"
+   ]
+  },
+  {
+   "id": "outfits/lolita_gothic",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "gothic"
+   ]
+  },
+  {
+   "id": "outfits/lolita_ivory",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "ivory"
+   ]
+  },
+  {
+   "id": "outfits/lolita_lavender",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "lavender"
+   ]
+  },
+  {
+   "id": "outfits/lolita_mint",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "mint"
+   ]
+  },
+  {
+   "id": "outfits/lolita_pink",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "pink"
+   ]
+  },
+  {
+   "id": "outfits/lolita_red",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "red"
+   ]
+  },
+  {
+   "id": "outfits/lolita_wine",
+   "slot": "outfit",
+   "price": 360,
+   "parts": [
+    "lolita",
+    "wine"
+   ]
+  },
+  {
+   "id": "outfits/suit",
+   "slot": "outfit",
+   "price": 180,
+   "parts": [
+    "suit"
+   ]
+  },
+  {
+   "id": "pets/cat",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat"
+   ]
+  },
+  {
+   "id": "pets/dog",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog"
+   ]
+  },
+  {
+   "id": "pets/pet_bear_brown",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bear",
+    "brown"
+   ]
+  },
+  {
+   "id": "pets/pet_bear_panda",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bear",
+    "panda"
+   ]
+  },
+  {
+   "id": "pets/pet_bear_pink",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bear",
+    "pink"
+   ]
+  },
+  {
+   "id": "pets/pet_bear_teddy",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bear",
+    "teddy"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_blue",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "blue"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_cockatoo",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "cockatoo"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_parrot",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "parrot"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_red",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "red"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_white",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/pet_bird_yellow",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "bird",
+    "yellow"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_black",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "black"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_brown",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "brown"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_calico",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "calico"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_gray",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "gray"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_orange",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "orange"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_pink",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "pink"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_siamese",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "siamese"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_white",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "cat",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_xmas_orange",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "cat",
+    "xmas",
+    "orange"
+   ]
+  },
+  {
+   "id": "pets/pet_cat_xmas_white",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "cat",
+    "xmas",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_black",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "black"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_brown",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "brown"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_corgi",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "corgi"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_dalmatian",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "dalmatian"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_golden",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dog",
+    "golden"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_poodle",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "poodle"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_shiba",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "shiba"
+   ]
+  },
+  {
+   "id": "pets/pet_dog_white",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "dog",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/pet_dragon_blue",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dragon",
+    "blue"
+   ]
+  },
+  {
+   "id": "pets/pet_dragon_gold",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dragon",
+    "gold"
+   ]
+  },
+  {
+   "id": "pets/pet_dragon_green",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dragon",
+    "green"
+   ]
+  },
+  {
+   "id": "pets/pet_dragon_purple",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dragon",
+    "purple"
+   ]
+  },
+  {
+   "id": "pets/pet_dragon_red",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "dragon",
+    "red"
+   ]
+  },
+  {
+   "id": "pets/pet_frog_blue",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "frog",
+    "blue"
+   ]
+  },
+  {
+   "id": "pets/pet_frog_green",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "frog",
+    "green"
+   ]
+  },
+  {
+   "id": "pets/pet_frog_poison",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "frog",
+    "poison"
+   ]
+  },
+  {
+   "id": "pets/pet_hedgehog_brown",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "hedgehog",
+    "brown"
+   ]
+  },
+  {
+   "id": "pets/pet_hedgehog_gray",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "hedgehog",
+    "gray"
+   ]
+  },
+  {
+   "id": "pets/pet_rabbit_black",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit",
+    "black"
+   ]
+  },
+  {
+   "id": "pets/pet_rabbit_brown",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit",
+    "brown"
+   ]
+  },
+  {
+   "id": "pets/pet_rabbit_gray",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit",
+    "gray"
+   ]
+  },
+  {
+   "id": "pets/pet_rabbit_pink",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit",
+    "pink"
+   ]
+  },
+  {
+   "id": "pets/pet_rabbit_white",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/pet_turtle_green",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "turtle",
+    "green"
+   ]
+  },
+  {
+   "id": "pets/pet_turtle_rainbow",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "turtle",
+    "rainbow"
+   ]
+  },
+  {
+   "id": "pets/pet_unicorn_pink",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "unicorn",
+    "pink"
+   ]
+  },
+  {
+   "id": "pets/pet_unicorn_rainbow",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "unicorn",
+    "rainbow"
+   ]
+  },
+  {
+   "id": "pets/pet_unicorn_white",
+   "slot": "pet",
+   "price": 800,
+   "parts": [
+    "unicorn",
+    "white"
+   ]
+  },
+  {
+   "id": "pets/rabbit",
+   "slot": "pet",
+   "price": 400,
+   "parts": [
+    "rabbit"
+   ]
+  },
+  {
+   "id": "shoes/shoes_ankleboot_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "ankleboot",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_ankleboot_brown",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "ankleboot",
+    "brown"
+   ]
+  },
+  {
+   "id": "shoes/shoes_heel_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "heel",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_heel_nude",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "heel",
+    "nude"
+   ]
+  },
+  {
+   "id": "shoes/shoes_heel_red",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "heel",
+    "red"
+   ]
+  },
+  {
+   "id": "shoes/shoes_kneeboot_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "kneeboot",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_kneeboot_brown",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "kneeboot",
+    "brown"
+   ]
+  },
+  {
+   "id": "shoes/shoes_loafer_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "loafer",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_loafer_brown",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "loafer",
+    "brown"
+   ]
+  },
+  {
+   "id": "shoes/shoes_maryjane_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "maryjane",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_maryjane_white",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "maryjane",
+    "white"
+   ]
+  },
+  {
+   "id": "shoes/shoes_platform_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "platform",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_platform_white",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "platform",
+    "white"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sandal_tan",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sandal",
+    "tan"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sandal_white",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sandal",
+    "white"
+   ]
+  },
+  {
+   "id": "shoes/shoes_slipper_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "slipper",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_slipper_pink",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "slipper",
+    "pink"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sneaker_airmax",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sneaker",
+    "airmax"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sneaker_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sneaker",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sneaker_red",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sneaker",
+    "red"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sneaker_white",
+   "slot": "shoes",
+   "price": 0,
+   "parts": [
+    "sneaker",
+    "white"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sports_black",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sports",
+    "black"
+   ]
+  },
+  {
+   "id": "shoes/shoes_sports_white",
+   "slot": "shoes",
+   "price": 90,
+   "parts": [
+    "sports",
+    "white"
+   ]
+  },
+  {
+   "id": "socks/socks_black",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "black"
+   ]
+  },
+  {
+   "id": "socks/socks_dot_black_pink",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "dot",
+    "black",
+    "pink"
+   ]
+  },
+  {
+   "id": "socks/socks_dot_navy_w",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "dot",
+    "navy",
+    "w"
+   ]
+  },
+  {
+   "id": "socks/socks_dot_white_red",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "dot",
+    "white",
+    "red"
+   ]
+  },
+  {
+   "id": "socks/socks_gray",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "gray"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_black",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "black"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_black_stripe",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "black",
+    "stripe"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_brown",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "brown"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_dot_white",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "dot",
+    "white"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_navy",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "navy"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_pink",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "pink"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_red",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "red"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_stripe_bw",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "stripe",
+    "bw"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_stripe_pink",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "stripe",
+    "pink"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_white",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "white"
+   ]
+  },
+  {
+   "id": "socks/socks_knee_white_stripe",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "knee",
+    "white",
+    "stripe"
+   ]
+  },
+  {
+   "id": "socks/socks_mint",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "mint"
+   ]
+  },
+  {
+   "id": "socks/socks_navy",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "navy"
+   ]
+  },
+  {
+   "id": "socks/socks_pink",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "pink"
+   ]
+  },
+  {
+   "id": "socks/socks_red",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "red"
+   ]
+  },
+  {
+   "id": "socks/socks_solid_black",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "solid",
+    "black"
+   ]
+  },
+  {
+   "id": "socks/socks_stripe_bw",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "stripe",
+    "bw"
+   ]
+  },
+  {
+   "id": "socks/socks_stripe_navy_w",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "stripe",
+    "navy",
+    "w"
+   ]
+  },
+  {
+   "id": "socks/socks_stripe_rainbow",
+   "slot": "socks",
+   "price": 80,
+   "parts": [
+    "stripe",
+    "rainbow"
+   ]
+  },
+  {
+   "id": "socks/socks_stripe_rw",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "stripe",
+    "rw"
+   ]
+  },
+  {
+   "id": "socks/socks_thigh_black",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "thigh",
+    "black"
+   ]
+  },
+  {
+   "id": "socks/socks_thigh_pink",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "thigh",
+    "pink"
+   ]
+  },
+  {
+   "id": "socks/socks_thigh_purple",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "thigh",
+    "purple"
+   ]
+  },
+  {
+   "id": "socks/socks_thigh_red",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "thigh",
+    "red"
+   ]
+  },
+  {
+   "id": "socks/socks_thigh_white",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "thigh",
+    "white"
+   ]
+  },
+  {
+   "id": "socks/socks_white",
+   "slot": "socks",
+   "price": 0,
+   "parts": [
+    "white"
+   ]
+  },
+  {
+   "id": "socks/socks_white_frill",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "white",
+    "frill"
+   ]
+  },
+  {
+   "id": "socks/socks_white_lace",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "white",
+    "lace"
+   ]
+  },
+  {
+   "id": "socks/socks_xmas_green",
+   "slot": "socks",
+   "price": 80,
+   "parts": [
+    "xmas",
+    "green"
+   ]
+  },
+  {
+   "id": "socks/socks_xmas_red",
+   "slot": "socks",
+   "price": 80,
+   "parts": [
+    "xmas",
+    "red"
+   ]
+  },
+  {
+   "id": "socks/socks_yellow",
+   "slot": "socks",
+   "price": 40,
+   "parts": [
+    "yellow"
+   ]
+  },
+  {
+   "id": "weapons/weapon_axe",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "axe"
+   ]
+  },
+  {
+   "id": "weapons/weapon_baseball_bat",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "baseball",
+    "bat"
+   ]
+  },
+  {
+   "id": "weapons/weapon_bow",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "bow"
+   ]
+  },
+  {
+   "id": "weapons/weapon_club",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "club"
+   ]
+  },
+  {
+   "id": "weapons/weapon_frying_pan",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "frying",
+    "pan"
+   ]
+  },
+  {
+   "id": "weapons/weapon_hammer",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "hammer"
+   ]
+  },
+  {
+   "id": "weapons/weapon_heart_wand",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "heart",
+    "wand"
+   ]
+  },
+  {
+   "id": "weapons/weapon_mace",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "mace"
+   ]
+  },
+  {
+   "id": "weapons/weapon_magical_wand",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "magical",
+    "wand"
+   ]
+  },
+  {
+   "id": "weapons/weapon_scythe",
+   "slot": "weapon",
+   "price": 500,
+   "parts": [
+    "scythe"
+   ]
+  },
+  {
+   "id": "weapons/weapon_spellbook",
+   "slot": "weapon",
+   "price": 500,
+   "parts": [
+    "spellbook"
+   ]
+  },
+  {
+   "id": "weapons/weapon_staff",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "staff"
+   ]
+  },
+  {
+   "id": "weapons/weapon_sword",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "sword"
+   ]
+  },
+  {
+   "id": "weapons/weapon_wand",
+   "slot": "weapon",
+   "price": 250,
+   "parts": [
+    "wand"
+   ]
+  }
+ ]
+}

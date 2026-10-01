@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { runDungeon, bestiary, CHEST_GRADES, AUTO_SAVE_SLOT, type BattleEvent } from '../src/battle.ts';
 import { THEME_RULES } from '../src/themes.ts';
 import { GODS, DEMONS } from '../src/contracts.ts';
@@ -20,6 +21,7 @@ import { PETS, isPetId } from '../src/pets.ts';
 import { dailyDungeon, dailyRandom, seededRandom, dateSeed } from '../src/daily.ts';
 import { listSkills, saveSkill, deleteSkill } from '../src/skills.ts';
 import { loadJournal, recordJournal } from '../src/journal.ts';
+import { buyCosmetic, wearCosmetic, cleanAvatar, type CosmeticItem } from '../src/wardrobe.ts';
 import { ROSTER_NAMES } from '../src/monsters.ts';
 import { movePath, importPaths, createEntry, resolveInside } from '../src/inventory.ts';
 import { loadProfile, saveProfile, finishRun, startingStatPoints, rebirth, XP_PER_LEVEL, TITLES, PRESTIGE_LEVEL } from '../src/profile.ts';
@@ -102,10 +104,13 @@ ipcMain.handle('set-party', (_event, on: boolean) => {
 // the hit from the page (devtools console etc.).
 const TYPING_HIT_MIN_MS = 1500;
 let lastTypingHitAt = 0;
-ipcMain.handle('typing-hit', () => {
+// 타자의 신: the fastest line typed this run (chars per minute), lines of 20+ chars only.
+let runBestCpm = 0;
+ipcMain.handle('typing-hit', (_event, cpm: unknown, length: unknown) => {
   const now = Date.now();
   if (now - lastTypingHitAt < TYPING_HIT_MIN_MS) return false;
   lastTypingHitAt = now;
+  if (typeof cpm === 'number' && Number.isFinite(cpm) && typeof length === 'number' && length >= 20) runBestCpm = Math.max(runBestCpm, Math.min(cpm, 3000));
   return externalHit?.(1) ?? false;
 });
 
@@ -230,6 +235,15 @@ function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
 
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
+ipcMain.handle('ranking-list', async (_event, board: unknown) => {
+  if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
+  const which = board === 'weekly' || board === 'daily' ? board : 'all';
+  try {
+    return { entries: await fetchRanking(rankingConfig.url, which, which === 'daily' ? localDate() : undefined) };
+  } catch (err) {
+    return { error: `랭킹을 불러오지 못했다 (${err instanceof Error ? err.message : err})` };
+  }
+});
 ipcMain.handle('ranking-submit', async (_event, name: unknown) => {
   if (!rankingConfig?.secret || !pendingRank) return { error: '이 기록은 등록할 수 없다' };
   const clean = String(name ?? '').trim().slice(0, 16);
@@ -336,6 +350,7 @@ let currentCwd: string | null = null;
 let currentModel = DEFAULT_WEAPON_ID;
 
 ipcMain.handle('get-setup-info', async () => ({
+  ...((runActive = false), {}), // back on the start screen: no run in progress
   profile: await loadProfile(),
   weapons: WEAPONS,
   items: [...ITEMS, ...BOSS_ITEMS],
@@ -511,6 +526,7 @@ ipcMain.handle(
     },
   ) => {
     const profile = await loadProfile();
+    runActive = true;
     if (requested.pet !== undefined) {
       const chosen = isPetId(requested.pet) && profile.pets?.includes(requested.pet) ? requested.pet : undefined;
       if (chosen) profile.activePet = chosen;
@@ -585,6 +601,9 @@ ipcMain.handle(
     let lastReturned: string | undefined = options.sessionId;
     const convo: { provider: Provider; role: 'user' | 'assistant'; text: string }[] = [];
     const seen: Record<Provider, number> = { claude: 0, codex: 0 };
+    const providersUsed = new Set<Provider>();
+    let walletWrites: Promise<unknown> = Promise.resolve();
+    runBestCpm = 0;
     const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex' };
     const handoff = (provider: Provider) => {
       const missed = convo.slice(seen[provider]).filter((e) => e.provider !== provider);
@@ -631,6 +650,7 @@ ipcMain.handle(
             convo.length = 0;
           }
           const provider = providerOf(currentModel);
+          providersUsed.add(provider);
           const sent = attachments;
           attachments = [];
           const full = handoff(provider) + prompt;
@@ -655,8 +675,10 @@ ipcMain.handle(
       },
       cwd,
       difficulty: options.difficulty,
-      coins: slot ? slot.coins : profile.coins,
-      bag: slot ? slot.bag : profile.bag,
+      // The wallet is the profile's, never a save slot's: reloading a save
+      // can't copy coins or items back (it's kept up to date below).
+      coins: profile.coins,
+      bag: profile.bag,
       playerMaxHp: slot ? slot.playerMaxHp : profile.maxHp,
       playerHp: slot?.playerHp,
       monsterHp: slot?.monsterHp,
@@ -671,7 +693,7 @@ ipcMain.handle(
       // Hero stats are per-run: fresh each game, restored only from a save slot.
       stats: slot?.stats,
       statPoints: slot ? slot.statPoints : startingStatPoints(profile),
-      swordLevel: slot ? slot.swordLevel : profile.swordLevel,
+      swordLevel: profile.swordLevel, // permanent, like the wallet: a save can't undo a broken sword
       runId,
       ...(paidXp ? { paidXp } : {}),
       ...(profile.activePet ? { pet: profile.activePet } : {}),
@@ -689,6 +711,9 @@ ipcMain.handle(
         const savedAt = Date.now();
         const data = { ...event.state, savedAt, cwd, themeId: options.themeId, difficulty: options.difficulty, model: currentModel, heroClass };
         if (event.slot === 0) {
+          // Every input wait: the live wallet goes to the profile (a crash keeps it).
+          const { coins: liveCoins, bag: liveBag, swordLevel: liveSword } = event.state;
+          walletWrites = walletWrites.then(async () => saveProfile({ ...(await loadProfile()), coins: liveCoins, bag: { ...liveBag }, swordLevel: liveSword })).catch(() => {});
           if (data.sessionId) {
             // Autosave, keyed by Claude session; keep the 30 most recent.
             const all = { ...folder.runStates, [data.sessionId]: data };
@@ -719,6 +744,9 @@ ipcMain.handle(
     // Settings changed mid-run win over the copy loaded at the start.
     // A daily run doesn't move the theme's story progress.
     await flushJournal({ floorsCleared: summary.floorsCleared, testsPassed: summary.runStats.testsPassed, tokens: summary.runStats.tokens });
+    await walletWrites; // the last live-wallet write lands before the run's own save
+    summary.runStats.bestTypingCpm = runBestCpm;
+    summary.runStats.bothAis = providersUsed.size > 1 ? 1 : 0;
     const finished = finishRun(profile, summary, day ? undefined : options.themeId);
     const updated = { ...finished.profile, heroClass, claude: currentClaude ?? profile.claude };
     await saveProfile(updated);
@@ -735,10 +763,11 @@ ipcMain.handle(
     const startFloor = Math.min(summary.nextFloor, Math.max(0, Math.floor(options.startFloor || 0)));
     pendingRank =
       runToken && rankScore > 0
-        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, ...(day ? { daily: day.date } : {}) }
+        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, avatar: cleanAvatar(updated.avatar), ...(day ? { daily: day.date } : {}) }
         : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;
+    runActive = false;
     return { summary, profile: updated, ranking, progress: { unlocked: unlocked.map(({ done: _done, ...a }) => a), dailyCompleted, rewardCoins } };
   },
 );
@@ -753,6 +782,19 @@ function insideCwd(filePath: string): string | null {
 const noProject = { ok: false, message: '진행 중인 프로젝트가 없다' } as const;
 // 스킬북 (src/skills.ts): the run's project skills plus the user's.
 ipcMain.handle('journal-get', () => loadJournal());
+// 꾸미기: buy and wear cosmetics with the profile's coins — only between runs
+// (during one the live wallet is the run's).
+const COSMETICS: CosmeticItem[] = JSON.parse(readFileSync(path.join(__dirname, 'renderer', 'avatar', 'catalog.json'), 'utf-8')).items;
+let runActive = false;
+const wardrobeChange = async (change: (p: Awaited<ReturnType<typeof loadProfile>>) => ReturnType<typeof buyCosmetic>) => {
+  if (runActive) return { error: '모험 중에는 꾸밀 수 없다 — 시작 화면에서!' };
+  const result = change(await loadProfile());
+  if ('error' in result) return result;
+  await saveProfile(result.profile);
+  return { profile: result.profile };
+};
+ipcMain.handle('wardrobe-buy', (_event, id: unknown) => wardrobeChange((p) => buyCosmetic(p, COSMETICS, String(id))));
+ipcMain.handle('wardrobe-wear', (_event, slot: unknown, id: unknown) => wardrobeChange((p) => wearCosmetic(p, COSMETICS, String(slot), id === null ? null : String(id))));
 // Codex: sign-in (ChatGPT, in the browser) and its model families.
 ipcMain.handle('codex-status', async () => ({ ...(await codexLoginStatus()), models: await codexModels() }));
 ipcMain.handle('codex-login', () => codexLogin());

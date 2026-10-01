@@ -10,6 +10,7 @@
     <section id="setup-screen">
       <header class="setup-header">
         <img src="logo.png" alt="프롬프트 배틀" class="title-logo" />
+        <button type="button" id="hero-avatar-btn" class="hero-avatar-btn" title="꾸미기: 코인으로 옷·머리·펫을 사서 입힌다"></button>
         <div class="setup-hero">
           <p id="profile-line" class="profile-line"></p>
           <button type="button" id="rebirth-btn" class="rebirth-btn" hidden>🌟 환생하기</button>
@@ -426,6 +427,27 @@
       </div>
     </div>
 
+    <div id="wardrobe-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel wardrobe-panel" role="dialog" aria-label="꾸미기">
+        <div class="settings-head">
+          <h2>👕 꾸미기 <span id="wardrobe-coins" class="coin-label"></span></h2>
+          <button type="button" id="wardrobe-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="wardrobe-body">
+          <div class="wardrobe-preview">
+            <div id="wardrobe-avatar"></div>
+            <p class="option-sub">업적과 모험이 끝나서 얻은 코인으로 산다. 랭킹에도 이 모습이 나온다.</p>
+          </div>
+          <div class="wardrobe-shop">
+            <nav id="wardrobe-tabs" class="settings-tabs wardrobe-tabs"></nav>
+            <div id="wardrobe-items" class="wardrobe-items"></div>
+            <p id="wardrobe-msg" class="choice-hint"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
     <div id="journal-overlay" class="file-viewer-overlay" hidden>
       <div class="settings-panel journal-panel" role="dialog" aria-label="모험 일지">
         <div class="settings-head">
@@ -499,6 +521,18 @@
         </div>
         <p id="ranking-status" class="option-sub"></p>
         <div class="ranking-scroll"><table id="ranking-table" class="ranking-table"></table></div>
+      </div>
+    </div>
+    <div id="rank-detail-overlay" class="file-viewer-overlay" hidden>
+      <div class="settings-panel rank-detail-panel" role="dialog" aria-label="랭킹 상세">
+        <div class="settings-head">
+          <h2 id="rank-detail-title"></h2>
+          <button type="button" id="rank-detail-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="rank-detail-body">
+          <div id="rank-detail-avatar"></div>
+          <dl id="rank-detail-stats" class="rank-detail-stats"></dl>
+        </div>
       </div>
     </div>
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { MONSTER_COUNT, spawnMonster } from './monsters.ts';
 import type { BattleSummary, PaidXp } from './battle.ts';
 import { isPetId, type PetId } from './pets.ts';
+import { cleanAvatar } from './wardrobe.ts';
 import { getHeroClass, DEFAULT_CLASS_ID, type HeroClassId } from './classes.ts';
 import { coerceClaudeSettings, DEFAULT_CLAUDE_SETTINGS, type ClaudeSettings } from './claude-settings.ts';
 import { readStore, writeStore } from './store.ts';
@@ -45,6 +46,9 @@ export interface Profile {
   prestige?: number;
   // Boss relics worn (2 slots), kept between runs.
   equipment?: string[];
+  // 꾸미기 (src/wardrobe.ts): cosmetics owned, and the look worn.
+  wardrobe?: string[];
+  avatar?: Record<string, string>;
 }
 
 const BASE_MAX_HP = 100;
@@ -144,6 +148,8 @@ function coerceProfile(parsed: unknown): Profile {
     maxHpPenalty: 0,
     ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
     ...(isValidCount(p?.prestige, 0) && p.prestige > 0 ? { prestige: p.prestige } : {}),
+    ...(Array.isArray(p?.wardrobe) && p.wardrobe.length ? { wardrobe: [...new Set(p.wardrobe.filter((x): x is string => typeof x === 'string' && /^[a-z]+\/[a-z0-9_]+$/.test(x)))] } : {}),
+    ...(Object.keys(cleanAvatar(p?.avatar)).length ? { avatar: cleanAvatar(p?.avatar) } : {}),
     ...(Array.isArray(p?.equipment) && p.equipment.length ? { equipment: p.equipment.filter((x): x is string => typeof x === 'string' && /^boss-\d+$/.test(x)).slice(0, 2) } : {}),
     ...(Array.isArray(p?.pets) && p.pets.some(isPetId) ? { pets: [...new Set(p.pets.filter(isPetId))] } : {}),
     ...(isPetId(p?.activePet) && Array.isArray(p?.pets) && p.pets.includes(p.activePet) ? { activePet: p.activePet } : {}),

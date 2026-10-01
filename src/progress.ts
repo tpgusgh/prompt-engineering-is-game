@@ -22,6 +22,17 @@ export interface RunStats {
   filesEdited: number;
   typingLines: number;
   betsWon: number;
+  contractsBroken: number;
+  deathsByContract: number; // fell while bound to a demon
+  bestTypingCpm: number;
+  richest: number; // most coins held at once
+  shelvesCleared: number; // bought every good on a merchant's shelf in one visit
+  nightBuys: number;
+  springsDrunk: number;
+  dailyRuns: number;
+  awakenedBossKills: number;
+  gearWorn: number; // most relics worn at once
+  bothAis: number; // runs fought with both Claude and Codex
   byModel: Record<string, ModelRecord>;
   // Bestiary: monster indexes met, and kills per monster index.
   seen: number[];
@@ -33,6 +44,8 @@ export type Records = RunStats & { runs: number; maxSwordLevel: number; maxLevel
 export const emptyRunStats = (): RunStats => ({
   turns: 0, tokens: 0, bestHit: 0, longestTurnMs: 0, crits: 0, bossesDefeated: 0,
   floorsCleared: 0, testsPassed: 0, filesEdited: 0, typingLines: 0, betsWon: 0, byModel: {}, seen: [], kills: {},
+  contractsBroken: 0, deathsByContract: 0, bestTypingCpm: 0, richest: 0, shelvesCleared: 0, nightBuys: 0, springsDrunk: 0,
+  dailyRuns: 0, awakenedBossKills: 0, gearWorn: 0, bothAis: 0,
 });
 export const emptyRecords = (): Records => ({ ...emptyRunStats(), runs: 0, maxSwordLevel: 0, maxLevel: 1 });
 
@@ -40,7 +53,7 @@ export const emptyRecords = (): Records => ({ ...emptyRunStats(), runs: 0, maxSw
 const TEST_COMMAND = /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test\b|\bnpx\s+(jest|vitest|mocha|playwright\s+test)\b|\b(pytest|jest|vitest|mocha|rspec|phpunit|ctest)\b|\bnode\s+--test\b|\bgo\s+test\b|\bcargo\s+(test|nextest)\b|\bdotnet\s+test\b|\bmvn\s+(\S+\s+)*test\b|\bgradlew?\s+(\S+\s+)*test\b|\bswift\s+test\b|\bflutter\s+test\b|\bmake\s+(test|check)\b|\bpython3?\s+-m\s+(pytest|unittest)\b/;
 export const isTestCommand = (command: string) => TEST_COMMAND.test(command);
 
-const MAX_KEYS: (keyof RunStats)[] = ['bestHit', 'longestTurnMs'];
+const MAX_KEYS: (keyof RunStats)[] = ['bestHit', 'longestTurnMs', 'bestTypingCpm', 'richest', 'gearWorn'];
 const NOT_COUNTS: (keyof RunStats)[] = ['byModel', 'seen', 'kills'];
 
 export function mergeRecords(records: Records, run: RunStats, extra: { swordLevel: number; level: number }): Records {
@@ -48,7 +61,7 @@ export function mergeRecords(records: Records, run: RunStats, extra: { swordLeve
   for (const [index, n] of Object.entries(run.kills)) out.kills[index] = (out.kills[index] ?? 0) + n;
   for (const key of Object.keys(run) as (keyof RunStats)[]) {
     if (NOT_COUNTS.includes(key)) continue;
-    const value = run[key] as number;
+    const value = (run[key] as number) ?? 0;
     (out[key] as number) = MAX_KEYS.includes(key) ? Math.max(out[key] as number, value) : (out[key] as number) + value;
   }
   for (const [model, r] of Object.entries(run.byModel)) {
@@ -86,6 +99,17 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'level-5', icon: '🎖', title: '숙련된 모험가', description: '용사 레벨 5 달성', coins: 80, done: (r) => r.maxLevel >= 5 },
   { id: 'million', icon: '🪙', title: '백만 토큰', description: '누적 토큰 100만', coins: 100, done: (r) => r.tokens >= 1_000_000 },
   { id: 'bestiary-half', icon: '📖', title: '몬스터 연구가', description: `도감 몬스터 ${TOTAL_MONSTERS / 2}종 발견`, coins: 80, done: (r) => r.seen.length >= TOTAL_MONSTERS / 2 },
+  { id: 'pact-breaker', icon: '💔', title: '계약 파괴자', description: '계약을 강제로 파기한 자', coins: 50, done: (r) => (r.contractsBroken ?? 0) >= 1 },
+  { id: 'pact-victim', icon: '😈', title: '계약에게 당한 자', description: '악마와 계약한 채 쓰러지기', coins: 40, done: (r) => (r.deathsByContract ?? 0) >= 1 },
+  { id: 'typing-god', icon: '⌨️', title: '타자의 신', description: '코딩 타자 분당 700타 이상', coins: 150, done: (r) => (r.bestTypingCpm ?? 0) >= 700 },
+  { id: 'rich', icon: '💰', title: '부자', description: '코인 3,000개 이상 보유', coins: 100, done: (r) => (r.richest ?? 0) >= 3000 },
+  { id: 'shelf-sweep', icon: '🛒', title: '싹쓸이 손님', description: '상인의 물건을 한 번에 전부 사기', coins: 80, done: (r) => (r.shelvesCleared ?? 0) >= 1 },
+  { id: 'night-regular', icon: '🏮', title: '야시장 단골', description: '야시장에서 3번 사기', coins: 60, done: (r) => (r.nightBuys ?? 0) >= 3 },
+  { id: 'spring-lover', icon: '💧', title: '샘물 애호가', description: '회복의 샘 3번 마시기', coins: 40, done: (r) => (r.springsDrunk ?? 0) >= 3 },
+  { id: 'daily-runner', icon: '📅', title: '오늘의 도전자', description: '오늘의 도전 한 판 끝내기', coins: 40, done: (r) => (r.dailyRuns ?? 0) >= 1 },
+  { id: 'awakened-slayer', icon: '🔥', title: '각성 진압', description: '각성한 보스 쓰러뜨리기', coins: 100, done: (r) => (r.awakenedBossKills ?? 0) >= 1 },
+  { id: 'fully-geared', icon: '⚙️', title: '장비빨', description: '보스 유물 2개 장착', coins: 80, done: (r) => (r.gearWorn ?? 0) >= 2 },
+  { id: 'two-ais', icon: '🤝', title: 'AI 양다리', description: '한 판에 Claude와 Codex 둘 다 쓰기', coins: 50, done: (r) => (r.bothAis ?? 0) >= 1 },
   { id: 'bestiary-all', icon: '📚', title: '도감 완성', description: `도감 몬스터 ${TOTAL_MONSTERS}종 모두 처치`, coins: 300, done: (r) => Object.keys(r.kills).length >= TOTAL_MONSTERS },
 ];
 

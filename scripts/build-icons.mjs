@@ -18,7 +18,7 @@ export const EMOJI = {
   '🛡️': 'shield', '❔': 'circle-help', '⬆️': 'arrow-up', '⬇️': 'arrow-down', '🗑': 'trash-2', '🗑️': 'trash-2', '🔍': 'search',
   '🔒': 'lock', '❤️': 'heart', '🐉': 'flame', '🏔': 'mountain', '🏔️': 'mountain', '☄️': 'rocket', '📚': 'library', '🤐': 'mic-off',
   '⚀': 'dice-1', '⚁': 'dice-2', '⚂': 'dice-3', '⚃': 'dice-4', '⚄': 'dice-5', '⚅': 'dice-6', '💀': 'skull', '🎁': 'gift', '💰': 'hand-coins', '💣': 'bomb', '🤝': 'handshake', '📃': 'scroll-text', '💎': 'gem', '🔔': 'bell', '👻': 'ghost', '🎯': 'target',
-  '📎': 'paperclip', '📓': 'notebook-pen', '🎓': 'graduation-cap', '👁': 'eye', '🦉': 'bird', '🐾': 'paw-print', '🌟': 'star', '🔥': 'flame',
+  '📎': 'paperclip', '📓': 'notebook-pen', '👕': 'shirt', '🛒': 'shopping-cart', '💔': 'heart-crack', '😈': 'angry', '🎓': 'graduation-cap', '👁': 'eye', '🦉': 'bird', '🐾': 'paw-print', '🌟': 'star', '🔥': 'flame',
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {

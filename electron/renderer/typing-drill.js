@@ -165,7 +165,7 @@ typingInput.addEventListener('input', async () => {
   $('typing-stats').textContent = `${cpm}타/분 · 정확도 ${accuracy}% · ${typingDone}줄 완성`;
   lastTypedTitle = typingSnippet.title;
   sfx('typed');
-  window.promptBattle.typingHit();
+  window.promptBattle.typingHit(cpm, typingSnippet.code.length);
   const explain = $('typing-explain');
   explain.hidden = false;
   explain.className = 'typing-explain';

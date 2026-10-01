@@ -562,6 +562,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       maxHpPenalty += lost;
       playerMaxHp = Math.max(20, playerMaxHp - lost);
       playerHp = Math.min(playerHp, playerMaxHp);
+      runStats.contractsBroken += 1;
       deps.onBattleEvent({ type: 'contractBroken', penalty: lost, maxHp: playerMaxHp });
     } else {
       contract = result.contract;
@@ -624,6 +625,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   // Every wait for input: the per-session autosave (slot 0) and the auto slot
   // (4), both with the live state — a wounded monster stays wounded on load.
   const autosave = () => {
+    runStats.richest = Math.max(runStats.richest, coins);
     if (deps.daily) return; // a daily run can't be saved (a reload would reroll the day)
     const state = currentState();
     deps.onBattleEvent({ type: 'snapshot', slot: 0, state });
@@ -760,6 +762,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
           drank = true;
           const amount = Math.min(playerMaxHp - playerHp, Math.round(playerMaxHp * SPRING_HEAL));
           playerHp += amount;
+          runStats.springsDrunk += 1;
           deps.onBattleEvent({ type: 'springDrank', amount });
           emitPlayerHp();
         }
@@ -815,6 +818,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         else {
           coins -= good.price;
           sold.add(id);
+          runStats.nightBuys += 1;
           grantItem(good);
           deps.onBattleEvent({ type: 'purchased', itemId: id, coins });
         }
@@ -827,6 +831,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   const visitMerchant = () => {
     const offer = shopOffer(shopVisits++, relics, shopRandom).map((i) => ({ ...i, price: priceAt(i, floor), limit: merchantLimit(i.id) }));
     const bought: Record<string, number> = {};
+    let swept = false;
     deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer, priceMult: priceMultiplier(floor) });
     return visitShop((input) => {
       if (input.startsWith('/bet ')) {
@@ -861,6 +866,10 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       } else {
         coins -= item.price;
         bought[item.id] = (bought[item.id] ?? 0) + 1;
+        if (!swept && offer.every((o) => bought[o.id])) {
+          swept = true;
+          runStats.shelvesCleared += 1;
+        }
         grantItem(item);
         deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins, left: item.limit - bought[item.id] });
       }
@@ -1190,6 +1199,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }
     if (playerHp <= 0) {
       defeated = true;
+      if (contract?.kind === 'demon') runStats.deathsByContract += 1;
       deps.onBattleEvent({ type: 'playerDefeated' });
       break;
     }
@@ -1229,6 +1239,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     floorsCleared += 1;
     runStats.floorsCleared += 1;
     if (isBoss) runStats.bossesDefeated += 1;
+    if (isBoss && enraged) runStats.awakenedBossKills += 1;
     runStats.kills[monsterIndex] = (runStats.kills[monsterIndex] ?? 0) + 1;
     if (currentFloorEngaged) modelRecord(floorModel).cleared += 1;
     deps.onBattleEvent({ type: 'floorCleared', monsterName: spawned.name, xpGained: gained });
@@ -1256,6 +1267,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     if (visit && !(await visit())) break;
   }
 
+  runStats.richest = Math.max(runStats.richest, coins);
+  runStats.gearWorn = Math.max(runStats.gearWorn, equipment.length);
+  if (deps.daily) runStats.dailyRuns = 1;
   const summary: BattleSummary = {
     floorsCleared,
     floorsEngaged,
