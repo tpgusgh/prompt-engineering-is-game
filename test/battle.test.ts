@@ -1040,7 +1040,14 @@ test('contracts: a god contract adds +1 to the closing blow and is kept in the s
   assert.deepEqual(summary.contract, { kind: 'god', id: 'thunder' });
 });
 
-test('contracts: a demon costs max HP to sign; a second contract of any kind breaks them all (-10 max HP for good)', async () => {
+test('breaking pacts costs 10%: of the run max HP now, and of the base max HP for good', async () => {
+  const { deps, events } = makeFakeDeps(['/use contract', '/use contract', '/quit']);
+  const summary = await runDungeon({ ...deps, playerMaxHp: 250, baseMaxHp: 90, bag: { contract: 2 } });
+  assert.ok(events.some((e) => e.type === 'contractBroken' && e.penalty === 25 && e.maxHp === 225));
+  assert.equal(summary.maxHpPenalty, 9, '10% of the base 90');
+});
+
+test('contracts: a demon costs max HP to sign; a second contract of any kind breaks them all (-10% max HP for good)', async () => {
   const { deps, events } = makeFakeDeps(['/use devilContract', '/use contract', '/quit']);
   const summary = await runDungeon({ ...deps, bag: { devilContract: 1, contract: 1 }, random: seq(0, 0.99) }); // 0 → pride (30%)
   const signed = events.find((e) => e.type === 'contractSigned');

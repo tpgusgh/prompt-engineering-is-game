@@ -1742,7 +1742,7 @@ function renderBattleEvent(event) {
     case 'contractBroken':
       heroContract = null;
       renderContract();
-      appendLog(`⚠️ 계약이 서로 충돌해 모두 깨졌다! 최대 HP가 영구히 ${event.penalty} 줄었다 (최대 HP ${event.maxHp}). 이제 다시 계약할 수 있다.`, 'error');
+      appendLog(`⚠️ 계약이 서로 충돌해 모두 깨졌다! 최대 HP 10% 감소 (-${event.penalty}, 최대 HP ${event.maxHp}). 기본 최대 HP도 영구히 10% 줄어든다. 이제 다시 계약할 수 있다.`, 'error');
       break;
     case 'relicGained':
       appendLog(`✨ ${itemName(event.itemId)}을(를) 손에 넣었다! 이제부터 얻는 코인 +25% (영구)`, 'victory');
@@ -3288,7 +3288,7 @@ function renderContract() {
     list.append(li);
   }
   const rule = document.createElement('small');
-  rule.textContent = '계약은 하나만. 또 계약서를 쓰면 모든 계약이 깨지고 최대 HP가 영구히 -10.';
+  rule.textContent = '계약은 하나만. 또 계약서를 쓰면 모든 계약이 깨지고 최대 HP가 영구히 10% 줄어든다.';
   tip.append(head, list, rule);
   el.append(tip);
 }

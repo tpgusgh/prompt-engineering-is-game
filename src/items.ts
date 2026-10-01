@@ -36,8 +36,8 @@ export const ITEMS: Item[] = [
   { id: 'elixir', name: '엘릭서', price: 110, description: 'HP 완전 회복' },
   { id: 'bomb', name: '폭탄', price: 45, description: '몬스터 최대 HP의 20% 피해 (보스는 5%, 최소 30)' },
   { id: 'scroll', name: '지혜의 두루마리', price: 50, description: '경험치 +30' },
-  { id: 'contract', name: '계약서', price: 120, description: '6원소신 중 하나와 무작위 계약 — 모든 타격 +5%와 신의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
-  { id: 'devilContract', name: '악마의 계약서', price: 90, description: '7대 악마 중 하나와 무작위 계약 — 서명에 최대 HP 일부를 바치고 악마의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10' },
+  { id: 'contract', name: '계약서', price: 120, description: '6원소신 중 하나와 무작위 계약 — 모든 타격 +5%와 신의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10%' },
+  { id: 'devilContract', name: '악마의 계약서', price: 90, description: '7대 악마 중 하나와 무작위 계약 — 서명에 최대 HP 일부를 바치고 악마의 특성. 계약이 있으면 모두 깨지고 최대 HP 영구 -10%' },
   { id: 'coinCharm', name: '코인의 부적', price: 150, description: '얻는 코인 영구 +25% (단 한 번만 살 수 있다)' },
 ];
 

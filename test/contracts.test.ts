@@ -22,7 +22,7 @@ test('any second contract (same kind or the other) breaks them all', () => {
   assert.deepEqual(again, { contract: null, broken: true });
   const mixed = signContract({ kind: 'god', id: 'fire' }, 'demon', () => 0);
   assert.deepEqual(mixed, { contract: null, broken: true });
-  assert.equal(BREAK_PENALTY, 10);
+  assert.equal(BREAK_PENALTY, 0.1);
 });
 
 test('a god contract adds +5% to every hit plus its trait; demons have their own (all as ratios)', () => {
