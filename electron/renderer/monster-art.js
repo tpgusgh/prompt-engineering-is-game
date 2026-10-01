@@ -380,13 +380,22 @@ const BOSS_AURA = `<defs><radialGradient id="boss-aura"><stop offset="55%" stop-
 
 const BOSS_CROWN = `<path d="M70 14 L78 0 L88 12 L100 -4 L112 12 L122 0 L130 14 Z" fill="#ebcb8b" stroke="#8a6d2b" stroke-width="2" transform="translate(0 6)"/>`;
 
+// Each drawing gets its own gradient ids: the same monster can be on the
+// page twice (battle + bestiary), and a url(#id) shared between them can
+// draw from the wrong (hidden) copy and come out broken on some GPUs.
+let drawSeq = 0;
+function scoped(svg) {
+  const n = ++drawSeq;
+  return svg.replace(/\bid="([^"]+)"/g, (_, id) => `id="${id}-${n}"`).replace(/url\(#([^)]+)\)/g, (_, id) => `url(#${id}-${n})`);
+}
+
 export function monsterSvg(index, isBoss) {
   const body = MONSTERS[index % MONSTERS.length];
-  return `<svg class="monster-svg${isBoss ? ' boss' : ''}" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  return scoped(`<svg class="monster-svg${isBoss ? ' boss' : ''}" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
     ${isBoss ? BOSS_AURA : ''}
     <g class="monster-body">${body}</g>
     ${isBoss ? BOSS_CROWN : ''}
-  </svg>`;
+  </svg>`);
 }
 
 // The merchant goblin: a friendly goblin with a pointed hat, a pack of wares
@@ -415,9 +424,9 @@ const MERCHANT = `<defs>
   <text x="44" y="156" text-anchor="middle" font-size="16" font-weight="bold" fill="#8a6d2b" font-family="monospace">$</text>`;
 
 export function merchantSvg() {
-  return `<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  return scoped(`<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
     <g class="monster-body">${MERCHANT}</g>
-  </svg>`;
+  </svg>`);
 }
 
 // The blacksmith: a bearded dwarf with a hammer over an anvil.
@@ -445,9 +454,9 @@ const BLACKSMITH = `<defs>
   <circle cx="72" cy="132" r="3" fill="#ffcf70"/><circle cx="130" cy="128" r="2.5" fill="#ffcf70"/><circle cx="118" cy="120" r="2" fill="#ffb347"/>`;
 
 export function blacksmithSvg() {
-  return `<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  return scoped(`<svg class="monster-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
     <g class="monster-body">${BLACKSMITH}</g>
-  </svg>`;
+  </svg>`);
 }
 
 // Treasure chest (the monster fell mid-turn; overkill decides the grade).
@@ -467,7 +476,7 @@ export function chestSvg(grade, open = false) {
     ? `<path d="M44 92 L60 40 L140 40 L156 92 Z" fill="${dark}" stroke="#1a1208" stroke-width="3" transform="rotate(-18 44 92)"/>`
     : `<path d="M40 96 Q40 56 100 56 Q160 56 160 96 Z" fill="${body}" stroke="#1a1208" stroke-width="3"/><rect x="92" y="70" width="16" height="30" fill="${dark}"/>`;
   const glow = open ? `<ellipse class="boss-aura" cx="100" cy="92" rx="70" ry="30" fill="${shine}" opacity=".55"/><path d="M70 90 L60 30 M100 90 L100 16 M130 90 L140 30" stroke="${shine}" stroke-width="5" stroke-linecap="round" opacity=".8"/>` : '';
-  return `<svg class="monster-svg chest-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  return scoped(`<svg class="monster-svg chest-svg" viewBox="-10 -10 220 220" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="100" cy="186" rx="70" ry="9" fill="#000" opacity=".4"/>
     <g class="monster-body">
       ${glow}
@@ -478,5 +487,5 @@ export function chestSvg(grade, open = false) {
       <circle cx="100" cy="123" r="3.5" fill="#1a1208"/>
       ${lid}
     </g>
-  </svg>`;
+  </svg>`);
 }
