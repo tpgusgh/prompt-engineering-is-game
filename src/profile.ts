@@ -127,7 +127,9 @@ function coerceProfile(parsed: unknown): Profile {
     storyFloors: coerceStoryFloors(p),
     coins: isValidCount(p?.coins, 0) ? p.coins : DEFAULT_PROFILE.coins,
     bag: coerceCounts(p?.bag, 1),
-    maxHp: BASE_MAX_HP - (isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0),
+    // Broken-pact max HP cuts used to last forever; now they last one run,
+    // so any old saved penalty is dropped.
+    maxHp: BASE_MAX_HP,
     swordLevel: isValidCount(p?.swordLevel, 0) ? p.swordLevel : 0,
     heroClass: getHeroClass(typeof p?.heroClass === 'string' ? p.heroClass : undefined).id,
     claude: coerceClaudeSettings(p?.claude),
@@ -137,7 +139,7 @@ function coerceProfile(parsed: unknown): Profile {
     ...(coerceDaily(p?.daily) ? { daily: coerceDaily(p?.daily) } : {}),
     ...(coerceContract(p?.contract) ? { contract: coerceContract(p?.contract) } : {}),
     relics: Array.isArray(p?.relics) ? p.relics.filter((r): r is string => r === 'coinCharm') : [],
-    maxHpPenalty: isValidCount(p?.maxHpPenalty, 0) ? Math.min(p.maxHpPenalty, BASE_MAX_HP - 20) : 0,
+    maxHpPenalty: 0,
     ...(Object.keys(coerceClaims(p?.xpClaims)).length ? { xpClaims: coerceClaims(p?.xpClaims) } : {}),
     ...(isValidCount(p?.prestige, 0) && p.prestige > 0 ? { prestige: p.prestige } : {}),
     ...(Array.isArray(p?.pets) && p.pets.some(isPetId) ? { pets: [...new Set(p.pets.filter(isPetId))] } : {}),
@@ -215,8 +217,8 @@ export function applyRun(profile: Profile, summary: BattleSummary, themeId: stri
   updated.bag = { ...summary.bag };
   // Max HP bonuses (vitality, life crystals) last one run: the next starts at
   // base, minus what broken contracts took for good.
-  updated.maxHpPenalty = Math.min(BASE_MAX_HP - 20, (profile.maxHpPenalty ?? 0) + (summary.maxHpPenalty ?? 0));
-  updated.maxHp = BASE_MAX_HP - updated.maxHpPenalty;
+  updated.maxHpPenalty = 0; // a broken pact's cut lasts only the run it happened in
+  updated.maxHp = BASE_MAX_HP;
   if (summary.contract !== undefined) {
     if (summary.contract) updated.contract = summary.contract;
     else delete updated.contract;

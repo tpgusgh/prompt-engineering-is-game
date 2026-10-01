@@ -597,7 +597,6 @@ ipcMain.handle(
       ...(profile.activePet ? { pet: profile.activePet } : {}),
       ownedPets: profile.pets ?? [],
       prestige: profile.prestige ?? 0,
-      baseMaxHp: profile.maxHp,
       ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date), shopRandom: seededRandom(dateSeed(day.date) ^ 0x5bd1e995) } : {}),
       ...showcaseRolls(),
       onBattleEvent: (event: BattleEvent) => {

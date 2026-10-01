@@ -223,8 +223,6 @@ export interface BattleDeps {
   ownedPets?: string[];
   // 환생 stars: +10% damage and coins each.
   prestige?: number;
-  // The profile's max HP (no run bonuses); a broken pact takes 10% of it for good.
-  baseMaxHp?: number;
   // 일일 도전 (src/daily.ts): that day's areas per chapter; the run can't be saved.
   rosters?: number[];
   daily?: string;
@@ -400,8 +398,6 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
   let mods = contractMods(contract);
   const relics = [...(deps.relics ?? [])];
   let maxHpPenalty = 0;
-  // The profile's max HP without this run's bonuses: what a broken pact cuts for good.
-  const baseMaxHp = deps.baseMaxHp ?? deps.playerMaxHp ?? 100;
   let shopVisits = 0;
   const prestigeMult = 1 + 0.1 * (deps.prestige ?? 0);
   const coinGain = (n: number) => Math.round(n * mods.coinMult * prestigeMult * (relics.includes('coinCharm') ? COIN_CHARM_BONUS : 1));
@@ -542,9 +538,9 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     const result = signContract(contract, kind, random);
     if (result.broken) {
       contract = null;
-      // 10% of the run's max HP now; 10% of the base (profile) max HP for good.
+      // 10% of max HP, for the rest of this run only.
       const lost = Math.max(1, Math.round(playerMaxHp * BREAK_PENALTY));
-      maxHpPenalty += Math.max(1, Math.round((baseMaxHp - maxHpPenalty) * BREAK_PENALTY));
+      maxHpPenalty += lost;
       playerMaxHp = Math.max(20, playerMaxHp - lost);
       playerHp = Math.min(playerHp, playerMaxHp);
       deps.onBattleEvent({ type: 'contractBroken', penalty: lost, maxHp: playerMaxHp });

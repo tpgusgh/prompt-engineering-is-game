@@ -1,7 +1,7 @@
 // Contracts, signed with the 계약서 (one of 6 elemental gods) or the 악마의
 // 계약서 (one of the 7 deadly-sin demons, which costs a share of max HP to
 // sign). The hero holds at most one; signing another — of either kind —
-// breaks them all and takes 10% of max HP (of the base, for good). Kept in the profile.
+// breaks them all and takes 10% of max HP for the rest of that run. Kept in the profile.
 
 export type ContractKind = 'god' | 'demon';
 export interface Contract {
@@ -61,7 +61,7 @@ export const DEMONS: Demon[] = [
 ];
 
 export const GOD_HIT_MULT = 1.05; // every god pact: all hits +5%
-export const BREAK_PENALTY = 0.1; // share of max HP lost when contracts break (now, and of the base for good)
+export const BREAK_PENALTY = 0.1; // share of max HP lost for the rest of the run when contracts break
 
 export function pactOf(contract: Contract | null | undefined): Pact | Demon | undefined {
   if (!contract) return undefined;

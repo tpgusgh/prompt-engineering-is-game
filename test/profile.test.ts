@@ -212,13 +212,13 @@ test('older profiles fill the bestiary from the story floors already reached', a
   assert.equal(profile.records.turns, 3);
 });
 
-test('applyRun keeps the contract, relics and broken-contract max HP penalty', () => {
+test('applyRun keeps the contract and relics; a broken-pact max HP cut lasts only that run', () => {
   const p = applyRun(base, summary({ contract: { kind: 'demon', id: 'greed' }, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
   assert.deepEqual(p.contract, { kind: 'demon', id: 'greed' });
   assert.deepEqual(p.relics, ['coinCharm']);
-  assert.equal(p.maxHpPenalty, 10);
-  assert.equal(p.maxHp, 90);
+  assert.equal(p.maxHpPenalty, 0);
+  assert.equal(p.maxHp, 100, 'the next run starts at full base max HP');
   const broken = applyRun(p, summary({ contract: null, relics: ['coinCharm'], maxHpPenalty: 10 }), 'adventure');
   assert.equal(broken.contract, undefined);
-  assert.equal(broken.maxHp, 80);
+  assert.equal(broken.maxHp, 100);
 });
