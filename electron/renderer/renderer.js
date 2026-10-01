@@ -332,6 +332,50 @@ function openRest(kind, text, action, command) {
   $('rest-action').onclick = () => window.promptBattle.submitPrompt(command);
   $('rest-result').textContent = '';
 }
+// 야시장: rare stall, 4 discounted goods, one of each.
+const NIGHT_SVG = '<svg viewBox="0 0 200 200" width="160" height="160"><rect x="30" y="96" width="140" height="70" rx="6" fill="#3b2a4a"/><path d="M20 100 L100 52 L180 100 Z" fill="#5a3a6e"/><path d="M20 100 Q40 112 60 100 Q80 112 100 100 Q120 112 140 100 Q160 112 180 100" fill="#bf616a"/><line x1="60" y1="70" x2="60" y2="84" stroke="#d8dee9" stroke-width="2"/><ellipse cx="60" cy="92" rx="10" ry="12" fill="#ff8a3d"/><ellipse cx="60" cy="92" rx="5" ry="7" fill="#ffd36b"/><line x1="140" y1="70" x2="140" y2="84" stroke="#d8dee9" stroke-width="2"/><ellipse cx="140" cy="92" rx="10" ry="12" fill="#ff8a3d"/><ellipse cx="140" cy="92" rx="5" ry="7" fill="#ffd36b"/><circle cx="160" cy="30" r="12" fill="#ebcb8b"/><circle cx="166" cy="26" r="11" fill="#151922"/><rect x="58" y="124" width="22" height="18" rx="3" fill="#ebcb8b"/><rect x="92" y="120" width="18" height="22" rx="3" fill="#88c0d0"/><rect x="120" y="126" width="22" height="16" rx="3" fill="#b48ead"/></svg>';
+let nightSold = new Set();
+let nightGoods = [];
+function renderNightGoods() {
+  const el = $('night-goods');
+  el.textContent = '';
+  for (const g of nightGoods) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'night-good';
+    const sold = nightSold.has(g.id);
+    btn.disabled = sold || !inputEnabled;
+    const icon = ITEM_ICONS[g.id] ?? (g.id.startsWith('boss-') ? '👑' : '📦');
+    btn.innerHTML = '';
+    const name = document.createElement('strong');
+    name.textContent = `${icon} ${g.name}`;
+    const price = document.createElement('span');
+    price.className = 'night-price';
+    price.innerHTML = sold ? '팔림' : `<s>🪙 ${g.original}</s> 🪙 ${g.price} <em>-${Math.round(g.discount * 100)}%</em>`;
+    const desc = document.createElement('small');
+    desc.textContent = g.description;
+    btn.append(name, price, desc);
+    btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${g.id}`));
+    el.append(btn);
+  }
+}
+function openNightMarket(event) {
+  monsterPanel.hidden = true;
+  fleeBtn.disabled = true;
+  nightGoods = event.items;
+  nightSold = new Set();
+  $('night-panel').hidden = false;
+  $('night-art').innerHTML = NIGHT_SVG;
+  renderNightGoods();
+}
+function closeNightMarket() {
+  $('night-panel').hidden = true;
+  nightGoods = [];
+  monsterPanel.hidden = !merchantPanel.hidden || !$('blacksmith-panel').hidden || !$('rest-panel').hidden;
+  fleeBtn.disabled = !inputEnabled;
+}
+$('night-leave').addEventListener('click', () => window.promptBattle.submitPrompt('/leave'));
+
 function closeRest() {
   $('rest-panel').hidden = true;
   monsterPanel.hidden = !merchantPanel.hidden || !$('blacksmith-panel').hidden;
@@ -432,6 +476,7 @@ function setInputEnabled(enabled) {
   $('change-folder').disabled = !enabled;
   $('attach-btn').disabled = !enabled;
   for (const btn of document.querySelectorAll('.bag-list button, .merchant-panel button')) btn.disabled = !enabled;
+  if (nightGoods.length) renderNightGoods(); // sold-out goods stay disabled
   if (statDefs.length) renderStatPanel();
 }
 
@@ -1585,6 +1630,10 @@ function renderBattleEvent(event) {
     case 'purchased':
       coins = event.coins;
       renderCoins();
+      if (nightGoods.length) {
+        nightSold.add(event.itemId);
+        renderNightGoods();
+      }
       appendLog(`${itemName(event.itemId)}을(를) 샀다! (남은 코인 ${event.coins})`, 'victory');
       break;
     case 'purchaseFailed':
@@ -1695,6 +1744,16 @@ function renderBattleEvent(event) {
       renderCoins();
       appendLog('대장장이가 나타났다! "그 검, 좀 더 날카롭게 해줄까?"', 'coin-line');
       openBlacksmith(event);
+      break;
+    case 'nightMarketOpen':
+      coins = event.coins;
+      renderCoins();
+      appendLog('🏮 어둠 속에 등불이 하나둘 켜진다... 야시장이 열렸다! 오늘 밤만, 하나씩만.', 'coin-line');
+      openNightMarket(event);
+      fx.burst('chest', 'night-art', 14);
+      break;
+    case 'nightMarketClosed':
+      closeNightMarket();
       break;
     case 'springOpen':
       appendLog('💧 숲 사이로 맑은 샘이 보인다. 한 모금이면 상처가 아물 것 같다.', 'story-line');
@@ -2104,6 +2163,7 @@ async function startGame({ loadSlot, slot, daily = false }) {
   closeMerchant();
   closeBlacksmith();
   closeRest();
+  closeNightMarket();
   exitOverlay.hidden = true;
   unsaved = false;
   saveThenExit = false;
@@ -2222,7 +2282,7 @@ attackForm.addEventListener('submit', (e) => {
   // re-enables input; slash commands (/new alone, /use, /buy, /flee...)
   // resolve instantly, so disabling for them would lock the input.
   // At a shop an empty line just leaves it (no hesitate follows).
-  const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden || !$('rest-panel').hidden;
+  const atMerchant = !merchantPanel.hidden || !$('blacksmith-panel').hidden || !$('rest-panel').hidden || !$('night-panel').hidden;
   // A skill (/fix-tests ...) is a real attack; only the game's own commands aren't.
   const command = isGameCommand(trimmed);
   const startsTurn = (!command && !(atMerchant && trimmed === '')) || /^\/new\s+\S/.test(trimmed);

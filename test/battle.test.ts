@@ -1099,6 +1099,28 @@ test('boss drops: each boss has its own relic, dropped 30% of the time, and it w
   assert.equal(shield.events.filter((e) => e.type === 'monsterAttack').length, 1);
 });
 
+test('night market: a rare stop; each good sells once at its discount', async () => {
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, 'BUY_FIRST', 'BUY_FIRST', '/leave', '/quit']);
+  let offerFirst = '';
+  const inputs = deps.readInput;
+  deps.readInput = async () => {
+    const v = await inputs();
+    return v === 'BUY_FIRST' ? `/buy ${offerFirst}` : v;
+  };
+  deps.onBattleEvent = ((orig) => (e: BattleEvent) => {
+    if (e.type === 'nightMarketOpen') offerFirst = e.items[0].id;
+    orig(e);
+  })(deps.onBattleEvent);
+  const summary = await runDungeon({ ...deps, coins: 5000, random: seq(0.78, 0.99) });
+  const open = events.find((e) => e.type === 'nightMarketOpen');
+  assert.ok(open?.type === 'nightMarketOpen' && open.items.length === 4);
+  const bought = events.filter((e) => e.type === 'purchased');
+  assert.equal(bought.length, 1, 'only one of each');
+  assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.reason.includes('팔렸')));
+  assert.equal(summary.coins, 5000 + events.filter((e) => e.type === 'coinsChanged').reduce((n, e) => n + (e.type === 'coinsChanged' ? e.gained ?? 0 : 0), 0) - open.items[0].price);
+  assert.ok(events.some((e) => e.type === 'nightMarketClosed'));
+});
+
 test('rest stop: the spring heals half of max HP once', async () => {
   const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/drink', '/drink', '/leave', '/quit']);
   const summary = await runDungeon({ ...deps, playerHp: 20, random: seq(0.84, 0.99) });

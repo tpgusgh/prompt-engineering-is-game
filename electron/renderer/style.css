@@ -3123,3 +3123,35 @@ body {
   color: #d08770;
   font-style: italic;
 }
+
+/* 야시장 */
+.night-panel {
+  background: linear-gradient(180deg, #1b1426, #151922);
+  border-color: #b48ead;
+}
+.night-goods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.night-good {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #5a3a6e;
+  background: rgba(180, 142, 173, 0.08);
+  color: #eceff4;
+  cursor: pointer;
+}
+.night-good:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.night-price s { color: #7b88a1; }
+.night-price em { color: #ff8a3d; font-style: normal; font-weight: 700; }
+.night-good small { color: #a9b1c2; font-size: 11px; }

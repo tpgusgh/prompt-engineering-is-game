@@ -20,6 +20,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **📅 Daily dungeon** — one a day, the same for everyone: the date picks the theme, each chapter's area, and the merchant/chest/flee rolls. Normal difficulty, from floor 1, no saving. Fall and post to the **daily board** (story progress is untouched).
 - **🌟 Rebirth** — from level 20, **Rebirth** on the start screen sends you back to level 1 for a star: each star is +10% damage and coins and +2 starting stat points, for good. Coins, sword, pets, pacts and the bestiary stay.
 - **🐾 Pets** — rare in gold-or-better chests (3–20%), kept for good; pick one on the start screen: healing slime (5% max HP per turn), baby drake (3% of the monster's max HP per turn), wise owl (+20% floor XP).
+- **🏮 Night market** — a rare stall between floors (about 4%): 4 goods, boss relics and contracts included, 30–70% off today's price, one of each.
 - **Rest stops** — between floors, sometimes a **healing spring** (50% max HP, once) and, while bound, a **shrine** to renounce your pact with no max-HP penalty.
 - **Story & effects** — a prologue card per theme, boss entrance and awakening lines, chapter-clear story cards; floating damage numbers and sparkles/flashes on crits, chests, clears, level-ups and awakenings.
 - **📜 Skillbook** — 📜 by the input. Write frequent instructions as **Claude skill files** (`.claude/skills/<name>/SKILL.md`), edit and delete them; **Load** puts `/<name>` in front of the prompt and Claude runs that skill. Your `~/.claude/skills` show up too (load only).

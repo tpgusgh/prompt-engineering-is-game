@@ -44,3 +44,23 @@ function seq(...values: number[]) {
   return () => values[Math.min(i++, values.length - 1)];
 }
 
+
+test('night market: 4 different goods, 30-70% off today\'s price, boss relics can show up', async () => {
+  const { nightMarketOffer, priceAt, getItem, BOSS_ITEMS } = await import('../src/items.ts');
+  let saw = false;
+  for (let s = 0; s < 40; s++) {
+    let x = s / 40;
+    const random = () => (x = (x * 9301 + 0.4927) % 1);
+    const offer = nightMarketOffer(5, random);
+    assert.equal(offer.length, 4);
+    assert.equal(new Set(offer.map((i) => i.id)).size, 4);
+    for (const i of offer) {
+      assert.ok(i.discount >= 0.3 && i.discount <= 0.7, `${i.discount}`);
+      assert.equal(i.original, priceAt(getItem(i.id)!, 5));
+      assert.equal(i.price, Math.round(i.original * (1 - i.discount)));
+      assert.notEqual(i.id, 'coinCharm');
+    }
+    if (offer.some((i) => BOSS_ITEMS.some((b) => b.id === i.id))) saw = true;
+  }
+  assert.ok(saw, 'relics are in the pool');
+});

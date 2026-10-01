@@ -3,7 +3,7 @@ import { spawnMonster, listMonsters, MONSTER_COUNT, TRAITS, ROSTER_NAMES, DIFFIC
 import { THEME_RULES, themeRules } from './themes.ts';
 import type { TurnResult, AgentEvent } from './agent.ts';
 import { rollPet, PET_HEAL_RATIO, PET_FIRE_RATIO, PET_XP_BONUS, type PetId } from './pets.ts';
-import { bossItemFor, BOSS_DROP_CHANCE, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
+import { bossItemFor, BOSS_DROP_CHANCE, nightMarketOffer, type NightGood, getItem, shopOffer, sellPrice, priceAt, priceMultiplier, rollChestItem, POTION_HEAL, BANDAGE_HEAL, CRYSTAL_MAX_HP, COIN_CHARM_BONUS, bombDamage, SCROLL_XP, type Item } from './items.ts';
 import { contractMods, pactOf, signContract, BREAK_PENALTY, type Contract, type Demon } from './contracts.ts';
 import { EMPTY_STATS, VITALITY_RATE, raiseStat, allMaxed, isStatId, attackMultiplier, defenseReduction, type Stats, type StatId } from './stats.ts';
 import { enhanceOdds, swordMultiplier, SWORD_MAX_LEVEL, type EnhanceOdds } from './forge.ts';
@@ -50,6 +50,8 @@ export type BattleEvent =
   | { type: 'shrineOpen'; contract: Contract }
   | { type: 'contractRenounced'; name: string }
   | { type: 'shrineClosed' }
+  | { type: 'nightMarketOpen'; coins: number; items: NightGood[] }
+  | { type: 'nightMarketClosed' }
   | { type: 'petHelped'; pet: PetId; amount: number }
   | { type: 'petFound'; pet: PetId }
   | { type: 'turnStart'; prompt: string }
@@ -267,6 +269,7 @@ const BLACKSMITH_CHANCE = 0.2;
 // the healing spring, and the shrine where a pact can be renounced freely.
 const SPRING_BAND = [0.8, 0.88] as const;
 const SHRINE_BAND = [0.88, 0.96] as const; // only while holding a pact
+const NIGHT_MARKET_BAND = [0.76, 0.8] as const; // 야시장, rare
 export const SPRING_HEAL = 0.5; // of max HP, once
 const BOSS_COIN_MULTIPLIER = 3;
 
@@ -721,6 +724,45 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     );
   };
 
+  // A bought item: the crystal and the coin charm apply now, the rest go in the bag.
+  const grantItem = (item: Item) => {
+    if (item.id === 'crystal') {
+      playerMaxHp += CRYSTAL_MAX_HP;
+      playerHp += CRYSTAL_MAX_HP;
+      emitPlayerHp();
+    } else if (item.id === 'coinCharm') {
+      relics.push(item.id);
+      deps.onBattleEvent({ type: 'relicGained', itemId: item.id });
+    } else {
+      bag[item.id] = (bag[item.id] ?? 0) + 1;
+      emitBag();
+    }
+  };
+
+  const visitNightMarket = () => {
+    const goods = nightMarketOffer(floor, shopRandom);
+    const sold = new Set<string>();
+    deps.onBattleEvent({ type: 'nightMarketOpen', coins, items: goods });
+    return visitShop(
+      (input) => {
+        if (!input.startsWith('/buy ')) return false;
+        const id = input.slice('/buy '.length).trim();
+        const good = goods.find((g) => g.id === id);
+        if (!good) deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '야시장에 없는 물건이다' });
+        else if (sold.has(id)) deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '이미 팔렸다 (하나씩만 있다)' });
+        else if (coins < good.price) deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
+        else {
+          coins -= good.price;
+          sold.add(id);
+          grantItem(good);
+          deps.onBattleEvent({ type: 'purchased', itemId: id, coins });
+        }
+        return true;
+      },
+      () => deps.onBattleEvent({ type: 'nightMarketClosed' }),
+    );
+  };
+
   const visitMerchant = () => {
     const offer = shopOffer(shopVisits++, relics, shopRandom).map((i) => ({ ...i, price: priceAt(i, floor) }));
     deps.onBattleEvent({ type: 'merchantOpen', coins, items: offer, priceMult: priceMultiplier(floor) });
@@ -754,17 +796,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         deps.onBattleEvent({ type: 'purchaseFailed', itemId: id, reason: '코인이 부족하다' });
       } else {
         coins -= item.price;
-        if (item.id === 'crystal') {
-          playerMaxHp += CRYSTAL_MAX_HP;
-          playerHp += CRYSTAL_MAX_HP;
-          emitPlayerHp();
-        } else if (item.id === 'coinCharm') {
-          relics.push(item.id);
-          deps.onBattleEvent({ type: 'relicGained', itemId: item.id });
-        } else {
-          bag[item.id] = (bag[item.id] ?? 0) + 1;
-          emitBag();
-        }
+        grantItem(item);
         deps.onBattleEvent({ type: 'purchased', itemId: item.id, coins });
       }
       return true;
@@ -1153,6 +1185,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
       if (!(await visitMerchant())) break;
     } else if (encounter < (MERCHANT_CHANCE + BLACKSMITH_CHANCE) * theme.shopChance) {
       if (!(await visitBlacksmith())) break;
+    } else if (encounter >= NIGHT_MARKET_BAND[0] && encounter < NIGHT_MARKET_BAND[1]) {
+      if (!(await visitNightMarket())) break;
     } else if (encounter >= SPRING_BAND[0] && encounter < SPRING_BAND[1]) {
       if (!(await visitSpring())) break;
     } else if (contract && encounter >= SHRINE_BAND[0] && encounter < SHRINE_BAND[1]) {

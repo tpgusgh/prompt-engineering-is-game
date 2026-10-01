@@ -68,6 +68,22 @@ export const bossItemFor = (roster: number) => BOSS_ITEMS.find((i) => i.boss ===
 
 export const SHOP_SIZE = 5;
 
+// 야시장: a rare stall of NIGHT_MARKET_SIZE different goods — boss relics and
+// contracts included — each 30-70% off today's price, one of each.
+export const NIGHT_MARKET_SIZE = 4;
+export type NightGood = Item & { original: number; discount: number };
+export function nightMarketOffer(floor: number, random: () => number): NightGood[] {
+  const pool = [...ITEMS.filter((i) => i.id !== 'coinCharm'), ...BOSS_ITEMS];
+  const picks: NightGood[] = [];
+  while (picks.length < NIGHT_MARKET_SIZE && pool.length) {
+    const [item] = pool.splice(Math.min(pool.length - 1, Math.floor(random() * pool.length)), 1);
+    const discount = Math.round((0.3 + random() * 0.4) * 20) / 20; // 5% steps
+    const original = priceAt(item, floor);
+    picks.push({ ...item, original, discount, price: Math.round(original * (1 - discount)) });
+  }
+  return picks;
+}
+
 // Prices climb with depth: +PRICE_GROWTH per floor (floor 10 = double).
 export const PRICE_GROWTH = 0.1;
 export const priceMultiplier = (floor: number) => Math.round((1 + PRICE_GROWTH * Math.max(0, floor)) * 100) / 100;
