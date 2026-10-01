@@ -232,8 +232,8 @@ test('a monster killed by the turn does not counterattack', async () => {
 
 test('player HP reaching 0 ends the run as a defeat', async () => {
   const { deps, events, runTurnCalls } = makeFakeDeps([WEAK_PROMPT, WEAK_PROMPT, WEAK_PROMPT, '/quit']);
-  const summary = await runDungeon({ ...deps, playerMaxHp: 10 });
-  assert.equal(runTurnCalls.length, 2, 'two counters of 6 kill a 10-HP player; the third prompt is never read');
+  const summary = await runDungeon({ ...deps, playerMaxHp: 100, playerHp: 10 });
+  assert.equal(runTurnCalls.length, 2, 'two counters of 6 kill a hero at 10 HP; the third prompt is never read');
   assert.ok(events.some((e) => e.type === 'playerDefeated'));
   assert.equal(summary.defeated, true);
   assert.equal(summary.floorsCleared, 0);
@@ -1102,6 +1102,16 @@ test('the merchant buys bag items back at half price', async () => {
   assert.equal(events.filter((e) => e.type === 'sellFailed').length, 2, 'none left / not in the bag');
   assert.equal(summary.bag.potion, undefined);
   assert.equal(summary.coins, 10 + 15);
+});
+
+test('one counterattack takes at most 35% of the hero max HP (the chapter 2 boss used to two-shot)', async () => {
+  const { deps, events } = makeFakeDeps(['x', '/quit']);
+  await runDungeon({ ...deps, startFloor: 11, playerMaxHp: 150 });
+  const start = events.find((e) => e.type === 'floorStart');
+  const hit = events.find((e) => e.type === 'monsterAttack');
+  assert.ok(start?.type === 'floorStart' && start.isBoss && hit?.type === 'monsterAttack');
+  assert.ok(Math.round(start.maxHp * 0.1 * 1.1) > 53, 'uncapped it would be far more');
+  assert.equal(hit.damage, Math.round(150 * 0.35));
 });
 
 test('counters grow +10% per chapter', async () => {

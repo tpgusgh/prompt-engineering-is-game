@@ -1340,14 +1340,21 @@ function renderBattleEvent(event) {
       break;
     }
     case 'monsterAttack':
+      pendingCounter = event.damage;
       appendLog(`${currentMonsterName}${pick(COUNTER_LINES)} ${event.damage}의 피해를 받았다!`, 'error');
       shakeScreen();
       break;
     case 'playerHpChanged':
+      if (lastPlayerHp !== null && event.hp < lastPlayerHp) {
+        lastHit = { damage: pendingCounter ?? lastPlayerHp - event.hp, by: currentMonsterName, hpBefore: lastPlayerHp };
+      }
+      pendingCounter = null;
+      lastPlayerHp = event.hp;
       setBar(playerHpFill, playerHpLabel, event.hp, event.maxHp, '');
       break;
     case 'playerDefeated':
       appendLog('용사가 쓰러졌다...', 'error');
+      showDeathCard();
       break;
     case 'floorCleared': {
       const before = levelOf(profile.xp + runXp);
@@ -1596,6 +1603,24 @@ function renderBattleEvent(event) {
 // monster's counter (and the hit log) never shows up before the AI has
 // finished talking on screen.
 const battleQueue = [];
+// Death: the battle screen stays with the killing blow shown until 다음으로.
+let lastPlayerHp = null;
+let lastHit = null;
+let pendingCounter = null; // a counter's full damage, before HP clamps at 0
+let deathAck = null; // resolves when 다음으로 is clicked
+function showDeathCard() {
+  $('death-last-hit').textContent = lastHit ? `마지막 피해: ${lastHit.by}에게 ${lastHit.damage} (남아 있던 HP ${lastHit.hpBefore})` : '';
+  $('death-card').hidden = false;
+  setInputEnabled(false);
+  $('death-next').focus();
+}
+function resetDeathCard() {
+  lastPlayerHp = null;
+  lastHit = null;
+  pendingCounter = null;
+  $('death-card').hidden = true;
+  deathAck = new Promise((resolve) => $('death-next').addEventListener('click', resolve, { once: true }));
+}
 let stoppedTurn = false; // the last turn was stopped with ⏹ (monsterWaits follows)
 const typingBehind = new Set(); // bubbles whose shown text lags the stream
 // Animations that should play out before the next events (the chest opening).
@@ -1839,9 +1864,12 @@ async function startGame({ loadSlot, slot }) {
   try {
     const party = $('party-mode').checked;
     const heroClassId = chosenClass;
+    resetDeathCard();
     const runPromise = window.promptBattle.startRun({ cwd: chosenFolder, difficulty, model: chosenWeapon, themeId: activeTheme.id, startFloor, sessionId, loadSlot, party, heroClass: heroClassId });
     setTimeout(refreshTree, 300);
     const { summary, profile: updated, progress, ranking } = await runPromise;
+    if (summary.defeated) await deathAck;
+    $('death-card').hidden = true;
     profile = updated;
     dungeonScreen.hidden = true;
     summaryScreen.hidden = false;

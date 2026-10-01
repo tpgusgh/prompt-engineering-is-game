@@ -2787,3 +2787,36 @@ body {
 .last-prompt-answers span {
   color: #d8dee9;
 }
+
+.death-card {
+  position: fixed;
+  /* over the monster, centered on the battle column, leaving the log readable */
+  left: calc(50% + 115px);
+  top: 90px;
+  transform: translateX(-50%);
+  z-index: 50;
+  min-width: 280px;
+  padding: 16px 20px;
+  background: #1d222d;
+  border: 1px solid #bf616a;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  color: #eceff4;
+}
+.death-card strong {
+  color: #bf616a;
+  font-size: 16px;
+}
+.death-card p {
+  margin: 8px 0 12px;
+  color: #d8dee9;
+}
+.death-card button {
+  padding: 8px 18px;
+  background: #bf616a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
