@@ -204,6 +204,17 @@ ipcMain.handle('check-update', (_event, force?: boolean) => checkForUpdate(Boole
 
 // Online ranking: a defeated run can be submitted once (release builds only —
 // they carry the signing key). The run token is fetched when a run starts.
+// README screenshots only: PROMPTBATTLE_SHOWCASE=merchant|nightMarket|spring|shrine
+// makes every floor clear lead there (and the shelf hold a devil's contract).
+// Ignored in packaged builds, so it can't be used to cheat.
+const SHOWCASE_ROLL: Record<string, number> = { merchant: 0.1, nightMarket: 0.7, spring: 0.77, shrine: 0.85 };
+function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
+  const roll = SHOWCASE_ROLL[process.env.PROMPTBATTLE_SHOWCASE ?? ''];
+  if (app.isPackaged || roll === undefined) return {};
+  let n = 0;
+  return { random: () => roll, shopRandom: () => (n++ % 2 === 0 ? 0.01 : 0.9) };
+}
+
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
 ipcMain.handle('ranking-list', async (_event, board: unknown) => {
@@ -587,6 +598,7 @@ ipcMain.handle(
       ownedPets: profile.pets ?? [],
       prestige: profile.prestige ?? 0,
       ...(day ? { daily: day.date, rosters: day.rosters, random: dailyRandom(day.date), shopRandom: seededRandom(dateSeed(day.date) ^ 0x5bd1e995) } : {}),
+      ...showcaseRolls(),
       onBattleEvent: (event: BattleEvent) => {
         trackHistory(event);
         if (event.type !== 'snapshot') {

@@ -28,7 +28,7 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Achievements, daily quest, records** — 16 achievements (first boss, 10 crits, sword +5, full bestiary…) that pay coins, a daily quest ("pass tests 3 times"…), and **📊 records**: tokens processed, best hit, longest turn, win rate per weapon (model).
 - **Treasure chests** — if a monster hits 0 HP while the AI is still working, it falls on the spot and turns into a treasure chest; the rest of the work, the closing blow and typing hits pile onto it, and the overkill sets the grade: measured as a share of the monster's max HP, across 8 grades: wood (0%) · iron (15%) · silver (35%) · gold (70%) · platinum (120%) · diamond (200%) · legendary (300%) · mythic (500%+). Coins always; items by chance (5% for wood up to 95% for mythic), better loot in better chests.
 - **"AI is done" notification** — when the game window isn't in front and the AI finishes, a notification (click to return), a Dock bounce on Mac / taskbar flash on Windows. Toggle in ⚙️ Settings → sound & notifications.
-- **Shop & items** — the merchant shelves 5 items at a time, rotating each visit, and buys bag items back at half price. Besides bandages, potions, whetstones, amulets, smoke bombs and life crystals: elixir (full heal), bomb (20% of the monster's max HP, 5% on bosses, at least 30), scroll of wisdom (+30 XP), the **coin charm** (+25% coins for good, one purchase only), the **contract** and the **devil's contract**.
+- **Shop & items** — the merchant shelves 4 items at a time, rotating each visit, and buys bag items back at half price. Besides bandages, potions, whetstones, amulets, smoke bombs and life crystals: elixir (full heal), bomb (20% of the monster's max HP, 5% on bosses, at least 30), scroll of wisdom (+30 XP), the **coin charm** (+25% coins for good, one purchase only), the **contract** and the **devil's contract**.
 - **Contracts** — a contract binds you to one of 6 elemental gods at random (+5% to every hit plus the god's trait, all as percentages); a devil's contract to one of the 7 deadly-sin demons, costing 10–30% of max HP to sign, each with its own trait. You hold one pact at most: using another scroll while bound breaks them all and costs **10 max HP for good**. Pacts last across runs. The merchant only rarely (10% a visit) shelves a contract or a devil's contract.
 - **Attach files & pictures** — 📎 beside the input, drag & drop onto it, or paste an image (⌘/Ctrl+V). Claude sees pictures, reads PDFs as documents and gets code/text files inline (5 at a time; images 5MB, PDFs 30MB, text 200KB).
 - **Next-prompt memo** — jot the next prompt in the 📝 memo while the AI fights; when the turn ends it moves into the input box.
@@ -77,18 +77,28 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 ### 1. Setup
 ![Setup screen](docs/screenshots/setup.png)
 
-Everything fits on one screen: pick a 📁 project folder, then in the **New adventure** card a theme, a **class** (🗡 swordsman / 🧙 wizard / 🏹 archer — it renames your weapons), a weapon (Claude model — the **token ●** dots show how fast it uses up your plan limits) and a difficulty, then ▶ enter. **Continue** below loads the 3 save slots and the per-floor autosave. After picking a folder, its Claude sessions are listed too (with 💾 the autosaved floor/HP). In **⚙️ Settings** (top right — the same window in battle), the Claude tab has:
+Everything fits on one screen: pick a 📁 project folder, then in the **New adventure** card a theme, a **class** (🗡 swordsman / 🧙 wizard / 🏹 archer — it renames your weapons), a **pet** (🐾 one of those you've found), a weapon (Claude model — the **token ●** dots show how fast it uses up your plan limits), a **skill** (effort) and a difficulty, then ▶ enter. Below it, **📅 Daily dungeon** is the same one-day dungeon for everyone. From level 20 a **🌟 Rebirth** button appears. **Continue** below loads the 3 save slots and the per-floor autosave. After picking a folder, its Claude sessions are listed too (with 💾 the autosaved floor/HP). In **⚙️ Settings** (top right — the same window in battle), the Claude tab has:
 
 - 🔑 **Connection**: the Claude Code login (CLI) or an **API key** (stored encrypted in the keychain, with a "check connection" button)
 - 🧩 **Skills**: all / none / pick (searchable)
-- 🔌 **MCP servers**: on/off per server, with connection status
+- 🔌 **MCP servers**: on/off per server, with connection status. **Connect MCP** opens claude.ai connectors and the MCP server list, or adds a server by command or URL
 
 These apply only to the game's sessions; your Claude Code settings are untouched.
 
 ### Bestiary
 ![Bestiary](docs/screenshots/bestiary.png)
 
-Every monster you've met: art, HP, counterattack, boss rule and kills. **📖 Bestiary** at the top right of the start screen.
+Every monster you've met: art, HP, counterattack, boss rule, phase-2 awakening and kills, filterable by chapter (area). **📖 Bestiary** at the top right of the start screen.
+
+### Ranking
+![Ranking](docs/screenshots/ranking.png)
+
+**All-time · This week · 📅 Daily** tabs with theme and difficulty filters, showing the chapter/floor reached, titles and rebirth stars. **🏆 Ranking** at the top right of the start screen.
+
+### Prologue
+![Prologue](docs/screenshots/prologue.png)
+
+A new adventure (or the daily dungeon) opens with the theme's story, one line at a time. Clearing a chapter shows the next story card; bosses speak when they appear and when they awaken.
 
 ### 2. Battle
 ![Battle screen](docs/screenshots/battle.png)
@@ -114,12 +124,32 @@ When the AI needs your answer, a large quest window opens. Pick a choice or writ
 ### 5. Merchant goblin
 ![Merchant goblin](docs/screenshots/merchant.png)
 
-Sometimes appears after a clear. Buy items with coins, or gamble on 🎲 odd/even (win double; `올인` = all-in). Typing a prompt here closes the shop and attacks the next monster.
+Appears after 35% of clears (40% in the adventure theme). Four goods sit side by side, rotating each visit, each with a per-visit limit (shown as "left"), priced higher the deeper you go (+10% a floor). 10% of the time a contract is shelved, and a **devil's contract** first poses as a plain one, then corrupts a second later. Sell bag items back (half today's price) or gamble on 🎲 odd/even (win double; `올인` = all-in). Typing a prompt here closes the shop and attacks the next monster.
+
+### 🏮 Night market
+![Night market](docs/screenshots/night-market.png)
+
+10% of clears: 4 goods, boss relics and contracts included, 30–70% off, one of each.
+
+### Shrine & spring
+![Shrine](docs/screenshots/shrine.png)
+
+While bound, a shrine appears 10% of the time to renounce your pact with no max-HP penalty. The healing spring (5%, not in the adventure theme) restores 50% of max HP once.
+
+### 📜 Skillbook
+![Skillbook](docs/screenshots/skillbook.png)
+
+📜 by the input. Write frequent instructions as Claude skill files (`.claude/skills/<name>/SKILL.md`); **Load** puts `/<name>` in front of the prompt and Claude runs it.
 
 ### 6. Blacksmith
 ![Blacksmith](docs/screenshots/blacksmith.png)
 
 Enhance your weapon with coins (up to +10). Success gets less likely as it climbs, and from +3 a failure can break it back to +0 (shabby). Each level changes the weapon's prefix (초라한 shabby → 그냥 plain → … → 신화의 mythic).
+
+### When you fall
+![Fallen](docs/screenshots/death.png)
+
+The killing blow (who, how much, the HP you had) stays on screen until **Next ▶** opens the summary (and the ranking).
 
 ### 7. Exit
 ![Exit](docs/screenshots/exit.png)

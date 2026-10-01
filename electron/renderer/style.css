@@ -632,7 +632,7 @@ body {
 }
 .merchant-items {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* 4 goods side by side */
   gap: 6px;
   margin-bottom: 8px;
 }
@@ -3131,7 +3131,7 @@ body {
 }
 .night-goods {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* 4 goods side by side, like the merchant */
   gap: 8px;
   margin: 8px 0;
 }
@@ -3165,4 +3165,25 @@ body {
 }
 .merchant-item.sold-out .limit {
   color: #bf616a;
+}
+
+/* The devil's contract: shown as a plain contract, then corrupted. */
+.merchant-item.corrupting,
+.night-good.corrupting {
+  animation: corrupt 0.9s steps(9) forwards;
+}
+@keyframes corrupt {
+  0% { filter: none; transform: none; }
+  20% { filter: hue-rotate(-40deg) saturate(2); transform: translateX(-2px) skewX(4deg); }
+  40% { filter: invert(0.2) hue-rotate(-80deg) saturate(3); transform: translateX(2px) skewX(-6deg); box-shadow: 0 0 14px #bf616a; }
+  60% { filter: brightness(0.6) hue-rotate(-120deg) saturate(3); transform: translateX(-1px); }
+  80% { filter: brightness(1.3) hue-rotate(-150deg) saturate(2); box-shadow: 0 0 22px #bf616a; }
+  100% { filter: none; transform: none; }
+}
+.merchant-item.corrupted,
+.night-good.corrupted {
+  background: linear-gradient(160deg, #3a1520, #1d1218);
+  border-color: #bf616a;
+  box-shadow: 0 0 10px rgba(191, 97, 106, 0.45);
+  color: #f2c4c8;
 }

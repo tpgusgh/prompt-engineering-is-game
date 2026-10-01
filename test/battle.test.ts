@@ -1197,17 +1197,17 @@ test('shop prices climb with depth: +10% per floor; selling pays half the curren
   assert.ok(b.items.every((i) => i.price >= 2 * 10));
 });
 
-test('shop: 5 items per visit; the coin charm is a one-time relic that boosts coins', async () => {
-  // The charm is on the second visit's shelf (10 items rotate, contracts aside).
-  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
-  const summary = await runDungeon({ ...deps, coins: 500, random: seq(0.1, 0.1, 0.99), getDamageMultiplier: () => 10 });
+test('shop: 4 items per visit; the coin charm is a one-time relic that boosts coins', async () => {
+  // The charm is on the third visit's shelf (10 items rotate 4 at a time, contracts aside).
+  const { deps, events } = makeFakeDeps([ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/leave', ONE_SHOT_PROMPT, '/buy coinCharm', '/buy coinCharm', '/leave', ONE_SHOT_PROMPT, '/quit']);
+  const summary = await runDungeon({ ...deps, coins: 500, random: seq(0.1, 0.1, 0.1, 0.99), getDamageMultiplier: () => 10 });
   const shelves = events.filter((e) => e.type === 'merchantOpen');
-  assert.ok(shelves.every((e) => e.type === 'merchantOpen' && e.items.length === 5));
+  assert.ok(shelves.every((e) => e.type === 'merchantOpen' && e.items.length === 4));
   assert.ok(events.some((e) => e.type === 'relicGained' && e.itemId === 'coinCharm'));
   assert.ok(events.some((e) => e.type === 'purchaseFailed' && e.itemId === 'coinCharm'), 'only once');
   assert.deepEqual(summary.relics, ['coinCharm']);
   const gains = events.filter((e) => e.type === 'coinsChanged').map((e) => (e.type === 'coinsChanged' ? e.gained : 0));
-  assert.equal(gains.at(-1), Math.round((10 + 2 * 2) * 1.25), 'the floor after buying (floor 3) pays 25% more');
+  assert.equal(gains.at(-1), Math.round((10 + 2 * 3) * 1.25), 'the floor after buying (floor 4) pays 25% more');
 });
 
 test('save/load XP dupe: floors and scrolls already paid for this run line give no XP again', async () => {

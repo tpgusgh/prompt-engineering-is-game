@@ -335,6 +335,7 @@ function openRest(kind, text, action, command) {
 // 야시장: rare stall, 4 discounted goods, one of each.
 const NIGHT_SVG = '<svg viewBox="0 0 200 200" width="160" height="160"><rect x="30" y="96" width="140" height="70" rx="6" fill="#3b2a4a"/><path d="M20 100 L100 52 L180 100 Z" fill="#5a3a6e"/><path d="M20 100 Q40 112 60 100 Q80 112 100 100 Q120 112 140 100 Q160 112 180 100" fill="#bf616a"/><line x1="60" y1="70" x2="60" y2="84" stroke="#d8dee9" stroke-width="2"/><ellipse cx="60" cy="92" rx="10" ry="12" fill="#ff8a3d"/><ellipse cx="60" cy="92" rx="5" ry="7" fill="#ffd36b"/><line x1="140" y1="70" x2="140" y2="84" stroke="#d8dee9" stroke-width="2"/><ellipse cx="140" cy="92" rx="10" ry="12" fill="#ff8a3d"/><ellipse cx="140" cy="92" rx="5" ry="7" fill="#ffd36b"/><circle cx="160" cy="30" r="12" fill="#ebcb8b"/><circle cx="166" cy="26" r="11" fill="#151922"/><rect x="58" y="124" width="22" height="18" rx="3" fill="#ebcb8b"/><rect x="92" y="120" width="18" height="22" rx="3" fill="#88c0d0"/><rect x="120" y="126" width="22" height="16" rx="3" fill="#b48ead"/></svg>';
 let nightSold = new Set();
+let nightCorrupted = false; // the devil's contract corrupts once per stall
 let nightGoods = [];
 function renderNightGoods() {
   const el = $('night-goods');
@@ -357,6 +358,10 @@ function renderNightGoods() {
     btn.append(name, price, desc);
     btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${g.id}`));
     el.append(btn);
+    if (g.id === 'devilContract' && !nightCorrupted) {
+      nightCorrupted = true;
+      corruptIntoDevil(btn, name, desc);
+    } else if (g.id === 'devilContract') btn.classList.add('corrupted');
   }
 }
 function openNightMarket(event) {
@@ -364,6 +369,7 @@ function openNightMarket(event) {
   fleeBtn.disabled = true;
   nightGoods = event.items;
   nightSold = new Set();
+  nightCorrupted = false;
   $('night-panel').hidden = false;
   $('night-art').innerHTML = NIGHT_SVG;
   renderNightGoods();
@@ -706,6 +712,28 @@ function renderBag() {
   }
 }
 
+// A devil's contract first poses as a plain one; a second later it corrupts.
+function corruptIntoDevil(card, nameEl, descEl) {
+  const devil = { name: nameEl.textContent, desc: descEl.textContent };
+  const plain = items.find((i) => i.id === 'contract');
+  nameEl.textContent = plain?.name ?? '계약서';
+  descEl.textContent = plain?.description ?? '';
+  card.classList.add('disguised');
+  card.disabled = true;
+  setTimeout(() => {
+    card.classList.add('corrupting');
+    sfx('hurt');
+    setTimeout(() => {
+      nameEl.textContent = `💀 ${devil.name}`;
+      descEl.textContent = devil.desc;
+      card.classList.remove('corrupting', 'disguised');
+      card.classList.add('corrupted');
+      card.disabled = !inputEnabled;
+      fx.burst('awaken', card, 12);
+    }, 450);
+  }, 1000);
+}
+
 function openMerchant(event) {
   monsterPanel.hidden = true;
   fleeBtn.disabled = true; // nothing to flee from in the shop
@@ -735,6 +763,7 @@ function openMerchant(event) {
     btn.append(name, desc, price, limit);
     btn.addEventListener('click', () => window.promptBattle.submitPrompt(`/buy ${item.id}`));
     merchantItemsEl.append(btn);
+    if (item.id === 'devilContract') corruptIntoDevil(btn, name, desc);
   }
   renderSellList();
 }

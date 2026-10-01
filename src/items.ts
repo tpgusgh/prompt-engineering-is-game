@@ -66,7 +66,7 @@ export const BOSS_ITEMS: Item[] = [
 ];
 export const bossItemFor = (roster: number) => BOSS_ITEMS.find((i) => i.boss === roster);
 
-export const SHOP_SIZE = 5;
+export const SHOP_SIZE = 4;
 // How many of each the merchant sells you per visit.
 export const MERCHANT_LIMIT: Partial<Record<ItemId, number>> = {
   bandage: 5, potion: 3, bomb: 3, whetstone: 2, amulet: 2, smoke: 2, scroll: 2,

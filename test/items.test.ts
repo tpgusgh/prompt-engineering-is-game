@@ -36,7 +36,7 @@ test('contracts are rare at the merchant: off the rotation, 10% a visit for one 
   assert.equal(god.at(-1), 'contract');
   const devil = shopOffer(0, [], seq(0.05, 0.8)).map((i) => i.id);
   assert.equal(devil.at(-1), 'devilContract');
-  assert.equal(devil.length, 5);
+  assert.equal(devil.length, 4);
 });
 
 function seq(...values: number[]) {
