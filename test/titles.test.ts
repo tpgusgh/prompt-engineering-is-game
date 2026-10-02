@@ -29,3 +29,13 @@ test('title shop: ids are unique and safe for the ranking; the ranking keeps onl
   assert.equal(cleanBadge('<script>'), undefined);
   assert.equal(cleanBadge(5), undefined);
 });
+
+test('title shop: some titles need an achievement first; every title has a tier', () => {
+  const locked = TITLE_SHOP.find((t) => t.requires === 'boss-3')!;
+  assert.ok(locked);
+  const rich = { coins: 99999, titles: [], achievements: [] } as never;
+  const r = buyTitle(rich, TITLE_SHOP, locked.id);
+  assert.ok('error' in r && /업적/.test(r.error));
+  assert.ok('profile' in buyTitle({ coins: 99999, titles: [], achievements: ['boss-3'] } as never, TITLE_SHOP, locked.id));
+  for (const t of TITLE_SHOP) assert.ok(['common', 'rare', 'epic', 'legend'].includes(t.tier), t.id);
+});

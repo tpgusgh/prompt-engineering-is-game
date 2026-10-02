@@ -27,6 +27,8 @@ export interface ClaudeSettings {
   // MCP servers added in the game (⚙️ → Claude → 🔌 MCP 연결하러 가기),
   // passed to every Claude query on top of Claude Code's own config.
   mcpServers?: Record<string, GameMcpServer>;
+  // 안전 모드 (src/safety.ts): risky shell commands wait for the player's OK.
+  safeMode?: boolean;
 }
 
 export type GameMcpServer = { type: 'stdio'; command: string; args: string[] } | { type: 'http'; url: string };
@@ -89,6 +91,7 @@ export function coerceClaudeSettings(value: unknown): ClaudeSettings {
     disabledMcp: strings(v.disabledMcp),
     auth: v.auth === 'api' ? 'api' : 'cli',
     ...(Object.keys(coerceMcpServers(v.mcpServers)).length ? { mcpServers: coerceMcpServers(v.mcpServers) } : {}),
+    ...(v.safeMode === true ? { safeMode: true } : {}),
   };
 }
 

@@ -3,6 +3,9 @@
 // them up under the input as you type.
 export const CRITERIA_BONUS = 0.5;
 export const CRIT_AT = 3;
+// Shorter than this, the criteria count half and can't crit: a bare list of
+// keywords isn't a good prompt.
+export const FULL_BONUS_AT = 50;
 
 export const PROMPT_CRITERIA = [
   {

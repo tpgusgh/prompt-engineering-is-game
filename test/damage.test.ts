@@ -44,3 +44,11 @@ test('a numbered list counts as steps; English forms work too', () => {
   assert.deepEqual(calculateDamage('1. read it\n2. fix it').matchedKeywords, ['단계']);
   assert.deepEqual(calculateDamage('fix it step by step and verify with tests, because it breaks').matchedKeywords, ['검증', '단계', '이유']);
 });
+
+test('under 50 characters the criteria count half and never crit (no keyword stuffing)', () => {
+  const stuffed = calculateDamage('src/a.ts 테스트 왜 예시'); // 18 chars, 4 criteria
+  assert.equal(stuffed.matchedKeywords.length, 4);
+  assert.equal(stuffed.crit, false);
+  assert.equal(stuffed.damage, Math.round(12 * (1 + 4 * 0.25)));
+  assert.equal(stuffed.short, true);
+});

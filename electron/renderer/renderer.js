@@ -16,8 +16,8 @@ import { MONSTER_LINES } from './monster-lines.js';
 import { fatigueOf } from './fatigue.js';
 import { fx } from './fx.js';
 import { startTour, resetTutorial } from './tutorial.js';
-import { TITLE_SHOP } from './title-shop.js';
-import { PROMPT_CRITERIA, CRITERIA_BONUS, CRIT_AT, metCriteria } from './prompt-criteria.js';
+import { TITLE_SHOP, TIER_NAME } from './title-shop.js';
+import { PROMPT_CRITERIA, CRITERIA_BONUS, CRIT_AT, FULL_BONUS_AT, metCriteria } from './prompt-criteria.js';
 import { playMusic, stopMusic, pushMusic, popMusic, sfx, getAudioSettings, setVolume, toggleMute } from './audio.js';
 
 const setupScreen = $('setup-screen');
@@ -234,7 +234,23 @@ document.querySelectorAll('input[name="difficulty"]').forEach((r) => r.addEventL
 // In battle: the same switch next to the weapon; the next attack goes to the other AI.
 function renderAiSwitch() {
   for (const b of document.querySelectorAll('.ai-switch button')) b.classList.toggle('active', b.dataset.provider === providerOf(weaponSelect.value || chosenWeapon));
+  renderPlanBtn();
 }
+// 작전 회의: while on, every attack is planned first and runs once approved.
+let planOn = false;
+function renderPlanBtn() {
+  const codex = providerOf(weaponSelect.value || chosenWeapon) === 'codex';
+  const btn = $('plan-btn');
+  btn.disabled = codex;
+  btn.classList.toggle('on', planOn && !codex);
+  btn.setAttribute('aria-pressed', String(planOn && !codex));
+}
+$('plan-btn').addEventListener('click', () => {
+  planOn = !planOn;
+  window.promptBattle.setPlanMode(planOn);
+  renderPlanBtn();
+  appendLog(planOn ? '🗺 작전 회의 켜짐: Claude가 먼저 계획을 세우고, 승인해야 고치기 시작한다.' : '🗺 작전 회의 꺼짐: 바로 작업한다.');
+});
 for (const b of document.querySelectorAll('.ai-switch button')) {
   b.addEventListener('click', async () => {
     const provider = b.dataset.provider;
@@ -1666,8 +1682,14 @@ function renderBattleEvent(event) {
     case 'askUser':
       showAsk(event.questions);
       break;
+    case 'askPlan':
+      showPlan(event.plan);
+      break;
+    case 'askDanger':
+      showDanger(event.command, event.danger);
+      break;
     case 'askClosed':
-      if (askQuestions) closeAsk();
+      if (askQuestions || dangerAsk || planAsk) closeAsk();
       break;
     case 'agentError':
       appendLog(`공격이 빗나갔다! 주문이 실패했다: ${event.error}`, 'error');
@@ -1681,7 +1703,7 @@ function renderBattleEvent(event) {
         appendLog(`『${skillName()}』 ${pick(ATTACK_LINES[chosenClass] ?? ATTACK_LINES.swordsman)(event.damage, weaponName())}${label}`, event.crit ? 'crit' : undefined);
         flashMonster();
       }
-      if (event.matchedKeywords.length > 0) appendLog(`(기준: ${event.matchedKeywords.join(', ')} → +${Math.round(event.matchedKeywords.length * CRITERIA_BONUS * 100)}%)`);
+      if (event.matchedKeywords.length > 0) appendLog(`(기준: ${event.matchedKeywords.join(', ')} → +${Math.round(event.matchedKeywords.length * CRITERIA_BONUS * (event.short ? 0.5 : 1) * 100)}%${event.short ? ` · ${FULL_BONUS_AT}자 미만이라 절반` : ''})`);
       turnConcluded(chest.active || chest.opened ? `${currentMonsterName}을(를) 쓰러뜨렸다! 다음 명령을 내려줘.` : `『${skillName()}』 작업 완료 — 다음 명령을 내려줘.`);
       break;
     }
@@ -2303,6 +2325,7 @@ $('daily-btn').addEventListener('click', () => {
 });
 
 async function startGame({ loadSlot, slot, daily = false }) {
+  window.promptBattle.setPlanMode(planOn);
   dailyRun = daily;
   if (daily) {
     slot = undefined;
@@ -2559,12 +2582,30 @@ const meterChips = PROMPT_CRITERIA.map((c) => {
 const meterTotal = document.createElement('span');
 meterTotal.className = 'meter-total';
 $('prompt-meter').append(...meterChips, meterTotal);
+const meterEstimate = document.createElement('span');
+meterEstimate.className = 'meter-estimate';
+$('prompt-meter').append(meterEstimate);
+let previewSeq = 0;
 function renderPromptMeter() {
   const text = promptInput.value;
-  const met = new Set(text.startsWith('/') ? [] : metCriteria(text).map((c) => c.id));
+  const command = text.startsWith('/');
+  const met = new Set(command ? [] : metCriteria(text).map((c) => c.id));
+  const short = text.length < FULL_BONUS_AT;
+  const crit = !short && met.size >= CRIT_AT;
   PROMPT_CRITERIA.forEach((c, i) => meterChips[i].classList.toggle('on', met.has(c.id)));
-  meterTotal.textContent = met.size ? `+${Math.round(met.size * CRITERIA_BONUS * 100)}%${met.size >= CRIT_AT ? ' · 크리티컬 ×1.5' : ''}` : '';
-  meterTotal.classList.toggle('crit', met.size >= CRIT_AT);
+  const bonus = Math.round(met.size * CRITERIA_BONUS * (short ? 0.5 : 1) * 100);
+  meterTotal.textContent = met.size ? `+${bonus}%${crit ? ' · 크리티컬 ×1.5' : ''}${short ? ` · ${FULL_BONUS_AT}자 미만이라 절반` : ''}` : '';
+  meterTotal.classList.toggle('crit', crit);
+  // The closing blow with every multiplier (weapon, sword, whetstone...), from the run itself.
+  const seq = ++previewSeq;
+  if (!text.trim() || command) {
+    meterEstimate.textContent = '';
+    return;
+  }
+  window.promptBattle.previewDamage(text).then((p) => {
+    if (seq !== previewSeq) return;
+    meterEstimate.textContent = p ? `예상 피해 ~${p.damage}` : '';
+  });
 }
 promptInput.addEventListener('input', autoGrowInput);
 promptInput.addEventListener('keydown', (e) => {
@@ -2910,13 +2951,15 @@ function answerQuest(text) {
   promptInput.value = answer;
   attackForm.requestSubmit();
 }
-$('quest-submit').addEventListener('click', () => (askQuestions ? submitAsk() : answerQuest($('quest-answer').value)));
+$('quest-submit').addEventListener('click', () => (planAsk ? answerPlan(true) : dangerAsk ? answerDanger(true) : askQuestions ? submitAsk() : answerQuest($('quest-answer').value)));
 function closeQuest() {
   if ($('quest-overlay').hidden) return;
   $('quest-overlay').hidden = true;
   popMusic();
 }
 $('quest-later').addEventListener('click', () => {
+  if (dangerAsk) return answerDanger(false);
+  if (planAsk) return answerPlan(false);
   if (askQuestions) {
     window.promptBattle.askAnswer({});
     appendLog('📜 Claude의 질문을 건너뛰었다. Claude가 알아서 판단한다.');
@@ -2930,6 +2973,10 @@ $('quest-later').addEventListener('click', () => {
 $('quest-answer').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
     e.preventDefault();
+    if (planAsk) {
+      if ($('quest-answer').value.trim()) answerPlan(false);
+      return;
+    }
     answerQuest($('quest-answer').value);
   }
 });
@@ -3027,7 +3074,72 @@ function submitAsk() {
   askQuestions.forEach((q, i) => addQuestAnswer(q.question, askAnswerOf(askPicks[i])));
   closeAsk();
 }
+// 작전 회의: Claude's plan, approved as is or sent back with changes.
+let planAsk = null;
+function showPlan(plan) {
+  planAsk = { plan };
+  $('quest-ribbon').textContent = '🗺 작전 회의 — Claude의 계획';
+  const body = $('quest-body');
+  body.innerHTML = marked.parse(plan || t('(빈 계획)'));
+  $('quest-choices').textContent = '';
+  const answer = $('quest-answer');
+  answer.hidden = false;
+  answer.value = '';
+  answer.placeholder = '고칠 점을 쓰고 ✏️ 수정 요청 (비워 두고 승인하면 그대로 진행)';
+  $('quest-later').textContent = '✏️ 수정 요청';
+  $('quest-submit').textContent = '⚔️ 승인하고 진행';
+  $('quest-submit').disabled = false;
+  $('quest-overlay').hidden = false;
+  pushMusic('quest');
+  sfx('party');
+  answer.focus();
+}
+function answerPlan(approve) {
+  if (!planAsk) return;
+  const feedback = $('quest-answer').value.trim();
+  if (!approve && !feedback) {
+    $('quest-answer').focus();
+    $('quest-answer').placeholder = '무엇을 고칠지 써 줘';
+    return;
+  }
+  window.promptBattle.askAnswer(approve ? { plan: 'approve' } : { plan: 'revise', feedback });
+  renderMarkdownLog(`**🗺 작전 회의 — Claude의 계획**\n\n${planAsk.plan}`, 'plan-log');
+  appendLog(approve ? '🗺 계획을 승인했다. Claude가 작업을 시작한다.' : `🗺 수정 요청: ${feedback}`);
+  closeAsk();
+}
+
+// 안전 모드: a risky shell command waits for the player's OK.
+let dangerAsk = null;
+function showDanger(command, danger) {
+  dangerAsk = { command, danger };
+  $('quest-ribbon').textContent = '🛡 안전 모드 — 위험한 명령';
+  const body = $('quest-body');
+  body.textContent = '';
+  const p = document.createElement('p');
+  p.textContent = `${t('Claude가 이 명령을 실행하려 한다:')} ${t(danger)}.`;
+  const pre = document.createElement('pre');
+  pre.className = 'danger-command';
+  pre.textContent = command;
+  body.append(p, pre);
+  $('quest-choices').textContent = '';
+  $('quest-answer').hidden = true;
+  $('quest-later').textContent = '🚫 막기';
+  $('quest-submit').textContent = '✅ 허락';
+  $('quest-submit').disabled = false;
+  $('quest-overlay').hidden = false;
+  pushMusic('quest');
+  sfx('party');
+}
+function answerDanger(allow) {
+  if (!dangerAsk) return;
+  window.promptBattle.askAnswer({ danger: allow ? 'allow' : 'deny' });
+  appendLog(`🛡 ${allow ? '허락했다' : '막았다'}: ${dangerAsk.command}`, allow ? undefined : 'error');
+  closeAsk();
+}
 function closeAsk() {
+  planAsk = null;
+  $('quest-answer').placeholder = t('직접 답하기... (Enter 제출 · Shift+Enter 줄바꿈)');
+  dangerAsk = null;
   askQuestions = null;
   askPicks = [];
   $('quest-ribbon').textContent = '📜 퀘스트 — Claude가 용사의 대답을 기다린다';
@@ -3073,12 +3185,14 @@ function renderAskResult(questions, picks) {
 // ---------------------------------------------------------------------------
 // Connection: Claude Code CLI login or an API key (stored encrypted by main).
 async function renderAuth() {
+  $('safe-mode').checked = !!claudeSettings.safeMode;
   for (const r of document.querySelectorAll('input[name="auth-mode"]')) r.checked = r.value === claudeSettings.auth;
   $('api-key-row').hidden = claudeSettings.auth !== 'api';
   const info = await window.promptBattle.apiKeyInfo();
   $('api-key-info').textContent = info.hasKey ? `저장된 키: ••••${info.last4} (키체인 암호화)` : info.unreadable ? '저장된 키를 키체인에서 찾지 못했다 — 다시 입력해 줘' : '저장된 키 없음';
   if (claudeSettings.auth === 'api' && !info.hasKey) $('auth-status').textContent = 'API 키를 입력해줘';
 }
+$('safe-mode').addEventListener('change', () => saveClaude({ safeMode: $('safe-mode').checked }));
 for (const radio of document.querySelectorAll('input[name="auth-mode"]')) {
   radio.addEventListener('change', async () => {
     await saveClaude({ auth: radio.value });
@@ -3716,11 +3830,13 @@ function renderRankingTable() {
       DIFFICULTY_LABEL[e.difficulty] ?? '',
       e.at ? new Date(e.at).toLocaleDateString('ko-KR') : '',
     ];
-    for (const c of cells) {
+    const tier = TITLE_SHOP.find((t) => t.id === e.badge)?.tier;
+    cells.forEach((c, i) => {
       const td = document.createElement('td');
       td.textContent = c;
+      if (i === 2 && tier) td.className = `tier-${tier}`; // the title column
       tr.append(td);
-    }
+    });
     table.append(tr);
   }
 }
@@ -4118,12 +4234,25 @@ function renderTitleShop() {
   const list = $('title-shop-items');
   list.textContent = '';
   const owned = new Set(profile.titles ?? []);
-  const row = (name, tag, worn, locked, onClick) => {
+  const got = new Set(profile.achievements ?? []);
+  const row = (name, tag, worn, locked, onClick, tier, note) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `title-shop-item${worn ? ' worn' : ''}${locked ? ' locked' : ''}`;
+    b.className = `title-shop-item${worn ? ' worn' : ''}${locked ? ' locked' : ''}${tier ? ` tier-${tier}` : ''}`;
     const n = document.createElement('strong');
     n.textContent = name;
+    if (tier) {
+      const chip = document.createElement('small');
+      chip.className = 'tier-chip';
+      chip.textContent = TIER_NAME[tier];
+      n.append(' ', chip);
+    }
+    if (note) {
+      const why = document.createElement('small');
+      why.className = 'title-note';
+      why.textContent = note;
+      n.append(why);
+    }
     const t = document.createElement('span');
     t.textContent = tag;
     b.append(n, t);
@@ -4134,7 +4263,9 @@ function renderTitleShop() {
   for (const t of TITLE_SHOP) {
     const have = owned.has(t.id);
     const worn = profile.badge === t.id;
-    row(t.name, worn ? '다는 중' : have ? '달기' : `🪙 ${fmtNum(t.price)}`, worn, !have, () =>
+    const need = !have && t.requires && !got.has(t.requires) ? achievementDefs.find((a) => a.id === t.requires) : null;
+    const note = t.requires && !have ? `${need ? '🔒' : '✅'} 업적 「${achievementDefs.find((a) => a.id === t.requires)?.title ?? t.requires}」 달성 시 구매 가능` : '';
+    row(t.name, worn ? '다는 중' : have ? '달기' : need ? '🔒 잠김' : `🪙 ${fmtNum(t.price)}`, worn, !have, () =>
       titleAct(async () => {
         if (!have) {
           const r = await window.promptBattle.titleBuy(t.id);
@@ -4143,6 +4274,8 @@ function renderTitleShop() {
         }
         return window.promptBattle.titleWear(t.id);
       }),
+      t.tier,
+      note,
     );
   }
 }

@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
   askAnswer: (answers) => ipcRenderer.invoke('ask-answer', answers),
+  previewDamage: (prompt) => ipcRenderer.invoke('preview-damage', prompt),
+  setPlanMode: (on) => ipcRenderer.invoke('set-plan-mode', on),
   onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),
   saveAndCloseDone: (ok) => ipcRenderer.send('save-and-close-done', ok),
   stopTurn: () => ipcRenderer.invoke('stop-turn'),

@@ -58,7 +58,7 @@ export type BattleEvent =
   | { type: 'petFound'; pet: PetId }
   | { type: 'turnStart'; prompt: string }
   | { type: 'partialHit'; damage: number; agentEvent: AgentEvent }
-  | { type: 'attack'; damage: number; crit: boolean; matchedKeywords: string[] }
+  | { type: 'attack'; damage: number; crit: boolean; matchedKeywords: string[]; short?: boolean }
   | { type: 'agentEvent'; agentEvent: AgentEvent }
   | { type: 'agentError'; error: string }
   | { type: 'agentSummary'; summary: string }
@@ -207,6 +207,9 @@ export interface BattleDeps {
   // The host gets a function that lands extra hits (the typing mini-game)
   // while an AI turn is running; it returns false when no turn is running.
   bindExternalHit?: (hit: (damage: number) => boolean) => void;
+  // The host gets a function that previews a prompt's closing blow (every
+  // multiplier as of now), for the estimate under the input.
+  bindDamagePreview?: (preview: (prompt: string) => { damage: number; crit: boolean }) => void;
   // Flee and merchant rolls; injectable so tests are deterministic.
   random?: () => number;
   // The model the next attack uses (for per-model win records).
@@ -880,6 +883,16 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
     }, () => deps.onBattleEvent({ type: 'merchantClosed' }));
   };
 
+  // A prompt's closing blow before the fight's own rules (traits, pacts...).
+  const promptDamage = (base: number) => {
+    const damage = Math.round(base * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * gear.damage() * attackMultiplier(stats) * swordMultiplier(swordLevel));
+    return sharpenMult > 1 ? Math.round(damage * sharpenMult) : damage;
+  };
+  deps.bindDamagePreview?.((prompt) => {
+    const base = calculateDamage(prompt);
+    return { damage: promptDamage(base.damage), crit: base.crit };
+  });
+
   deps.bindExternalHit?.((damage) => {
     if (!turnRunning) return false;
     damage *= mods.typingDamage;
@@ -994,13 +1007,8 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
 
       currentFloorEngaged = true;
       const base = calculateDamage(prompt);
-      let damage = Math.round(
-        base.damage * (deps.getDamageMultiplier?.() ?? 1) * prestigeMult * gear.damage() * attackMultiplier(stats) * swordMultiplier(swordLevel),
-      );
-      if (sharpenMult > 1) {
-        damage = Math.round(damage * sharpenMult);
-        sharpenMult = 1;
-      }
+      let damage = promptDamage(base.damage);
+      sharpenMult = 1;
       const { crit, matchedKeywords } = base;
       deps.onBattleEvent({ type: 'turnStart', prompt });
       runStats.turns += 1;
@@ -1121,7 +1129,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
         if (crit) runStats.crits += 1;
-        deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords });
+        deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords, ...(base.short ? { short: true } : {}) });
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });
       } else {
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });

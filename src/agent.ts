@@ -3,6 +3,7 @@ import { buildUserContent, type Attachment } from './attachments.ts';
 import { agentsFor, systemPromptFor } from './party.ts';
 import { relabelForListing } from './transcripts.ts';
 import { toQueryOptions, createTurnCloser, type ClaudeSettings } from './claude-settings.ts';
+import { guardHookFor, type Guard } from './safety.ts';
 
 export interface TurnResult {
   summary: string;
@@ -373,15 +374,25 @@ export interface AskQuestion {
   multiSelect: boolean;
 }
 export type AskUser = (questions: AskQuestion[]) => Promise<Record<string, string> | null>;
+// 작전 회의 (plan mode): Claude's plan goes to the player before any change.
+// null = the turn was stopped.
+export type ReviewPlan = (plan: string) => Promise<{ approve: true } | { approve: false; feedback: string } | null>;
 
 // bypassPermissions approves every other tool before this is asked; only
-// AskUserQuestion still comes here (it needs a person).
-export function canUseToolFor(askUser: AskUser) {
+// AskUserQuestion (and, in plan mode, ExitPlanMode) still come here.
+export function canUseToolFor({ askUser, reviewPlan }: { askUser?: AskUser; reviewPlan?: ReviewPlan }) {
   return async (name: string, input: Record<string, unknown>, _opts: unknown) => {
-    if (name !== 'AskUserQuestion') return { behavior: 'allow' as const, updatedInput: input };
-    const answers = await askUser((input.questions as AskQuestion[]) ?? []);
-    if (!answers) return { behavior: 'deny' as const, message: 'The player did not answer. Go on with your best judgment.' };
-    return { behavior: 'allow' as const, updatedInput: { ...input, answers } };
+    if (name === 'AskUserQuestion' && askUser) {
+      const answers = await askUser((input.questions as AskQuestion[]) ?? []);
+      if (!answers) return { behavior: 'deny' as const, message: 'The player did not answer. Go on with your best judgment.' };
+      return { behavior: 'allow' as const, updatedInput: { ...input, answers } };
+    }
+    if (name === 'ExitPlanMode' && reviewPlan) {
+      const review = await reviewPlan(typeof input.plan === 'string' ? input.plan : '');
+      if (!review) return { behavior: 'deny' as const, message: 'The player stopped here. Do not start the work; wait for their next message.' };
+      if (!review.approve) return { behavior: 'deny' as const, message: `The player wants changes to the plan before you start: ${review.feedback}\nRevise the plan and present it again with ExitPlanMode.` };
+    }
+    return { behavior: 'allow' as const, updatedInput: input };
   };
 }
 
@@ -398,6 +409,8 @@ export async function runAgentTurn(
     signal,
     attachments = [],
     askUser,
+    guard,
+    reviewPlan,
   }: {
     model?: string;
     // Let the main agent send out the wizard/swordsman/archer subagents
@@ -413,6 +426,10 @@ export async function runAgentTurn(
     attachments?: Attachment[];
     // Claude's multiple-choice questions go to the player (see canUseToolFor).
     askUser?: AskUser;
+    // 안전 모드: risky shell commands wait for the player's OK (src/safety.ts).
+    guard?: Guard;
+    // 작전 회의: run in plan mode; Claude's plan waits for the player's OK.
+    reviewPlan?: ReviewPlan;
   } = {},
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
@@ -454,15 +471,16 @@ export async function runAgentTurn(
         cwd,
         abortController,
         ...(model ? { model } : {}),
-        permissionMode: 'bypassPermissions',
+        permissionMode: reviewPlan ? ('plan' as const) : ('bypassPermissions' as const),
         // Required by the installed SDK alongside permissionMode: 'bypassPermissions'
         // (sdk.d.ts: "Must be set to true when using permissionMode: 'bypassPermissions'").
         allowDangerouslySkipPermissions: true,
         // `tools` restricts the actual available set (sdk.d.ts: "Specify the base
         // set of available built-in tools") — `allowedTools` only auto-approves,
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
-        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent', ...(askUser ? ['AskUserQuestion'] : [])],
-        ...(askUser ? { canUseTool: canUseToolFor(askUser) } : {}),
+        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent', ...(askUser ? ['AskUserQuestion'] : []), ...(reviewPlan ? ['ExitPlanMode'] : [])],
+        ...(askUser || reviewPlan ? { canUseTool: canUseToolFor({ askUser, reviewPlan }) } : {}),
+        ...(guard ? { hooks: { PreToolUse: [{ matcher: 'Bash', timeout: 3600, hooks: [guardHookFor(guard)] }] } } : {}),
         agents: agentsFor(party),
         systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: systemPromptFor(party) },
         ...(env ? { env } : {}),

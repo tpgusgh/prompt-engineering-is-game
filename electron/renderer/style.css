@@ -1426,6 +1426,8 @@ body {
 .quest-body p { margin: 0 0 0.7em; }
 .quest-body strong { color: #ffd98a; }
 .quest-body code { background: rgba(0, 0, 0, 0.3); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
+.quest-body pre { background: rgba(0, 0, 0, 0.3); padding: 10px 12px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+.quest-body pre code { background: none; padding: 0; border-radius: 0; }
 .quest-choices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -3225,13 +3227,6 @@ body {
   padding-left: 12px;
   padding-right: 12px;
 }
-/* Longer labels: the header buttons fold into two rows, the hero line gets the room. */
-:lang(en) .setup-actions,
-:lang(ja) .setup-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  max-width: 330px;
-}
 
 .shortcuts-panel { width: min(460px, calc(100vw - 32px)); }
 .shortcuts-table { width: 100%; border-collapse: collapse; font-size: 13px; color: #d8dee9; }
@@ -3430,7 +3425,7 @@ body.a11y-calm .fx-number {
 /* ---- 칭호 상점 ---- */
 .title-shop-panel { width: min(560px, calc(100vw - 32px)); }
 .title-shop-items { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 60vh; }
-.title-shop-item {
+.settings-panel .title-shop-item {
   margin: 0;
   display: flex;
   justify-content: space-between;
@@ -3462,6 +3457,7 @@ body.a11y-calm .fx-number {
 .meter-chip.on { color: #eceff4; border-color: #a3be8c; background: rgba(163, 190, 140, 0.15); }
 .meter-total { margin-left: 4px; color: #a3be8c; font-weight: 600; }
 .meter-total.crit { color: #ebcb8b; }
+.meter-estimate { margin-left: auto; color: #d8dee9; font-weight: 600; }
 
 /* ---- Claude's multiple-choice questions (AskUserQuestion) ---- */
 .ask-question { margin-bottom: 18px; }
@@ -3517,3 +3513,18 @@ body.a11y-calm .fx-number {
 .ask-result-row.on .ask-result-box { border-color: #5e81ac; background: #5e81ac; box-shadow: inset 0 0 0 3px #1d222d; }
 .ask-result-row.multi.on .ask-result-box { box-shadow: none; position: relative; }
 .ask-result-row.multi.on .ask-result-box::after { content: '✓'; position: absolute; inset: -2px 0 0 1px; color: #fff; font-size: 12px; font-weight: bold; }
+
+/* Title tiers (title-shop.js): shop rows and the ranking's title column */
+.tier-common { --tier: #d8dee9; }
+.tier-rare { --tier: #88c0d0; }
+.tier-epic { --tier: #b48ead; }
+.tier-legend { --tier: #ebcb8b; }
+.title-shop-item[class*='tier-'] strong { color: var(--tier); }
+.title-shop-item.locked strong { opacity: 0.75; }
+.tier-chip { margin-left: 4px; padding: 0 6px; border: 1px solid var(--tier); border-radius: 8px; font-size: 10px; font-weight: 500; }
+.title-note { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: #8f99ab; }
+.ranking-table td[class*='tier-'] { color: var(--tier); font-weight: 600; }
+.ranking-table td.tier-legend { text-shadow: 0 0 8px rgba(235, 203, 139, 0.45); }
+.danger-command { margin: 0; padding: 10px 12px; background: rgba(0, 0, 0, 0.45); border: 1px solid #bf616a; border-radius: 8px; color: #ffb4b4; white-space: pre-wrap; word-break: break-all; font-size: 14px; }
+.plan-btn.on { background: #5e81ac; border-color: #88c0d0; color: #fff; box-shadow: 0 0 0 2px rgba(136, 192, 208, 0.35); }
+.plan-btn:disabled { opacity: 0.35; cursor: not-allowed; }

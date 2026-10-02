@@ -88,8 +88,14 @@ let pendingInputResolve: ((value: string | null) => void) | null = null;
 let queuedCommands: string[] = [];
 // Lands a typing mini-game hit on the current monster (set by runDungeon).
 let externalHit: ((damage: number) => boolean) | null = null;
+// The run's damage preview (the estimate under the input).
+let damagePreview: ((prompt: string) => { damage: number; crit: boolean }) | null = null;
+ipcMain.handle('preview-damage', (_event, prompt: unknown) => (typeof prompt === 'string' ? (damagePreview?.(prompt.slice(0, 20_000)) ?? null) : null));
 // ⏹ 멈추기: stops the AI turn in progress.
 let currentTurnStop: AbortController | null = null;
+// 작전 회의 (🗺 next to the input): Claude plans first, the player approves.
+let planMode = false;
+ipcMain.handle('set-plan-mode', (_event, on: unknown) => (planMode = on === true));
 // Claude's multiple-choice question (AskUserQuestion) waiting on the player.
 let pendingAsk: ((answers: Record<string, string> | null) => void) | null = null;
 ipcMain.handle('ask-answer', (_event, answers: unknown) => {
@@ -674,6 +680,41 @@ ipcMain.handle(
                 })
               : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
                   model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
+                  ...((currentClaude ?? profile.claude).safeMode
+                    ? {
+                        guard: (command: string, danger: string) =>
+                          new Promise<boolean>((resolve) => {
+                            pendingAsk?.(null);
+                            const done = (answers: Record<string, string> | null) => resolve(answers?.danger === 'allow');
+                            pendingAsk = done;
+                            send({ type: 'askDanger', command, danger });
+                            stop.signal.addEventListener('abort', () => {
+                              if (pendingAsk !== done) return;
+                              pendingAsk = null;
+                              resolve(false);
+                              send({ type: 'askClosed' });
+                            }, { once: true });
+                          }),
+                      }
+                    : {}),
+                  ...(planMode
+                    ? {
+                        reviewPlan: (plan: string) =>
+                          new Promise<{ approve: true } | { approve: false; feedback: string } | null>((resolve) => {
+                            pendingAsk?.(null);
+                            const done = (answers: Record<string, string> | null) =>
+                              resolve(!answers ? null : answers.plan === 'approve' ? { approve: true } : { approve: false, feedback: answers.feedback ?? '' });
+                            pendingAsk = done;
+                            send({ type: 'askPlan', plan });
+                            stop.signal.addEventListener('abort', () => {
+                              if (pendingAsk !== done) return;
+                              pendingAsk = null;
+                              resolve(null);
+                              send({ type: 'askClosed' });
+                            }, { once: true });
+                          }),
+                      }
+                    : {}),
                   askUser: (questions) =>
                     new Promise((resolve) => {
                       pendingAsk?.(null);
@@ -708,6 +749,7 @@ ipcMain.handle(
       playerHp: slot?.playerHp,
       monsterHp: slot?.monsterHp,
       bindExternalHit: (fn) => (externalHit = fn),
+      bindDamagePreview: (fn) => (damagePreview = fn),
       getModel: () => currentModel,
       contract: slot ? ((profile.runKits?.[runId] ? profile.runKits[runId].contract : slot.contract) ?? null) : null,
       relics: profile.relics,

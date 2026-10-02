@@ -12,7 +12,7 @@ const SOURCES = [
   'electron/renderer/renderer.js', 'electron/renderer/story.js', 'electron/renderer/monster-lines.js',
   'electron/renderer/monster-lore.js', 'electron/renderer/monster-art.js', 'electron/renderer/settings-window.js',
   'electron/renderer/typing-drill.js', 'electron/renderer/typing-snippets.js', 'electron/renderer/updates.js',
-  'electron/renderer/fatigue.js', 'electron/renderer/tutorial.js', 'src/journal.ts', 'electron/renderer/log.js', 'electron/renderer/reply-format.js', 'electron/renderer/speech.js', 'electron/renderer/title-shop.js', 'electron/renderer/prompt-criteria.js', 'src/titles.ts',
+  'electron/renderer/fatigue.js', 'electron/renderer/tutorial.js', 'src/journal.ts', 'electron/renderer/log.js', 'electron/renderer/reply-format.js', 'electron/renderer/speech.js', 'electron/renderer/title-shop.js', 'electron/renderer/prompt-criteria.js', 'src/safety.ts', 'src/titles.ts',
   'src/battle.ts', 'src/items.ts', 'src/contracts.ts', 'src/classes.ts', 'src/monsters.ts', 'src/progress.ts', 'src/themes.ts',
   'src/pets.ts', 'src/stats.ts', 'src/weapons.ts', 'src/damage.ts', 'src/skills.ts', 'src/profile.ts', 'src/attachments.ts',
   'src/daily.ts', 'src/claude-settings.ts', 'src/ranking.ts', 'src/codex.ts', 'electron/main.ts', 'server/lib.js',

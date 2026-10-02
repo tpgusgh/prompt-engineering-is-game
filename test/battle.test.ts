@@ -593,6 +593,28 @@ test('/save keeps the run\'s pact in the save (it belongs to the run, not the pr
   assert.ok(snap && snap.type === 'snapshot' && snap.state.contract?.id === 'greed');
 });
 
+test('the host can preview a prompt\'s closing blow with every multiplier (weapon, sword, whetstone)', async () => {
+  let preview: ((prompt: string) => { damage: number; crit: boolean }) | null = null;
+  const { deps } = makeFakeDeps(['/use whetstone', '/quit']);
+  let seen: { damage: number; crit: boolean } | null = null;
+  const inputs = ['/use whetstone', '/quit'];
+  let i = 0;
+  await runDungeon({
+    ...deps,
+    bag: { whetstone: 1 },
+    swordLevel: 3,
+    getDamageMultiplier: () => 2,
+    bindDamagePreview: (fn) => (preview = fn),
+    readInput: async () => {
+      if (i === 1) seen = preview!('x'.repeat(240)); // after the whetstone
+      return inputs[i++] ?? null;
+    },
+  });
+  assert.ok(seen);
+  // 40 base x2 weapon x1.3 sword +3 x2 whetstone
+  assert.deepEqual(seen, { damage: Math.round(Math.round(40 * 2 * 1.3) * 2), crit: false });
+});
+
 test('/save with a bad slot is refused', async () => {
   const { deps, events } = makeFakeDeps(['/save 9', '/quit']);
   await runDungeon(deps);

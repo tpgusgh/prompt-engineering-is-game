@@ -14,7 +14,7 @@ export const EMOJI = {
   '💥': 'flame', '🔨': 'hammer', '⚒': 'hammer', '⚒️': 'hammer', '👑': 'crown', '📝': 'file-pen', '✏️': 'pencil', '📊': 'chart-column',
   '📈': 'trending-up', '▶': 'play', '▶️': 'play', '🗨': 'message-circle', '🗨️': 'message-circle', '🔀': 'shuffle', '🏆': 'trophy',
   '🦅': 'bird', '✨': 'sparkles', '▾': 'chevron-down', '▴': 'chevron-up', '🟢': 'circle', '📄': 'file', '🎒': 'backpack', '📜': 'scroll',
-  '🔑': 'key-round', '🧩': 'puzzle', '🔌': 'plug', '🪨': 'gem', '🧿': 'shield-check', '💨': 'wind', '📦': 'package', '🛡': 'shield',
+  '🔑': 'key-round', '🧩': 'puzzle', '🔌': 'plug', '🪨': 'gem', '🧿': 'shield-check', '💨': 'wind', '📦': 'package', '🗺': 'map', '🗺️': 'map', '🛡': 'shield',
   '🛡️': 'shield', '❔': 'circle-help', '⬆️': 'arrow-up', '⬇️': 'arrow-down', '🗑': 'trash-2', '🗑️': 'trash-2', '🔍': 'search',
   '🔒': 'lock', '❤️': 'heart', '🐉': 'flame', '🏔': 'mountain', '🏔️': 'mountain', '☄️': 'rocket', '📚': 'library', '🤐': 'mic-off',
   '⚀': 'dice-1', '⚁': 'dice-2', '⚂': 'dice-3', '⚃': 'dice-4', '⚄': 'dice-5', '⚅': 'dice-6', '💀': 'skull', '🎁': 'gift', '💰': 'hand-coins', '💣': 'bomb', '🤝': 'handshake', '📃': 'scroll-text', '💎': 'gem', '🔔': 'bell', '👻': 'ghost', '🎯': 'target',

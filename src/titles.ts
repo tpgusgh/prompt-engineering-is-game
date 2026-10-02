@@ -6,6 +6,7 @@ import type { Profile } from './profile.ts';
 export interface ShopTitle {
   id: string;
   price: number;
+  requires?: string; // an achievement id
 }
 export const BADGE_ID = /^[a-z0-9-]{1,24}$/;
 
@@ -13,6 +14,7 @@ export function buyTitle(profile: Profile, shop: ShopTitle[], id: string): { pro
   const title = shop.find((t) => t.id === id);
   if (!title) return { error: '그런 칭호는 없다' };
   if ((profile.titles ?? []).includes(id)) return { error: '이미 가지고 있다' };
+  if (title.requires && !profile.achievements?.includes(title.requires)) return { error: '먼저 업적을 달성해야 살 수 있다' };
   if (profile.coins < title.price) return { error: `코인이 부족하다 (${title.price} 필요)` };
   return { profile: { ...profile, coins: profile.coins - title.price, titles: [...(profile.titles ?? []), id] } };
 }

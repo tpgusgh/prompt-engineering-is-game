@@ -283,11 +283,23 @@ test('a result message reports the tokens the turn used (input + output + cache)
 test('canUseToolFor: Claude\'s questions (AskUserQuestion) go to the player; their answers come back as the tool input', async () => {
   const q = [{ question: '어떤 색?', header: '색', options: [{ label: '빨강', description: '' }, { label: '파랑', description: '' }], multiSelect: false }];
   const asked: unknown[] = [];
-  const allow = canUseToolFor(async (questions) => (asked.push(questions), { '어떤 색?': '파랑' }));
+  const allow = canUseToolFor({ askUser: async (questions) => (asked.push(questions), { '어떤 색?': '파랑' }) });
   const r = await allow('AskUserQuestion', { questions: q }, {} as never);
   assert.deepEqual(asked, [q]);
   assert.deepEqual(r, { behavior: 'allow', updatedInput: { questions: q, answers: { '어떤 색?': '파랑' } } });
-  const skipped = await canUseToolFor(async () => null)('AskUserQuestion', { questions: q }, {} as never);
+  const skipped = await canUseToolFor({ askUser: async () => null })('AskUserQuestion', { questions: q }, {} as never);
   assert.equal(skipped.behavior, 'deny', 'skipped (stopped) → Claude is told and goes on');
   assert.deepEqual(await allow('Bash', { command: 'ls' }, {} as never), { behavior: 'allow', updatedInput: { command: 'ls' } });
+});
+
+test('canUseToolFor: in 작전 회의 the plan goes to the player — approve runs it, feedback sends it back to be revised', async () => {
+  const plans: string[] = [];
+  const review = canUseToolFor({ reviewPlan: async (plan) => (plans.push(plan), plan.includes('v2') ? { approve: true } : { approve: false, feedback: '테스트도 추가해' }) });
+  const first = await review('ExitPlanMode', { plan: '# v1' }, {} as never);
+  assert.equal(first.behavior, 'deny');
+  assert.match((first as { message: string }).message, /테스트도 추가해/);
+  assert.deepEqual(await review('ExitPlanMode', { plan: '# v2' }, {} as never), { behavior: 'allow', updatedInput: { plan: '# v2' } });
+  const stopped = await canUseToolFor({ reviewPlan: async () => null })('ExitPlanMode', { plan: 'x' }, {} as never);
+  assert.equal(stopped.behavior, 'deny');
+  assert.deepEqual(plans, ['# v1', '# v2']);
 });

@@ -8,7 +8,9 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 
 ## Features
 
-- **Prompts are attacks** — better prompts hit harder. Length sets the base (10 + 1 per 8 characters, up to 40); each of **7 good-prompt criteria** met adds **+50%**, and 3 or more is a **critical ×1.5** (up to 270): 🎯 target (name the file, function or `code` — `src/app.ts`, `login()`) · 🧱 limits (only, must, don't, without, keep) · ✅ verify (test, verify, pass) · 🪜 steps (step by step, first … then, a 1. 2. list) · 🧐 why (why, because, so that) · 📎 example (example, e.g.) · ⚠️ edge cases (edge/corner case, null, empty, error handling). The criteria you've met light up under the input as you type. Korean forms count too.
+- **Prompts are attacks** — better prompts hit harder. Length sets the base (10 + 1 per 8 characters, up to 40); each of **7 good-prompt criteria** met adds **+50%**, and 3 or more is a **critical ×1.5** (up to 270): 🎯 target (name the file, function or `code` — `src/app.ts`, `login()`) · 🧱 limits (only, must, don't, without, keep) · ✅ verify (test, verify, pass) · 🪜 steps (step by step, first … then, a 1. 2. list) · 🧐 why (why, because, so that) · 📎 example (example, e.g.) · ⚠️ edge cases (edge/corner case, null, empty, error handling). The criteria you've met light up under the input as you type, with the **estimated damage** (weapon, sword and whetstone included). Under 50 characters the criteria count half and can't crit (no keyword lists). Korean forms count too.
+
+  ![Prompt criteria](docs/screenshots/en/prompt-meter.png)
 - **Real-time hits (work = damage)** — every successful command/edit lands its own hit as it completes (25% of the prompt damage, 1–12) and the full prompt damage closes the turn; failed actions don't hit. **⏹ Stop** ends a turn right away, and **your latest message** is shown beside the monster; touched files fly at the monster as their real OS icon.
 - **XP bar, level rewards, titles** — shows how far you are toward the next level (every 100 XP), like an HP bar; each new run starts with **one stat point per hero level**, and your title changes with level (견습 용사 apprentice … 전설의 프롬프터 legendary prompter); it fills as you defeat monsters mid-run, with a level-up message.
 - **3 themes that play differently** — pick one to see its perks and difficulty.
@@ -33,7 +35,9 @@ A turn-based RPG wrapped around real AI coding. Every prompt you type is an atta
 - **Attach files & pictures** — 📎 beside the input, drag & drop onto it, or paste an image (⌘/Ctrl+V). Claude sees pictures, reads PDFs as documents and gets code/text files inline (5 at a time; images 5MB, PDFs 30MB, text 200KB).
 - **Next-prompt memo** — jot the next prompt in the 📝 memo while the AI fights; when the turn ends it moves into the input box.
 - **Change folder mid-run** — **📁 폴더 바꾸기** above the inventory switches the project folder: the file tree follows and Claude carries on in a fresh session there (not while the AI is working).
-- **👑 Title shop** — **👑 Titles** on the start screen. Spend coins from achievements and runs on 15 titles (Caffeine Addict 200 to Bought This Title 10,000), kept for good. The one you wear shows in the ranking and on your profile instead of your level title.
+- **👑 Title shop** — **👑 Titles** on the start screen. Spend coins from achievements and runs on 21 titles (Caffeine Addict 200 to Bought This Title 10,000), kept for good. The one you wear shows in the ranking and on your profile instead of your level title. Each tier (common, rare, epic, legendary) has its own color in the ranking, and some titles (Dragon Slayer, God of the Keyboard, Monster Doctor...) unlock with an achievement.
+
+  ![Title shop](docs/screenshots/en/title-shop.png)
 - **Online ranking** — when you fall, enter a name on the summary screen to post your score ((floor reached×100 + chapters cleared×400 + XP) × difficulty). **All-time · This week · Daily** tabs keep 100 each and filter by theme and difficulty, with titles (a bought one if worn) and rebirth stars; click a row for the run's details. View them with **🏆 Ranking** on the start screen. Only released apps can post: the signing key is added at build time, and the server checks a single-use per-run token and recomputes the score. The Vercel backend is in [`server/`](server/README.md).
 - **Fatigue** — when Claude usage (the busier of the 5-hour and weekly windows) passes 75% the hero is "tired"; past 90% a red **fatigue danger** badge and warning appear (the AI may stop soon).
 - **Run summary** — at the end of a run: kills, XP, coins, best hit, tests passed, longest turn and more, as tidy cards.
@@ -128,6 +132,14 @@ The **👥 agents** tab (top right) lists the last 10 subagents: how long runnin
 ![Quest](docs/screenshots/en/quest.png)
 
 When the AI needs your answer, a large quest window opens. Pick a choice or write your own, and **attack with that answer**. When Claude asks a **multiple-choice question** mid-turn (Claude Code's question prompt), each question gets option cards (one pick = radio, several = checkboxes) and a free-answer box; your picks go straight back to Claude and the turn carries on. The answered questions stay in the log as a card with your picks lit up.
+
+![Multiple-choice quest](docs/screenshots/en/quest-ask.png)
+
+**🗺 War council**: turn on 🗺 next to the input and Claude plans first, shown in the quest window. **Approve and go** and it starts right away in the same turn; write what to change and **request changes** and it comes back with a revised plan (Claude only).
+
+![War council](docs/screenshots/en/war-council.png)
+
+**🛡 Safe mode** (⚙️ Settings → Claude, only when on): risky commands — `rm -rf`, force pushes, `git reset --hard`, dropping databases, `sudo` — stop right before they run and ask you to allow or block them.
 
 ### 5. Merchant goblin
 ![Merchant goblin](docs/screenshots/en/merchant.png)
