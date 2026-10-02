@@ -641,7 +641,7 @@ function turnConcluded(notify) {
   refreshTree();
   if (pendingQuest) showQuest(pendingQuest);
   // With a quest open the answer goes first; the memo waits for its turn.
-  if ($('quest-overlay').hidden) useNextMemo();
+  if (!questMusic) useNextMemo();
 }
 
 // ---------------------------------------------------------------------------
@@ -2935,8 +2935,7 @@ function showQuest(el) {
     last.remove();
   }
   $('quest-answer').value = '';
-  $('quest-overlay').hidden = false;
-  pushMusic('quest');
+  openQuestOverlay();
   sfx('party');
   $('quest-answer').focus();
 }
@@ -2952,11 +2951,28 @@ function answerQuest(text) {
   attackForm.requestSubmit();
 }
 $('quest-submit').addEventListener('click', () => (planAsk ? answerPlan(true) : dangerAsk ? answerDanger(true) : askQuestions ? submitAsk() : answerQuest($('quest-answer').value)));
-function closeQuest() {
-  if ($('quest-overlay').hidden) return;
-  $('quest-overlay').hidden = true;
-  popMusic();
+// The quest window can be put aside (👁 to look at files) and brought back;
+// the question keeps waiting, picks and drafts stay.
+let questMusic = false;
+function openQuestOverlay() {
+  $('quest-overlay').hidden = false;
+  $('quest-reopen').hidden = true;
+  if (!questMusic) pushMusic('quest');
+  questMusic = true;
 }
+function closeQuest() {
+  $('quest-overlay').hidden = true;
+  $('quest-reopen').hidden = true;
+  if (questMusic) popMusic();
+  questMusic = false;
+}
+$('quest-peek').addEventListener('click', () => {
+  $('quest-overlay').hidden = true;
+  const btn = $('quest-reopen');
+  btn.textContent = t(planAsk ? '🗺 작전 회의로 돌아가기' : dangerAsk ? '🛡 위험한 명령 확인하기' : askQuestions ? '📜 Claude의 질문으로 돌아가기' : '📜 퀘스트로 돌아가기');
+  btn.hidden = false;
+});
+$('quest-reopen').addEventListener('click', openQuestOverlay);
 $('quest-later').addEventListener('click', () => {
   if (dangerAsk) return answerDanger(false);
   if (planAsk) return answerPlan(false);
@@ -3056,8 +3072,7 @@ function showAsk(questions) {
     body.append(block);
   });
   renderAskSubmit();
-  $('quest-overlay').hidden = false;
-  pushMusic('quest');
+  openQuestOverlay();
   sfx('party');
 }
 const askAnswerOf = (pick) => [...pick.labels, ...(pick.other.trim() ? [pick.other.trim()] : [])].join(', ');
@@ -3089,8 +3104,7 @@ function showPlan(plan) {
   $('quest-later').textContent = '✏️ 수정 요청';
   $('quest-submit').textContent = '⚔️ 승인하고 진행';
   $('quest-submit').disabled = false;
-  $('quest-overlay').hidden = false;
-  pushMusic('quest');
+  openQuestOverlay();
   sfx('party');
   answer.focus();
 }
@@ -3126,8 +3140,7 @@ function showDanger(command, danger) {
   $('quest-later').textContent = '🚫 막기';
   $('quest-submit').textContent = '✅ 허락';
   $('quest-submit').disabled = false;
-  $('quest-overlay').hidden = false;
-  pushMusic('quest');
+  openQuestOverlay();
   sfx('party');
 }
 function answerDanger(allow) {

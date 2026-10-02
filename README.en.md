@@ -131,7 +131,7 @@ The **👥 agents** tab (top right) lists the last 10 subagents: how long runnin
 ### 4. Quests (when the AI asks you something)
 ![Quest](docs/screenshots/en/quest.png)
 
-When the AI needs your answer, a large quest window opens. Pick a choice or write your own, and **attack with that answer**. When Claude asks a **multiple-choice question** mid-turn (Claude Code's question prompt), each question gets option cards (one pick = radio, several = checkboxes) and a free-answer box; your picks go straight back to Claude and the turn carries on. The answered questions stay in the log as a card with your picks lit up.
+When the AI needs your answer, a large quest window opens. Pick a choice or write your own, and **attack with that answer**. When Claude asks a **multiple-choice question** mid-turn (Claude Code's question prompt), each question gets option cards (one pick = radio, several = checkboxes) and a free-answer box; your picks go straight back to Claude and the turn carries on. The answered questions stay in the log as a card with your picks lit up. Need to check a file first? **👁 Look away** puts the window aside — the question keeps waiting with your picks — and the button at the bottom brings it back (the war council and safe mode windows too).
 
 ![Multiple-choice quest](docs/screenshots/en/quest-ask.png)
 

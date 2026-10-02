@@ -355,6 +355,7 @@
       </div>
     </div>
 
+    <button type="button" id="quest-reopen" class="quest-reopen" hidden></button>
     <div id="quest-overlay" class="quest-overlay" hidden>
       <div class="quest-panel">
         <div id="quest-ribbon" class="quest-ribbon">📜 퀘스트 — Claude가 용사의 대답을 기다린다</div>
@@ -362,6 +363,7 @@
         <div id="quest-choices" class="quest-choices"></div>
         <textarea id="quest-answer" class="quest-answer" rows="3" placeholder="직접 답하기... (Enter 제출 · Shift+Enter 줄바꿈)"></textarea>
         <div class="quest-actions">
+          <button type="button" id="quest-peek" class="quest-peek" title="창을 잠시 닫고 파일·로그를 본다. 아래 버튼으로 다시 연다">👁 잠시 닫기</button>
           <button type="button" id="quest-later">나중에</button>
           <button type="button" id="quest-submit">⚔️ 이 답으로 공격</button>
         </div>
