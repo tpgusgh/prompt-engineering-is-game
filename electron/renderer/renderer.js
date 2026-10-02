@@ -2566,10 +2566,23 @@ playAgainBtn.addEventListener('click', async () => {
 // The prompt box grows with its text (up to ~40% of the window); Enter
 // attacks, Shift+Enter adds a line. Korean IME composition is respected.
 function autoGrowInput() {
-  promptInput.style.height = 'auto';
-  promptInput.style.height = `${Math.min(promptInput.scrollHeight, window.innerHeight * 0.4)}px`;
+  // Empty: back to one line. (An empty box measured while narrow counted the
+  // wrapped placeholder and stayed tall.)
+  if (!promptInput.value) promptInput.style.height = '';
+  else {
+    promptInput.style.height = 'auto';
+    promptInput.style.height = `${Math.min(promptInput.scrollHeight, window.innerHeight * 0.4)}px`;
+  }
   renderPromptMeter();
 }
+// The box got wider or narrower (window, side panels): measure again.
+let inputWidth = 0;
+new ResizeObserver(() => {
+  const w = promptInput.offsetWidth;
+  if (!w || w === inputWidth) return;
+  inputWidth = w;
+  autoGrowInput();
+}).observe(promptInput);
 // The prompt criteria (prompt-criteria.js) light up as you type: each one met
 // is +50% damage, three or more crit.
 const meterChips = PROMPT_CRITERIA.map((c) => {
