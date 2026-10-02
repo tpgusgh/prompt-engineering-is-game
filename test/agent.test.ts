@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractToolInfo, executableOverrideOptions } from '../src/agent.ts';
+import { extractToolInfo, executableOverrideOptions, canUseToolFor } from '../src/agent.ts';
 
 test('executableOverrideOptions is empty when PROMPTBATTLE_CLAUDE_EXECUTABLE is unset (plain CLI/dev case)', () => {
   const prior = process.env.PROMPTBATTLE_CLAUDE_EXECUTABLE;
@@ -278,4 +278,16 @@ test('a result message reports the tokens the turn used (input + output + cache)
   const info = extractToolInfo({ type: 'result', subtype: 'success', is_error: false, result: 'ok', usage: { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 5, cache_read_input_tokens: 100 } });
   assert.equal(info.tokensUsed, 135);
   assert.equal(extractToolInfo({ type: 'assistant', message: { content: [] } }).tokensUsed, undefined);
+});
+
+test('canUseToolFor: Claude\'s questions (AskUserQuestion) go to the player; their answers come back as the tool input', async () => {
+  const q = [{ question: '어떤 색?', header: '색', options: [{ label: '빨강', description: '' }, { label: '파랑', description: '' }], multiSelect: false }];
+  const asked: unknown[] = [];
+  const allow = canUseToolFor(async (questions) => (asked.push(questions), { '어떤 색?': '파랑' }));
+  const r = await allow('AskUserQuestion', { questions: q }, {} as never);
+  assert.deepEqual(asked, [q]);
+  assert.deepEqual(r, { behavior: 'allow', updatedInput: { questions: q, answers: { '어떤 색?': '파랑' } } });
+  const skipped = await canUseToolFor(async () => null)('AskUserQuestion', { questions: q }, {} as never);
+  assert.equal(skipped.behavior, 'deny', 'skipped (stopped) → Claude is told and goes on');
+  assert.deepEqual(await allow('Bash', { command: 'ls' }, {} as never), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });

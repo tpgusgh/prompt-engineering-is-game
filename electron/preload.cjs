@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('promptBattle', {
   attachRemove: (id) => ipcRenderer.invoke('attach-remove', id),
   startRun: (options) => ipcRenderer.invoke('start-run', options),
   submitPrompt: (text) => ipcRenderer.send('submit-prompt', text),
+  askAnswer: (answers) => ipcRenderer.invoke('ask-answer', answers),
   onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),
   saveAndCloseDone: (ok) => ipcRenderer.send('save-and-close-done', ok),
   stopTurn: () => ipcRenderer.invoke('stop-turn'),

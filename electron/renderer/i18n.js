@@ -14,7 +14,7 @@ export const LANGUAGES = [
   { id: 'ja', name: '日本語' },
 ];
 const KEY = 'pb-lang';
-const SKIP = '.user-chat, .ai-bubble, .tool-card, .markdown, #quest-body, #last-prompt-text, #last-prompt-answers, .file-viewer-body, #file-content, textarea, input, pre, code, script, style, [data-no-i18n]';
+const SKIP = '.user-chat, .ai-bubble, .ask-result, .tool-card, .markdown, #quest-body, #last-prompt-text, #last-prompt-answers, .file-viewer-body, #file-content, textarea, input, pre, code, script, style, [data-no-i18n]';
 const ATTRS = ['title', 'placeholder', 'aria-label'];
 
 function initialLang() {

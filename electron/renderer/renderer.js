@@ -1,7 +1,7 @@
 // electron/renderer/renderer.js
 import { marked } from '../../node_modules/marked/lib/marked.esm.js';
 import { monsterSvg, merchantSvg, blacksmithSvg, chestSvg } from './monster-art.js';
-import { LANGUAGES, currentLang, setLang } from './i18n.js'; // before iconize: it needs the original text
+import { LANGUAGES, currentLang, setLang, t } from './i18n.js'; // before iconize: it needs the original text
 import './iconize.js';
 import { $ } from './dom.js';
 import { logEl, appendLog, scrollLogToBottom } from './log.js';
@@ -1663,6 +1663,12 @@ function renderBattleEvent(event) {
       }
       break;
     }
+    case 'askUser':
+      showAsk(event.questions);
+      break;
+    case 'askClosed':
+      if (askQuestions) closeAsk();
+      break;
     case 'agentError':
       appendLog(`공격이 빗나갔다! 주문이 실패했다: ${event.error}`, 'error');
       turnConcluded('작업이 실패했다. 다음 명령을 내려줘.');
@@ -2904,13 +2910,19 @@ function answerQuest(text) {
   promptInput.value = answer;
   attackForm.requestSubmit();
 }
-$('quest-submit').addEventListener('click', () => answerQuest($('quest-answer').value));
+$('quest-submit').addEventListener('click', () => (askQuestions ? submitAsk() : answerQuest($('quest-answer').value)));
 function closeQuest() {
   if ($('quest-overlay').hidden) return;
   $('quest-overlay').hidden = true;
   popMusic();
 }
 $('quest-later').addEventListener('click', () => {
+  if (askQuestions) {
+    window.promptBattle.askAnswer({});
+    appendLog('📜 Claude의 질문을 건너뛰었다. Claude가 알아서 판단한다.');
+    closeAsk();
+    return;
+  }
   closeQuest();
   useNextMemo();
   promptInput.focus();
@@ -2921,6 +2933,142 @@ $('quest-answer').addEventListener('keydown', (e) => {
     answerQuest($('quest-answer').value);
   }
 });
+
+// Claude's own multiple-choice questions (AskUserQuestion, mid-turn): each
+// question's options as cards — one pick (radio) or several (checkbox) — plus
+// a free answer. The picks go back to Claude and stay in the log as a card.
+let askQuestions = null;
+let askPicks = [];
+function showAsk(questions) {
+  askQuestions = Array.isArray(questions) ? questions : [];
+  askPicks = askQuestions.map(() => ({ labels: new Set(), other: '' }));
+  $('quest-ribbon').textContent = '📜 퀘스트 — Claude가 용사의 선택을 기다린다';
+  const body = $('quest-body');
+  body.textContent = '';
+  $('quest-choices').textContent = '';
+  $('quest-answer').hidden = true;
+  $('quest-later').textContent = '건너뛰기';
+  askQuestions.forEach((q, qi) => {
+    const block = document.createElement('section');
+    block.className = 'ask-question';
+    const head = document.createElement('div');
+    head.className = 'ask-head';
+    const chip = document.createElement('span');
+    chip.className = 'ask-chip';
+    chip.textContent = q.header ?? '';
+    const title = document.createElement('strong');
+    title.textContent = q.question ?? '';
+    const kind = document.createElement('small');
+    kind.textContent = t(q.multiSelect ? '여러 개 고를 수 있다' : '하나만 고른다');
+    head.append(chip, title, kind);
+    const list = document.createElement('div');
+    list.className = 'ask-options';
+    const mark = (btn, on) => {
+      btn.classList.toggle('picked', on);
+      btn.setAttribute('aria-pressed', String(on));
+    };
+    const buttons = [];
+    for (const o of q.options ?? []) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `ask-option ${q.multiSelect ? 'multi' : 'single'}`;
+      const label = document.createElement('strong');
+      label.textContent = o.label;
+      const desc = document.createElement('span');
+      desc.textContent = o.description ?? '';
+      btn.append(label, desc);
+      btn.addEventListener('click', () => {
+        const pick = askPicks[qi];
+        if (q.multiSelect) {
+          if (pick.labels.has(o.label)) pick.labels.delete(o.label);
+          else pick.labels.add(o.label);
+        } else {
+          pick.labels = new Set([o.label]);
+          pick.other = '';
+          other.value = '';
+        }
+        buttons.forEach((b, i) => mark(b, pick.labels.has(q.options[i].label)));
+        renderAskSubmit();
+      });
+      buttons.push(btn);
+      list.append(btn);
+    }
+    const other = document.createElement('input');
+    other.type = 'text';
+    other.className = 'ask-other';
+    other.placeholder = t('직접 입력...');
+    other.addEventListener('input', () => {
+      askPicks[qi].other = other.value;
+      if (!q.multiSelect && other.value.trim()) {
+        askPicks[qi].labels.clear();
+        buttons.forEach((b) => mark(b, false));
+      }
+      renderAskSubmit();
+    });
+    block.append(head, list, other);
+    body.append(block);
+  });
+  renderAskSubmit();
+  $('quest-overlay').hidden = false;
+  pushMusic('quest');
+  sfx('party');
+}
+const askAnswerOf = (pick) => [...pick.labels, ...(pick.other.trim() ? [pick.other.trim()] : [])].join(', ');
+function renderAskSubmit() {
+  const btn = $('quest-submit');
+  btn.textContent = '⚔️ 이 선택으로 진행';
+  btn.disabled = !askPicks.every((p) => askAnswerOf(p));
+}
+function submitAsk() {
+  if (!askQuestions || !askPicks.every((p) => askAnswerOf(p))) return;
+  const answers = Object.fromEntries(askQuestions.map((q, i) => [q.question, askAnswerOf(askPicks[i])]));
+  window.promptBattle.askAnswer(answers);
+  renderAskResult(askQuestions, askPicks);
+  askQuestions.forEach((q, i) => addQuestAnswer(q.question, askAnswerOf(askPicks[i])));
+  closeAsk();
+}
+function closeAsk() {
+  askQuestions = null;
+  askPicks = [];
+  $('quest-ribbon').textContent = '📜 퀘스트 — Claude가 용사의 대답을 기다린다';
+  $('quest-answer').hidden = false;
+  $('quest-later').textContent = '나중에';
+  $('quest-submit').textContent = '⚔️ 이 답으로 공격';
+  $('quest-submit').disabled = false;
+  closeQuest();
+}
+// The answered questions in the log: every option, the picked ones marked.
+function renderAskResult(questions, picks) {
+  const card = document.createElement('div');
+  card.className = 'ask-result';
+  questions.forEach((q, qi) => {
+    const title = document.createElement('div');
+    title.className = 'ask-result-q';
+    title.textContent = q.question;
+    card.append(title);
+    const rows = (q.options ?? []).map((o) => ({ label: o.label, desc: o.description, on: picks[qi].labels.has(o.label) }));
+    if (picks[qi].other.trim()) rows.push({ label: picks[qi].other.trim(), desc: t('직접 입력'), on: true });
+    for (const r of rows) {
+      const row = document.createElement('div');
+      row.className = `ask-result-row ${q.multiSelect ? 'multi' : 'single'}${r.on ? ' on' : ''}`;
+      const box = document.createElement('span');
+      box.className = 'ask-result-box';
+      const text = document.createElement('div');
+      const label = document.createElement('strong');
+      label.textContent = r.label;
+      text.append(label);
+      if (r.desc) {
+        const desc = document.createElement('small');
+        desc.textContent = r.desc;
+        text.append(desc);
+      }
+      row.append(box, text);
+      card.append(row);
+    }
+  });
+  logEl.append(card);
+  requestAnimationFrame(scrollLogToBottom);
+}
 
 // ---------------------------------------------------------------------------
 // Connection: Claude Code CLI login or an API key (stored encrypted by main).

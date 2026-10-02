@@ -363,6 +363,28 @@ export async function loadSessionHistory(sessionId: string, cwd: string) {
   }
 }
 
+// Claude's multiple-choice questions (the AskUserQuestion tool), shown in
+// the game as a quest. Answers are keyed by question text; several picks are
+// joined with ", ". null = no answer (the turn was stopped).
+export interface AskQuestion {
+  question: string;
+  header: string;
+  options: { label: string; description: string }[];
+  multiSelect: boolean;
+}
+export type AskUser = (questions: AskQuestion[]) => Promise<Record<string, string> | null>;
+
+// bypassPermissions approves every other tool before this is asked; only
+// AskUserQuestion still comes here (it needs a person).
+export function canUseToolFor(askUser: AskUser) {
+  return async (name: string, input: Record<string, unknown>, _opts: unknown) => {
+    if (name !== 'AskUserQuestion') return { behavior: 'allow' as const, updatedInput: input };
+    const answers = await askUser((input.questions as AskQuestion[]) ?? []);
+    if (!answers) return { behavior: 'deny' as const, message: 'The player did not answer. Go on with your best judgment.' };
+    return { behavior: 'allow' as const, updatedInput: { ...input, answers } };
+  };
+}
+
 export async function runAgentTurn(
   prompt: string,
   cwd: string,
@@ -375,6 +397,7 @@ export async function runAgentTurn(
     env,
     signal,
     attachments = [],
+    askUser,
   }: {
     model?: string;
     // Let the main agent send out the wizard/swordsman/archer subagents
@@ -388,6 +411,8 @@ export async function runAgentTurn(
     signal?: AbortSignal;
     // Files and pictures sent along with the prompt (src/attachments.ts).
     attachments?: Attachment[];
+    // Claude's multiple-choice questions go to the player (see canUseToolFor).
+    askUser?: AskUser;
   } = {},
 ): Promise<TurnResult> {
   const filesChanged = new Set<string>();
@@ -436,7 +461,8 @@ export async function runAgentTurn(
         // `tools` restricts the actual available set (sdk.d.ts: "Specify the base
         // set of available built-in tools") — `allowedTools` only auto-approves,
         // it doesn't restrict, and under bypassPermissions nothing prompts anyway.
-        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent'],
+        tools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent', ...(askUser ? ['AskUserQuestion'] : [])],
+        ...(askUser ? { canUseTool: canUseToolFor(askUser) } : {}),
         agents: agentsFor(party),
         systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, append: systemPromptFor(party) },
         ...(env ? { env } : {}),

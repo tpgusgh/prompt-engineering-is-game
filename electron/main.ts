@@ -90,6 +90,17 @@ let queuedCommands: string[] = [];
 let externalHit: ((damage: number) => boolean) | null = null;
 // ⏹ 멈추기: stops the AI turn in progress.
 let currentTurnStop: AbortController | null = null;
+// Claude's multiple-choice question (AskUserQuestion) waiting on the player.
+let pendingAsk: ((answers: Record<string, string> | null) => void) | null = null;
+ipcMain.handle('ask-answer', (_event, answers: unknown) => {
+  const resolve = pendingAsk;
+  pendingAsk = null;
+  const clean: Record<string, string> = {};
+  if (answers && typeof answers === 'object' && !Array.isArray(answers)) {
+    for (const [q, a] of Object.entries(answers).slice(0, 4)) if (typeof a === 'string' && a.trim()) clean[q.slice(0, 500)] = a.trim().slice(0, 2000);
+  }
+  resolve?.(Object.keys(clean).length ? clean : null);
+});
 ipcMain.handle('stop-turn', () => {
   if (!currentTurnStop) return false;
   currentTurnStop.abort();
@@ -663,6 +674,19 @@ ipcMain.handle(
                 })
               : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
                   model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
+                  askUser: (questions) =>
+                    new Promise((resolve) => {
+                      pendingAsk?.(null);
+                      pendingAsk = resolve;
+                      send({ type: 'askUser', questions });
+                      // ⏹ 멈추기 while it's open: no answer, the quest closes.
+                      stop.signal.addEventListener('abort', () => {
+                        if (pendingAsk !== resolve) return;
+                        pendingAsk = null;
+                        resolve(null);
+                        send({ type: 'askClosed' });
+                      }, { once: true });
+                    }),
                 });
           if (turn.sessionId) sessions[provider] = turn.sessionId;
           convo.push({ provider, role: 'user', text: prompt }, { provider, role: 'assistant', text: turn.summary || turn.error || '' });
