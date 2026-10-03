@@ -3549,3 +3549,14 @@ body.a11y-calm .fx-number {
   animation: quest-pill 1.6s ease-in-out infinite;
 }
 @keyframes quest-pill { 50% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 0 8px rgba(224, 184, 112, 0.1); } }
+
+/* 🖥 서버 drawer */
+.server-item { border: 1px solid #3b4252; border-left: 3px solid #a3be8c; border-radius: 6px; background: #20252e; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.server-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; color: #e5e9f0; }
+.server-head strong { color: #a3be8c; }
+.server-head span { color: #8f99ab; font-size: 11.5px; }
+.server-command { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: #aeb7c7; background: #151922; padding: 4px 6px; border-radius: 4px; }
+.server-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.server-actions button { margin: 0; padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #4c566a; background: #2e3440; color: #e5e9f0; cursor: pointer; }
+.server-actions .server-kill { margin-left: auto; border-color: #bf616a; color: #ffb4b4; }
+.server-actions .server-kill:hover { background: #bf616a; color: #fff; }

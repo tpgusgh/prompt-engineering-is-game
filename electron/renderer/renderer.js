@@ -3400,9 +3400,82 @@ function renderAgents() {
 }
 $('agents-btn').addEventListener('click', () => {
   $('agents-drawer').hidden = !$('agents-drawer').hidden;
+  $('servers-drawer').hidden = true;
   renderAgents();
 });
 $('agents-close').addEventListener('click', () => ($('agents-drawer').hidden = true));
+
+// 🖥 서버 (src/servers.ts): servers running in the project folder — the AI's
+// dev servers — with their ports; open one in the browser or force it off.
+let servers = [];
+let serversError = '';
+async function refreshServers() {
+  if (dungeonScreen.hidden) return;
+  const r = await window.promptBattle.serversList();
+  servers = Array.isArray(r) ? r : [];
+  serversError = Array.isArray(r) ? '' : r?.error ?? '';
+  renderServers();
+}
+function renderServers() {
+  $('servers-btn').textContent = servers.length ? `🖥 서버 · 🟢 ${servers.length}개` : '🖥 서버';
+  $('servers-btn').classList.toggle('live', servers.length > 0);
+  if ($('servers-drawer').hidden) return;
+  const list = $('servers-list');
+  list.textContent = '';
+  if (!servers.length) {
+    const empty = document.createElement('p');
+    empty.className = 'option-sub';
+    empty.textContent = serversError || '켜진 서버가 없다. AI가 개발 서버를 켜면 여기에 나온다.';
+    list.append(empty);
+    return;
+  }
+  for (const s of servers) {
+    const item = document.createElement('div');
+    item.className = 'server-item';
+    const head = document.createElement('div');
+    head.className = 'server-head';
+    const ports = document.createElement('strong');
+    ports.textContent = `🟢 ${s.ports.map((p) => `:${p}`).join(' ')}`;
+    const name = document.createElement('span');
+    name.textContent = `${s.name} · PID ${s.pid}`;
+    head.append(ports, name);
+    const cmd = document.createElement('code');
+    cmd.className = 'server-command';
+    cmd.textContent = s.command;
+    cmd.title = s.command;
+    const actions = document.createElement('div');
+    actions.className = 'server-actions';
+    for (const port of s.ports) {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.textContent = `🌐 localhost:${port}`;
+      open.addEventListener('click', () => window.promptBattle.openLocal(port));
+      actions.append(open);
+    }
+    const kill = document.createElement('button');
+    kill.type = 'button';
+    kill.className = 'server-kill';
+    kill.textContent = '⏹ 강제로 끄기';
+    kill.addEventListener('click', async () => {
+      if (!window.confirm(t(`${s.name} (PID ${s.pid}, 포트 ${s.ports.join(', ')})을(를) 끌까?`))) return;
+      kill.disabled = true;
+      const ok = await window.promptBattle.serversKill(s.pid);
+      appendLog(ok ? `🖥 서버를 껐다: ${s.name} :${s.ports.join(', :')}` : `🖥 서버를 끄지 못했다: ${s.name} (PID ${s.pid})`, ok ? undefined : 'error');
+      refreshServers();
+    });
+    actions.append(kill);
+    item.append(head, cmd, actions);
+    list.append(item);
+  }
+}
+$('servers-btn').addEventListener('click', () => {
+  $('servers-drawer').hidden = !$('servers-drawer').hidden;
+  $('agents-drawer').hidden = true;
+  renderServers();
+  refreshServers();
+});
+$('servers-close').addEventListener('click', () => ($('servers-drawer').hidden = true));
+setInterval(refreshServers, 5000);
 // Live elapsed times.
 setInterval(() => {
   if (agentRuns.some((r) => !r.endedAt)) renderAgents();

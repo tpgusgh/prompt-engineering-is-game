@@ -51,6 +51,12 @@ const PARTY_RULE =
   'You also lead a party of subagents: wizard (explore/research, read-only), swordsman (implement changes), archer (run tests/verify). ' +
   'When a task has independent parts, delegate them by calling the Agent tool several times in ONE message so they work in parallel. For small, simple tasks just do the work yourself.';
 
+// A dev server run with Bash run_in_background never ends, so the turn would
+// wait on it forever; detached, the turn ends and the game's 🖥 서버 panel
+// (src/servers.ts) shows it and can stop it.
+const SERVER_RULE =
+  'To start a long-running server (dev server, API, watcher), run it detached in the project folder so your turn can end — e.g. `nohup npm run dev > server.log 2>&1 &` — then check it is up and give the user the URL. Do not use Bash run_in_background for servers. The user can see and stop it from the game\'s Servers panel.';
+
 export function systemPromptFor(party: boolean): string {
-  return [COURIER_RULE, ...(party ? [PARTY_RULE] : []), 'Reply to the user in the language they wrote in.'].join(' ');
+  return [COURIER_RULE, SERVER_RULE, ...(party ? [PARTY_RULE] : []), 'Reply to the user in the language they wrote in.'].join(' ');
 }

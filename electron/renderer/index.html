@@ -151,6 +151,7 @@
         <div class="battle-top">
           <div id="chapter-banner" class="chapter-banner"></div>
           <button type="button" id="agents-btn" class="agents-btn" title="서브에이전트 기록 (최근 10개)">👥 에이전트</button>
+          <button type="button" id="servers-btn" class="agents-btn" title="AI가 이 프로젝트에서 켠 서버: 열기 · 강제로 끄기">🖥 서버</button>
           <button type="button" class="agents-btn" data-open-settings title="설정">⚙️</button>
         </div>
         <div id="monster-panel">
@@ -376,6 +377,14 @@
         <button type="button" id="agents-close">✕</button>
       </div>
       <div id="agents-list" class="agents-list"></div>
+    </aside>
+
+    <aside id="servers-drawer" class="agents-drawer" hidden>
+      <div class="agents-head">
+        <strong>🖥 서버 <span class="option-sub">이 프로젝트 폴더에서 켜진 서버</span></strong>
+        <button type="button" id="servers-close">✕</button>
+      </div>
+      <div id="servers-list" class="agents-list"></div>
     </aside>
 
     <div id="unsaved-overlay" class="file-viewer-overlay unsaved-overlay" hidden>

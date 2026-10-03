@@ -12,6 +12,7 @@ import { GODS, DEMONS } from '../src/contracts.ts';
 import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachments.ts';
 import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
+import { listServers, killServer } from '../src/servers.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, parseMcpEntry, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
@@ -363,6 +364,18 @@ ipcMain.handle('pick-folder', async () => {
 // The project folder of the run in progress — the only place the in-app
 // file editor is allowed to write.
 let currentCwd: string | null = null;
+// 🖥 서버 (src/servers.ts): only a pid from the latest listing can be killed.
+let knownServers = new Set<number>();
+ipcMain.handle('servers-list', async () => {
+  if (!currentCwd) return [];
+  const list = await listServers(currentCwd);
+  if (Array.isArray(list)) knownServers = new Set(list.map((s) => s.pid));
+  return list;
+});
+ipcMain.handle('servers-kill', (_event, pid: unknown) => (typeof pid === 'number' && knownServers.has(pid) ? killServer(pid) : false));
+ipcMain.handle('open-local', (_event, port: unknown) =>
+  Number.isInteger(port) && (port as number) > 0 && (port as number) < 65536 ? shell.openExternal(`http://localhost:${port}`) : undefined,
+);
 // The weapon (Claude model) in hand; switchable mid-run via set-model.
 let currentModel = DEFAULT_WEAPON_ID;
 
