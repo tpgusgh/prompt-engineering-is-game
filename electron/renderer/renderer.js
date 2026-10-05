@@ -108,21 +108,27 @@ const touchedFiles = new Set();
 const heroClass = () => heroClasses.find((c) => c.id === chosenClass) ?? heroClasses[0];
 // Old saves hold versioned ids ("claude-opus-5-5"): match them to their family.
 const familyOf = (model) => ['haiku', 'sonnet', 'opus', 'fable'].find((f) => model === f || model?.includes(`-${f}-`)) ?? model;
-// Claude and Codex: four matching tiers; a Codex weapon is named like its Claude twin.
-const CODEX_TIER = { haiku: 'codex:luna', sonnet: 'codex:terra', opus: 'codex:sol', fable: 'codex:astra' };
-const providerOf = (model) => (model?.startsWith('codex:') ? 'codex' : 'claude');
-const tierTwin = (model) => Object.keys(CODEX_TIER).find((k) => CODEX_TIER[k] === model);
-const sameTierOn = (model, provider) => {
-  const f = familyOf(model);
-  if (providerOf(f) === provider) return f;
-  return provider === 'codex' ? CODEX_TIER[f] ?? 'codex:terra' : tierTwin(f) ?? 'sonnet';
+// Four matching tiers. Codex and Grok weapons are named like their Claude twin.
+const TIERS = {
+  claude: ['haiku', 'sonnet', 'opus', 'fable'],
+  codex: ['codex:luna', 'codex:terra', 'codex:sol', 'codex:astra'],
+  grok: ['grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova'],
 };
-const classWeapon = (model) => {
-  if (providerOf(model) === 'codex') {
-    const own = weapons.find((w) => w.model === model);
-    return { name: heroClass()?.weapons[tierTwin(model)]?.name ?? '무기', flavor: own?.flavor ?? 'Codex' };
+const providerOf = (model) => (model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude');
+const tierIndex = (model) => {
+  const f = familyOf(model);
+  for (const list of Object.values(TIERS)) {
+    const i = list.indexOf(f);
+    if (i >= 0) return i;
   }
-  return heroClass()?.weapons[familyOf(model)] ?? { name: '무기', flavor: '' };
+  return 1;
+};
+const sameTierOn = (model, provider) => TIERS[provider][tierIndex(model)];
+const classWeapon = (model) => {
+  const provider = providerOf(model);
+  if (provider === 'claude') return heroClass()?.weapons[familyOf(model)] ?? { name: '무기', flavor: '' };
+  const own = weapons.find((w) => w.model === model);
+  return { name: heroClass()?.weapons[TIERS.claude[tierIndex(model)]]?.name ?? '무기', flavor: own?.flavor ?? provider };
 };
 const enhancedName = (model, level) =>
   `${heroClass()?.modifiers[Math.max(0, Math.min(level, swordMax))] ?? ''} ${classWeapon(model).name}`.trim();
@@ -175,18 +181,25 @@ function renderWeaponOptions() {
   renderBattleDetailsSummary();
 }
 
-// ② 누구와 싸울까: Claude or Codex (Codex needs a ChatGPT sign-in once).
+// ② 누구와 싸울까: Claude, Codex (ChatGPT once), or Grok (SuperGrok / grok login once).
 let codexState = null;
+let grokState = null;
 async function refreshCodexStatus() {
   codexState = await window.promptBattle.codexStatus().catch(() => ({ loggedIn: false, detail: '' }));
   renderAiOptions();
 }
+async function refreshGrokStatus() {
+  grokState = await window.promptBattle.grokStatus().catch(() => ({ loggedIn: false, detail: '' }));
+  renderAiOptions();
+}
+const AI_LABEL = { claude: '🤖 Claude', codex: '⚡ Codex', grok: '✦ Grok' };
 function renderAiOptions() {
   const box = $('ai-options');
   box.textContent = '';
   const tiles = [
     { id: 'claude', icon: '🤖', name: 'Claude', by: 'Anthropic · Claude Code', note: '파티 모드 · 스킬북 · MCP 지원' },
     { id: 'codex', icon: '⚡', name: 'Codex', by: 'OpenAI · Codex', note: codexState?.loggedIn ? '로그인됨' : codexState ? 'ChatGPT 로그인이 필요하다' : '확인 중...' },
+    { id: 'grok', icon: '✦', name: 'Grok', by: 'xAI · Grok Build', note: grokState?.loggedIn ? '로그인됨' : grokState?.detail || '확인 중...' },
   ];
   for (const t of tiles) {
     const tile = document.createElement('button');
@@ -203,17 +216,20 @@ function renderAiOptions() {
     tile.append(head, by, note);
     tile.addEventListener('click', () => chooseProvider(t.id));
     box.append(tile);
-    if (t.id === 'codex' && codexState && !codexState.loggedIn) {
+    const needsLogin = (t.id === 'codex' && codexState && !codexState.loggedIn) || (t.id === 'grok' && grokState && !grokState.loggedIn);
+    if (needsLogin) {
       const login = document.createElement('button');
       login.type = 'button';
       login.className = 'ai-login';
-      login.textContent = 'ChatGPT로 로그인';
+      login.textContent = t.id === 'codex' ? 'ChatGPT로 로그인' : 'SuperGrok로 로그인';
       login.addEventListener('click', async (e) => {
         e.stopPropagation();
         login.disabled = true;
         login.textContent = '브라우저에서 로그인해 주세요...';
-        await window.promptBattle.codexLogin();
-        await refreshCodexStatus();
+        if (t.id === 'codex') await window.promptBattle.codexLogin();
+        else await window.promptBattle.grokLogin();
+        if (t.id === 'codex') await refreshCodexStatus();
+        else await refreshGrokStatus();
       });
       tile.append(login);
     }
@@ -224,26 +240,35 @@ function chooseProvider(provider) {
   renderWeaponOptions();
   renderAiOptions();
 }
+function syncEffortUi() {
+  const grok = providerOf(weaponSelect.value || chosenWeapon) === 'grok';
+  const setup = $('skill-setup-row');
+  if (setup) setup.hidden = grok;
+  const battle = $('effort-battle-wrap');
+  if (battle) battle.hidden = grok;
+}
 function renderBattleDetailsSummary() {
   const el = $('battle-details-summary');
   if (!el) return;
   const diff = document.querySelector('input[name="difficulty"]:checked')?.value ?? 'normal';
-  el.textContent = `${classWeapon(chosenWeapon).name} · ${skillName()} · ${DIFFICULTY_LABEL[diff] ?? ''}`;
+  const skill = providerOf(chosenWeapon) === 'grok' ? '' : ` · ${skillName()}`;
+  el.textContent = `${classWeapon(chosenWeapon).name}${skill} · ${DIFFICULTY_LABEL[diff] ?? ''}`;
 }
 document.querySelectorAll('input[name="difficulty"]').forEach((r) => r.addEventListener('change', () => renderBattleDetailsSummary()));
 // In battle: the same switch next to the weapon; the next attack goes to the other AI.
 function renderAiSwitch() {
   for (const b of document.querySelectorAll('.ai-switch button')) b.classList.toggle('active', b.dataset.provider === providerOf(weaponSelect.value || chosenWeapon));
+  syncEffortUi();
   renderPlanBtn();
 }
 // 작전 회의: while on, every attack is planned first and runs once approved.
 let planOn = false;
 function renderPlanBtn() {
-  const codex = providerOf(weaponSelect.value || chosenWeapon) === 'codex';
+  const claude = providerOf(weaponSelect.value || chosenWeapon) === 'claude';
   const btn = $('plan-btn');
-  btn.disabled = codex;
-  btn.classList.toggle('on', planOn && !codex);
-  btn.setAttribute('aria-pressed', String(planOn && !codex));
+  btn.disabled = !claude;
+  btn.classList.toggle('on', planOn && claude);
+  btn.setAttribute('aria-pressed', String(planOn && claude));
 }
 $('plan-btn').addEventListener('click', () => {
   planOn = !planOn;
@@ -262,10 +287,17 @@ for (const b of document.querySelectorAll('.ai-switch button')) {
         return;
       }
     }
+    if (provider === 'grok' && !grokState?.loggedIn) {
+      await refreshGrokStatus();
+      if (!grokState?.loggedIn) {
+        appendLog(`✦ Grok을 쓰려면 먼저 시작 화면에서 로그인해야 한다. ${grokState?.detail ?? ''}`, 'error');
+        return;
+      }
+    }
     chosenWeapon = sameTierOn(weaponSelect.value, provider);
     renderWeaponOptions();
     const w = await window.promptBattle.setModel(chosenWeapon);
-    appendLog(`${provider === 'codex' ? '⚡ Codex' : '🤖 Claude'}로 바꿨다 — 다음 공격부터. 지금까지의 대화는 이어서 넘겨준다. (무기: ${weaponName()} x${w.multiplier})`, 'story-line');
+    appendLog(`${AI_LABEL[provider] ?? provider}로 바꿨다 — 다음 공격부터. 지금까지의 대화는 이어서 넘겨준다. (무기: ${weaponName()} x${w.multiplier})`, 'story-line');
     renderSwordLevel();
   });
 }
@@ -365,6 +397,7 @@ async function loadSetup() {
   pacts = info.pacts ?? pacts;
   petDefs = info.pets ?? [];
   refreshCodexStatus();
+  refreshGrokStatus();
   prestigeLevel = info.prestigeLevel ?? prestigeLevel;
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
