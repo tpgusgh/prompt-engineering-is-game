@@ -2,7 +2,7 @@
 // multiplier scales the prompt's damage. The family alias (haiku, sonnet,
 // opus, fable) goes straight to the SDK, which picks that family's latest
 // version — so no version numbers here to go stale.
-export type Provider = 'claude' | 'codex';
+export type Provider = 'claude' | 'codex' | 'grok';
 export interface Weapon {
   model: string;
   name: string;
@@ -21,21 +21,34 @@ export const WEAPONS: Weapon[] = [
   { model: 'codex:terra', name: '장검', flavor: '균형 잡힌 Codex Terra', multiplier: 1, provider: 'codex' },
   { model: 'codex:sol', name: '마검', flavor: '코딩의 일꾼 Codex Sol', multiplier: 1.25, provider: 'codex' },
   { model: 'codex:astra', name: '전설의 성검', flavor: '최전선의 Codex Astra', multiplier: 1.5, provider: 'codex' },
+  // Grok (src/grok.ts): grok-4.6 fills the two light tiers, grok-4.7 the two heavy ones. Effort is the weapon.
+  { model: 'grok:spark', name: '단검', flavor: '가벼운 Grok 4.6 · 낮은 effort', multiplier: 0.8, provider: 'grok' },
+  { model: 'grok:kindle', name: '장검', flavor: 'Grok 4.6 · 높은 effort', multiplier: 1, provider: 'grok' },
+  { model: 'grok:flare', name: '마검', flavor: 'Grok 4.7 · 보통 effort', multiplier: 1.25, provider: 'grok' },
+  { model: 'grok:nova', name: '전설의 성검', flavor: 'Grok 4.7 · 높은 effort', multiplier: 1.5, provider: 'grok' },
 ];
 
-export const providerOf = (model: string | undefined): Provider => (model?.startsWith('codex:') ? 'codex' : 'claude');
-// The same tier on the other AI (switching keeps how hard you hit).
-const TIER: Record<string, string> = { haiku: 'codex:luna', sonnet: 'codex:terra', opus: 'codex:sol', fable: 'codex:astra' };
-export const sameTierOn = (model: string, provider: Provider): string => {
-  const f = modelFamily(model) ?? DEFAULT_WEAPON_ID;
-  if (providerOf(f) === provider) return f;
-  return provider === 'codex' ? TIER[f] : Object.keys(TIER).find((k) => TIER[k] === f)!;
+const TIERS: Record<Provider, readonly string[]> = {
+  claude: ['haiku', 'sonnet', 'opus', 'fable'],
+  codex: ['codex:luna', 'codex:terra', 'codex:sol', 'codex:astra'],
+  grok: ['grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova'],
 };
-// Class weapon names are by tier: a Codex weapon shares its Claude twin's name.
-export const nameFamily = (model: string | undefined) => {
-  const f = modelFamily(model);
-  return f && providerOf(f) === 'codex' ? Object.keys(TIER).find((k) => TIER[k] === f) : f;
-};
+
+export const providerOf = (model: string | undefined): Provider => (model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude');
+
+export function tierIndex(model: string | undefined): number {
+  const family = modelFamily(model) ?? DEFAULT_WEAPON_ID;
+  for (const list of Object.values(TIERS)) {
+    const index = list.indexOf(family);
+    if (index >= 0) return index;
+  }
+  return TIERS.claude.indexOf(DEFAULT_WEAPON_ID);
+}
+
+// The same tier on another AI (switching keeps how hard you hit).
+export const sameTierOn = (model: string, provider: Provider): string => TIERS[provider][tierIndex(model)] ?? DEFAULT_WEAPON_ID;
+// Class weapon names are by tier: Codex and Grok share their Claude twin's name.
+export const nameFamily = (model: string | undefined) => TIERS.claude[tierIndex(model)];
 
 export const DEFAULT_WEAPON_ID = 'sonnet';
 

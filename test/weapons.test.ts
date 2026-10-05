@@ -3,19 +3,24 @@ import assert from 'node:assert/strict';
 import { WEAPONS, getWeapon, DEFAULT_WEAPON_ID, sameTierOn, providerOf } from '../src/weapons.ts';
 
 test('each AI\'s weapons are ordered weakest to strongest by multiplier', () => {
-  for (const p of ['claude', 'codex']) {
+  for (const p of ['claude', 'codex', 'grok']) {
     const multipliers = WEAPONS.filter((w) => w.provider === p).map((w) => w.multiplier);
     assert.deepEqual(multipliers, [...multipliers].sort((a, b) => a - b));
   }
 });
 
 test('weapons are model families (no version numbers: the latest one is always used), Claude and Codex in matching tiers', () => {
-  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable', 'codex:luna', 'codex:terra', 'codex:sol', 'codex:astra']);
+  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable', 'codex:luna', 'codex:terra', 'codex:sol', 'codex:astra', 'grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova']);
   assert.equal(sameTierOn('opus', 'codex'), 'codex:sol');
   assert.equal(sameTierOn('codex:luna', 'claude'), 'haiku');
   assert.equal(sameTierOn('sonnet', 'claude'), 'sonnet');
+  assert.equal(sameTierOn('opus', 'grok'), 'grok:flare');
+  assert.equal(sameTierOn('grok:nova', 'claude'), 'fable');
+  assert.equal(sameTierOn('grok:spark', 'codex'), 'codex:luna');
   assert.equal(providerOf('codex:astra'), 'codex');
+  assert.equal(providerOf('grok:kindle'), 'grok');
   assert.equal(getWeapon('codex:sol').multiplier, getWeapon('opus').multiplier);
+  assert.equal(getWeapon('grok:nova').multiplier, getWeapon('fable').multiplier);
 });
 
 test('getWeapon returns the matching weapon; an old versioned id maps to its family; unknown falls back', () => {
