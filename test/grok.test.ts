@@ -42,3 +42,67 @@ test('text chunks and the end event keep the reply and the session', () => {
   assert.equal(turn.tokens, 12);
   assert.equal(events.length, 2);
 });
+
+// A fake `grok`: a node script that prints streaming-json lines, as told by FAKE_GROK.
+import { mkdtemp, writeFile, chmod } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { runGrokTurn } from '../src/grok.ts';
+
+async function fakeGrok(script: string) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'fake-grok-'));
+  const bin = path.join(dir, 'grok');
+  await writeFile(bin, `#!/usr/bin/env node\n${script}\n`);
+  await chmod(bin, 0o755);
+  process.env.PROMPTBATTLE_GROK_EXECUTABLE = bin;
+  return dir;
+}
+const posix = process.platform !== 'win32';
+const out = (o: unknown) => `console.log(${JSON.stringify(JSON.stringify(o))});`;
+
+test('runGrokTurn: a finished turn keeps the session and only the last message as the summary', { skip: !posix }, async () => {
+  await fakeGrok([out({ type: 'text', data: '먼저 볼게.' }), out({ type: 'tool_call', toolCallId: 't', kind: 'execute', rawInput: { command: 'ls' } }), out({ type: 'tool_call_update', toolCallId: 't', status: 'completed' }), out({ type: 'text', data: '끝났다.' }), out({ type: 'end', sessionId: 's2', usage: { total_tokens: 5 } })].join('\n'));
+  const r = await runGrokTurn('hi', tmpdir(), 's1', undefined, { model: 'grok:spark' });
+  assert.equal(r.error, undefined);
+  assert.equal(r.sessionId, 's2');
+  assert.equal(r.summary, '끝났다.');
+  assert.deepEqual(r.commandsRun, ['ls']);
+});
+
+test('runGrokTurn: exiting without an end event is an error, and the (maybe bad) session is not kept', { skip: !posix }, async () => {
+  await fakeGrok(`${out({ type: 'text', data: '...' })}\nconsole.error('auth expired');`);
+  const r = await runGrokTurn('hi', tmpdir(), 'bad-session', undefined, { model: 'grok:spark' });
+  assert.match(r.error ?? '', /auth expired/);
+  assert.equal(r.sessionId, undefined);
+  await fakeGrok(out({ type: 'error', error: { message: 'rate limited' } }));
+  assert.match((await runGrokTurn('hi', tmpdir(), undefined, undefined, { model: 'grok:spark' })).error ?? '', /rate limited/);
+});
+
+test('runGrokTurn: stopping kills grok and what it started, even if grok ignores SIGTERM', { skip: !posix }, async () => {
+  const dir = await fakeGrok(`
+    const { spawn } = require('node:child_process');
+    const kid = spawn('sleep', ['30'], { stdio: 'ignore' });
+    require('node:fs').writeFileSync(${JSON.stringify(path.join(tmpdir(), 'fake-grok-kid'))}, String(kid.pid));
+    process.on('SIGTERM', () => {});
+    console.log(JSON.stringify({ type: 'text', data: 'working' }));
+    setInterval(() => {}, 1000);`);
+  void dir;
+  const stop = new AbortController();
+  setTimeout(() => stop.abort(), 600);
+  const started = Date.now();
+  const r = await runGrokTurn('hi', tmpdir(), undefined, undefined, { model: 'grok:spark', signal: stop.signal });
+  assert.equal(r.interrupted, true);
+  assert.ok(Date.now() - started < 6000, 'the turn ends');
+  const kid = Number((await import('node:fs')).readFileSync(path.join(tmpdir(), 'fake-grok-kid'), 'utf8'));
+  await new Promise((res) => setTimeout(res, 300));
+  assert.throws(() => process.kill(kid, 0), 'the command grok started is gone too');
+});
+
+test('runGrokTurn: a missing binary says it is not installed', { skip: !posix }, async () => {
+  process.env.PROMPTBATTLE_GROK_EXECUTABLE = '/nope/grok';
+  const old = process.env.PATH;
+  process.env.PATH = '';
+  const r = await runGrokTurn('hi', tmpdir(), undefined, undefined, { model: 'grok:spark' });
+  process.env.PATH = old;
+  assert.match(r.error ?? '', /설치/);
+});

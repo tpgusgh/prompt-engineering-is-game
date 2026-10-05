@@ -216,7 +216,7 @@ function renderAiOptions() {
     tile.append(head, by, note);
     tile.addEventListener('click', () => chooseProvider(t.id));
     box.append(tile);
-    const needsLogin = (t.id === 'codex' && codexState && !codexState.loggedIn) || (t.id === 'grok' && grokState && !grokState.loggedIn);
+    const needsLogin = (t.id === 'codex' && codexState && !codexState.loggedIn) || (t.id === 'grok' && grokState && grokState.installed !== false && !grokState.loggedIn);
     if (needsLogin) {
       const login = document.createElement('button');
       login.type = 'button';

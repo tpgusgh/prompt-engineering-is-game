@@ -28,27 +28,52 @@ export const grokPath = () => process.env.PROMPTBATTLE_GROK_EXECUTABLE;
 export function grokBin(): string | undefined {
   const fromEnv = grokPath();
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
-  const name = process.platform === 'win32' ? 'grok.exe' : 'grok';
-  const candidates = [
-    path.join(os.homedir(), '.grok', 'bin', name),
-    ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, name)),
-  ];
-  return candidates.find((file) => fs.existsSync(file));
+  // Windows: npm-style installs are grok.cmd shims, not only grok.exe.
+  const names = process.platform === 'win32' ? ['grok.exe', 'grok.cmd', 'grok.bat'] : ['grok'];
+  const dirs = [path.join(os.homedir(), '.grok', 'bin'), ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean)];
+  return dirs.flatMap((dir) => names.map((name) => path.join(dir, name))).find((file) => fs.existsSync(file));
+}
+
+// A .cmd/.bat shim only runs through cmd.exe. The arguments are paths, model
+// names and flags (the prompt goes in a file), and a Windows path can't hold
+// a double quote, so quoting each one is enough.
+function command(bin: string, args: string[]): [string, string[], { windowsVerbatimArguments?: boolean }] {
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
+    return ['cmd.exe', ['/d', '/s', '/c', `"${[bin, ...args].map((a) => `"${a}"`).join(' ')}"`], { windowsVerbatimArguments: true }];
+  }
+  return [bin, args, {}];
+}
+
+// Stop grok and everything it started (test runs, dev servers): the process
+// group on macOS/Linux (SIGTERM, then SIGKILL), the whole tree on Windows.
+function killTree(pid: number | undefined, hard = false) {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
+    return;
+  }
+  try {
+    process.kill(-pid, hard ? 'SIGKILL' : 'SIGTERM');
+  } catch {
+    try {
+      process.kill(pid, hard ? 'SIGKILL' : 'SIGTERM');
+    } catch {}
+  }
 }
 
 function authFile(): string {
   return path.join(os.homedir(), '.grok', 'auth.json');
 }
 
-export async function grokLoginStatus(): Promise<{ loggedIn: boolean; detail: string }> {
-  if (!grokBin()) return { loggedIn: false, detail: 'Grok Build(grok)가 설치되어 있지 않다' };
-  if (process.env.XAI_API_KEY) return { loggedIn: true, detail: 'API 키' };
+export async function grokLoginStatus(): Promise<{ installed: boolean; loggedIn: boolean; detail: string }> {
+  if (!grokBin()) return { installed: false, loggedIn: false, detail: 'Grok Build(grok)가 설치되어 있지 않다' };
+  if (process.env.XAI_API_KEY) return { installed: true, loggedIn: true, detail: 'API 키' };
   try {
-    if (fs.statSync(authFile()).size > 2) return { loggedIn: true, detail: '로그인됨' };
+    if (fs.statSync(authFile()).size > 2) return { installed: true, loggedIn: true, detail: '로그인됨' };
   } catch {
     // no auth file yet
   }
-  return { loggedIn: false, detail: 'SuperGrok 로그인이 필요하다' };
+  return { installed: true, loggedIn: false, detail: 'SuperGrok 로그인이 필요하다' };
 }
 
 export async function grokLogin(): Promise<{ ok: boolean; detail: string }> {
@@ -60,7 +85,11 @@ export async function grokLogin(): Promise<{ ok: boolean; detail: string }> {
 
 export interface GrokTurnState {
   sessionId?: string;
+  // The whole reply; `last` is the message after the last tool call (the summary).
   text: string;
+  last?: string;
+  // An `end` event came: the turn finished (and its session id is good).
+  ended?: boolean;
   files: Set<string>;
   commands: string[];
   tokens: number;
@@ -104,8 +133,10 @@ export function mapGrokEvent(event: unknown, state: GrokTurnState, emit: (e: Age
   const row = event as Record<string, unknown>;
   if (row.type === 'text' && typeof row.data === 'string') {
     state.text += row.data;
+    state.last = (state.last ?? '') + row.data;
     emit({ type: 'text', value: row.data });
   } else if (row.type === 'tool_call' && typeof row.toolCallId === 'string') {
+    state.last = '';
     const hit = classify(row);
     if (!hit) return;
     state.pending.set(row.toolCallId, hit);
@@ -121,10 +152,13 @@ export function mapGrokEvent(event: unknown, state: GrokTurnState, emit: (e: Age
     const status = typeof row.status === 'string' ? row.status : '';
     emit({ type: 'toolResult', toolId: row.toolCallId, output, isError: status === 'failed' || status === 'error' });
   } else if (row.type === 'end') {
+    state.ended = true;
     if (typeof row.sessionId === 'string') state.sessionId = row.sessionId;
     state.tokens += tokensOf(row.usage);
-  } else if (row.type === 'error' && typeof row.message === 'string') {
-    state.error = row.message;
+  } else if (row.type === 'error') {
+    const nested = row.error && typeof row.error === 'object' ? (row.error as Record<string, unknown>).message : row.error;
+    const message = typeof row.message === 'string' ? row.message : typeof nested === 'string' ? nested : '';
+    if (message) state.error = message;
   }
 }
 
@@ -159,27 +193,50 @@ export async function runGrokTurn(
   ];
   let code = 1;
   let stderr = '';
+  let spawnError: NodeJS.ErrnoException | undefined;
   try {
-    const child = spawn(bin, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], signal });
-    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    const [file, argv, extra] = command(bin, args);
+    // Its own process group (detached), so a stop takes its commands down too.
+    const child = spawn(file, argv, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true, ...extra });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + String(chunk)).slice(-4000); });
     const lines = readline.createInterface({ input: child.stdout });
     lines.on('line', (line) => {
       try { mapGrokEvent(JSON.parse(line), state, (e) => onEvent?.(e)); } catch { /* a non-JSON line is not an event */ }
     });
+    let hardKill: NodeJS.Timeout | undefined;
+    const stop = () => {
+      killTree(child.pid);
+      hardKill = setTimeout(() => killTree(child.pid, true), 2000);
+    };
+    if (signal?.aborted) stop();
+    else signal?.addEventListener('abort', stop, { once: true });
     code = await new Promise((resolve) => {
-      child.on('error', () => resolve(1));
+      child.on('error', (err) => {
+        spawnError = err;
+        resolve(1);
+      });
+      // 'exit', not only 'close': a grandchild holding stdout open must not hang the turn.
+      child.on('exit', (status) => resolve(status ?? 1));
       child.on('close', (status) => resolve(status ?? 1));
     });
+    clearTimeout(hardKill);
+    signal?.removeEventListener('abort', stop);
     lines.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
   if (signal?.aborted) {
-    return { summary: state.text.trim(), filesChanged: [...state.files], commandsRun: state.commands, interrupted: true, ...(state.sessionId ? { sessionId: state.sessionId } : {}) };
+    return { summary: (state.last ?? state.text).trim(), filesChanged: [...state.files], commandsRun: state.commands, interrupted: true, ...(state.ended && state.sessionId ? { sessionId: state.sessionId } : {}) };
   }
-  if (code !== 0 && !state.error) state.error = stderr.trim().split('\n').slice(-1)[0] || `grok가 코드 ${code}로 끝났다`;
+  const lastErr = stderr.trim().split('\n').slice(-1)[0];
+  if (spawnError) state.error = spawnError.code === 'ENOENT' ? 'Grok Build(grok)가 설치되어 있지 않다' : `grok을 실행하지 못했다: ${spawnError.message}`;
+  else if (code !== 0 && !state.error) state.error = lastErr || `grok가 코드 ${code}로 끝났다`;
+  else if (!state.ended && !state.error) state.error = lastErr ? `grok이 응답을 끝내지 못했다: ${lastErr}` : 'grok이 응답을 끝내지 못했다';
+  // A turn that never finished doesn't hand back its session: a bad resume id
+  // would otherwise fail every turn after it.
+  if (!state.ended) state.sessionId = undefined;
   return {
-    summary: state.text.trim(),
+    summary: (state.last ?? state.text).trim(),
     filesChanged: [...state.files],
     commandsRun: state.commands,
     ...(state.error ? { error: state.error } : {}),

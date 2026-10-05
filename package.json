@@ -49,6 +49,9 @@
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
       "files": [
+        "src/**/*.ts",
+        "electron/**/*",
+        "package.json",
         "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**",
         "!node_modules/@anthropic-ai/claude-agent-sdk-win32-*/**",
         "!node_modules/@openai/codex-linux-*/**",
@@ -65,6 +68,9 @@
       "category": "Development",
       "icon": "build/icon.png",
       "files": [
+        "src/**/*.ts",
+        "electron/**/*",
+        "package.json",
         "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**",
         "!node_modules/@anthropic-ai/claude-agent-sdk-win32-*/**",
         "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*-musl/**",
@@ -78,6 +84,9 @@
       ],
       "icon": "build/icon.png",
       "files": [
+        "src/**/*.ts",
+        "electron/**/*",
+        "package.json",
         "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**",
         "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**",
         "!node_modules/@openai/codex-darwin-*/**",

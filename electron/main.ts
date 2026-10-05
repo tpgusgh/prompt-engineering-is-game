@@ -693,6 +693,8 @@ ipcMain.handle(
                   effort: (currentClaude ?? profile.claude).effort,
                   signal: stop.signal,
                 })
+              : provider === 'grok' && (currentClaude ?? profile.claude).safeMode
+                ? { summary: '', filesChanged: [], commandsRun: [], error: '안전 모드에서는 Grok을 쓸 수 없다 — Grok은 명령마다 허락을 받을 수 없다. Claude로 바꾸거나 설정에서 안전 모드를 꺼 줘.' }
               : provider === 'grok'
                 ? await runGrokTurn(withTextAttachments(full, sent, 'Grok'), cwd, sessions.grok, onEvent, { model: currentModel, signal: stop.signal })
                 : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
