@@ -31,6 +31,7 @@ import { loadFolderSession, saveFolderSession, appendHistory, type FolderSession
 import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon, providerOf, type Provider } from '../src/weapons.ts';
 import { runCodexTurn, codexModels, codexLoginStatus, codexLogin } from '../src/codex.ts';
+import { runGrokTurn, grokLoginStatus, grokLogin } from '../src/grok.ts';
 import { ITEMS, BOSS_ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
@@ -625,16 +626,17 @@ ipcMain.handle(
     };
     // Claude and Codex each keep their own session; switching AI hands the new
     // one what was said since it last worked (the files are shared anyway).
-    const sessions: Record<Provider, string | undefined> = { claude: undefined, codex: undefined };
+    const sessions: Record<Provider, string | undefined> = { claude: undefined, codex: undefined, grok: undefined };
     if (options.sessionId?.startsWith('codex:')) sessions.codex = options.sessionId.slice('codex:'.length);
+    else if (options.sessionId?.startsWith('grok:')) sessions.grok = options.sessionId.slice('grok:'.length);
     else sessions.claude = options.sessionId;
     let lastReturned: string | undefined = options.sessionId;
     const convo: { provider: Provider; role: 'user' | 'assistant'; text: string }[] = [];
-    const seen: Record<Provider, number> = { claude: 0, codex: 0 };
+    const seen: Record<Provider, number> = { claude: 0, codex: 0, grok: 0 };
     const providersUsed = new Set<Provider>();
     let walletWrites: Promise<unknown> = Promise.resolve();
     runBestCpm = 0;
-    const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex' };
+    const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex', grok: 'Grok' };
     const handoff = (provider: Provider) => {
       const missed = convo.slice(seen[provider]).filter((e) => e.provider !== provider);
       if (!missed.length) return '';
@@ -649,10 +651,10 @@ ipcMain.handle(
       return `[Game note: until now another AI (${other}) was working on this project in this folder. Its files and changes are already here. What was said meanwhile:\n${lines.join('\n')}\n— Pick up from there.]\n\n`;
     };
     // Codex reads text attachments inline; pictures and PDFs only go to Claude.
-    const withTextAttachments = (text: string, files: typeof attachments) => {
+    const withTextAttachments = (text: string, files: typeof attachments, who: string) => {
       const texts = files.filter((a) => a.kind === 'text').map((a) => `첨부 파일 ${a.name}:\n\`\`\`\n${(a as { text: string }).text}\n\`\`\``);
       const skipped = files.filter((a) => a.kind !== 'text').map((a) => a.name);
-      return [...texts, ...(skipped.length ? [`(Codex에는 이미지·PDF 첨부를 보낼 수 없어 뺐다: ${skipped.join(', ')})`] : []), text].join('\n\n');
+      return [...texts, ...(skipped.length ? [`(${who}에는 이미지·PDF 첨부를 보낼 수 없어 뺐다: ${skipped.join(', ')})`] : []), text].join('\n\n');
     };
 
     const trackHistory = (event: BattleEvent) => {
@@ -661,7 +663,7 @@ ipcMain.handle(
       else if (event.type === 'agentSummary') folder.history = appendHistory(folder.history, { role: 'assistant', text: event.summary });
       else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
       else if (event.type === 'sessionSaved') {
-        if (!event.sessionId.startsWith('codex:')) folder.sessionId = event.sessionId; // the folder's Claude session
+        if (!event.sessionId.startsWith('codex:') && !event.sessionId.startsWith('grok:')) folder.sessionId = event.sessionId; // the folder's Claude session
       }
       else if (event.type === 'sessionReset') delete folder.sessionId;
       else if (event.type === 'sessionSwitched') folder.sessionId = event.sessionId;
@@ -676,7 +678,7 @@ ipcMain.handle(
         try {
           // /new (or a failed first turn) cleared the battle's session: both AIs start fresh.
           if (sessionId === undefined && lastReturned !== undefined) {
-            sessions.claude = sessions.codex = undefined;
+            sessions.claude = sessions.codex = sessions.grok = undefined;
             convo.length = 0;
           }
           const provider = providerOf(currentModel);
@@ -686,12 +688,14 @@ ipcMain.handle(
           const full = handoff(provider) + prompt;
           const turn =
             provider === 'codex'
-              ? await runCodexTurn(withTextAttachments(full, sent), cwd, sessions.codex, onEvent, {
+              ? await runCodexTurn(withTextAttachments(full, sent, 'Codex'), cwd, sessions.codex, onEvent, {
                   model: (await codexModels())[currentModel.slice('codex:'.length) as 'luna'],
                   effort: (currentClaude ?? profile.claude).effort,
                   signal: stop.signal,
                 })
-              : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
+              : provider === 'grok'
+                ? await runGrokTurn(withTextAttachments(full, sent, 'Grok'), cwd, sessions.grok, onEvent, { model: currentModel, signal: stop.signal })
+                : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
                   model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
                   ...((currentClaude ?? profile.claude).safeMode
                     ? {
@@ -745,7 +749,7 @@ ipcMain.handle(
           if (turn.sessionId) sessions[provider] = turn.sessionId;
           convo.push({ provider, role: 'user', text: prompt }, { provider, role: 'assistant', text: turn.summary || turn.error || '' });
           seen[provider] = convo.length;
-          lastReturned = provider === 'codex' && turn.sessionId ? `codex:${turn.sessionId}` : turn.sessionId;
+          lastReturned = provider === 'claude' ? turn.sessionId : turn.sessionId ? `${provider}:${turn.sessionId}` : undefined;
           return { ...turn, sessionId: lastReturned };
         } finally {
           if (currentTurnStop === stop) currentTurnStop = null;
@@ -769,7 +773,11 @@ ipcMain.handle(
       themeId: options.themeId,
       initialSessionId: options.sessionId,
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
-      getDamageMultiplier: () => getWeapon(currentModel).multiplier * ATTACK_SPEED[(currentClaude ?? profile.claude).effort].multiplier,
+      getDamageMultiplier: () => {
+        const weapon = getWeapon(currentModel);
+        if (weapon.provider === 'grok') return weapon.multiplier;
+        return weapon.multiplier * ATTACK_SPEED[(currentClaude ?? profile.claude).effort].multiplier;
+      },
       // Hero stats are per-run: fresh each game, restored only from a save slot.
       stats: slot?.stats,
       statPoints: slot ? slot.statPoints : startingStatPoints(profile),
@@ -877,6 +885,8 @@ ipcMain.handle('title-wear', (_event, id: unknown) => titleChange((p) => wearTit
 // Codex: sign-in (ChatGPT, in the browser) and its model families.
 ipcMain.handle('codex-status', async () => ({ ...(await codexLoginStatus()), models: await codexModels() }));
 ipcMain.handle('codex-login', () => codexLogin());
+ipcMain.handle('grok-status', () => grokLoginStatus());
+ipcMain.handle('grok-login', () => grokLogin());
 ipcMain.handle('skills-list', () => (currentCwd ? listSkills(currentCwd) : []));
 ipcMain.handle('skill-save', (_event, skill: { name: string; description: string; body: string }) =>
   currentCwd ? saveSkill(currentCwd, { name: String(skill?.name ?? ''), description: String(skill?.description ?? ''), body: String(skill?.body ?? '') }) : { error: noProject.message },
