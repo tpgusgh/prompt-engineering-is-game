@@ -74,7 +74,7 @@
               <p class="choice-hint">무기 = AI 모델. 토큰 ●가 많을수록 세게 때리지만 사용량 한도가 빨리 줄어든다.</p>
             </div>
           </div>
-          <div class="choice-row">
+          <div class="choice-row" id="skill-setup-row">
             <span class="choice-label">스킬</span>
             <div>
               <div id="hero-skill-options" class="choice-grid hero-skill-grid"></div>
@@ -185,9 +185,10 @@
           <span class="ai-switch" role="group" aria-label="AI">
             <button type="button" data-provider="claude">🤖 Claude</button>
             <button type="button" data-provider="codex">⚡ Codex</button>
+            <button type="button" data-provider="grok">✦ Grok</button>
           </span>
           <label class="weapon-select">무기 <select id="weapon-select"></select> <span id="sword-level" class="sword-level"></span></label>
-          <label class="weapon-select" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
+          <label class="weapon-select" id="effort-battle-wrap" title="스킬 = effort: 상위 스킬일수록 깊게 생각하고 세게 때린다">스킬 <select id="effort-battle"></select></label>
         </div>
         <div id="stat-panel" class="stat-panel"></div>
 
