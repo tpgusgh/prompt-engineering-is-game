@@ -32,7 +32,7 @@ export interface RunStats {
   dailyRuns: number;
   awakenedBossKills: number;
   gearWorn: number; // most relics worn at once
-  bothAis: number; // runs fought with both Claude and Codex
+  bothAis: number; // runs fought with more than one AI
   byModel: Record<string, ModelRecord>;
   // Bestiary: monster indexes met, and kills per monster index.
   seen: number[];
@@ -109,7 +109,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'daily-runner', icon: '📅', title: '오늘의 도전자', description: '오늘의 도전 한 판 끝내기', coins: 40, done: (r) => (r.dailyRuns ?? 0) >= 1 },
   { id: 'awakened-slayer', icon: '🔥', title: '각성 진압', description: '각성한 보스 쓰러뜨리기', coins: 100, done: (r) => (r.awakenedBossKills ?? 0) >= 1 },
   { id: 'fully-geared', icon: '⚙️', title: '장비빨', description: '보스 유물 2개 장착', coins: 80, done: (r) => (r.gearWorn ?? 0) >= 2 },
-  { id: 'two-ais', icon: '🤝', title: 'AI 양다리', description: '한 판에 Claude와 Codex 둘 다 쓰기', coins: 50, done: (r) => (r.bothAis ?? 0) >= 1 },
+  { id: 'two-ais', icon: '🤝', title: 'AI 양다리', description: '한 판에 AI를 둘 이상 쓰기', coins: 50, done: (r) => (r.bothAis ?? 0) >= 1 },
   { id: 'bestiary-all', icon: '📚', title: '도감 완성', description: `도감 몬스터 ${TOTAL_MONSTERS}종 모두 처치`, coins: 300, done: (r) => Object.keys(r.kills).length >= TOTAL_MONSTERS },
 ];
 
