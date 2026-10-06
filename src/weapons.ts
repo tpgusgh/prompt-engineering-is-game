@@ -2,7 +2,7 @@
 // multiplier scales the prompt's damage. The family alias (haiku, sonnet,
 // opus, fable) goes straight to the SDK, which picks that family's latest
 // version — so no version numbers here to go stale.
-export type Provider = 'claude' | 'codex' | 'grok';
+export type Provider = 'claude' | 'codex' | 'grok' | 'gemini';
 export interface Weapon {
   model: string;
   name: string;
@@ -26,15 +26,22 @@ export const WEAPONS: Weapon[] = [
   { model: 'grok:kindle', name: '장검', flavor: 'Grok 4.6 · 높은 effort', multiplier: 1, provider: 'grok' },
   { model: 'grok:flare', name: '마검', flavor: 'Grok 4.7 · 보통 effort', multiplier: 1.25, provider: 'grok' },
   { model: 'grok:nova', name: '전설의 성검', flavor: 'Grok 4.7 · 높은 effort', multiplier: 1.5, provider: 'grok' },
+  // Gemini (src/gemini.ts): the CLI's model aliases, each its newest model.
+  { model: 'gemini:flash-lite', name: '단검', flavor: '가볍고 빠른 Gemini Flash-Lite', multiplier: 0.8, provider: 'gemini' },
+  { model: 'gemini:flash', name: '장검', flavor: '균형 잡힌 Gemini Flash', multiplier: 1, provider: 'gemini' },
+  { model: 'gemini:auto', name: '마검', flavor: 'Gemini Auto · 필요할 때 Pro', multiplier: 1.25, provider: 'gemini' },
+  { model: 'gemini:pro', name: '전설의 성검', flavor: '가장 강한 Gemini Pro', multiplier: 1.5, provider: 'gemini' },
 ];
 
 const TIERS: Record<Provider, readonly string[]> = {
   claude: ['haiku', 'sonnet', 'opus', 'fable'],
   codex: ['codex:luna', 'codex:terra', 'codex:sol', 'codex:astra'],
   grok: ['grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova'],
+  gemini: ['gemini:flash-lite', 'gemini:flash', 'gemini:auto', 'gemini:pro'],
 };
 
-export const providerOf = (model: string | undefined): Provider => (model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude');
+export const providerOf = (model: string | undefined): Provider =>
+  model?.startsWith('gemini:') ? 'gemini' : model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude';
 
 export function tierIndex(model: string | undefined): number {
   const family = modelFamily(model) ?? DEFAULT_WEAPON_ID;

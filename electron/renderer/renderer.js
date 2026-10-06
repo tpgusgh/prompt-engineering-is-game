@@ -108,13 +108,16 @@ const touchedFiles = new Set();
 const heroClass = () => heroClasses.find((c) => c.id === chosenClass) ?? heroClasses[0];
 // Old saves hold versioned ids ("claude-opus-5-5"): match them to their family.
 const familyOf = (model) => ['haiku', 'sonnet', 'opus', 'fable'].find((f) => model === f || model?.includes(`-${f}-`)) ?? model;
-// Four matching tiers. Codex and Grok weapons are named like their Claude twin.
+// Four matching tiers. Codex, Grok and Gemini weapons are named like their Claude twin.
 const TIERS = {
   claude: ['haiku', 'sonnet', 'opus', 'fable'],
   codex: ['codex:luna', 'codex:terra', 'codex:sol', 'codex:astra'],
   grok: ['grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova'],
+  gemini: ['gemini:flash-lite', 'gemini:flash', 'gemini:auto', 'gemini:pro'],
 };
-const providerOf = (model) => (model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude');
+const providerOf = (model) => (model?.startsWith('gemini:') ? 'gemini' : model?.startsWith('grok:') ? 'grok' : model?.startsWith('codex:') ? 'codex' : 'claude');
+// Grok and Gemini: the weapon is the whole setting (no effort skill on top).
+const weaponOnly = (model) => ['grok', 'gemini'].includes(providerOf(model));
 const tierIndex = (model) => {
   const f = familyOf(model);
   for (const list of Object.values(TIERS)) {
@@ -181,9 +184,15 @@ function renderWeaponOptions() {
   renderBattleDetailsSummary();
 }
 
-// ② 누구와 싸울까: Claude, Codex (ChatGPT once), or Grok (SuperGrok / grok login once).
+// ② 누구와 싸울까: Claude, Codex (ChatGPT once), Grok (SuperGrok / grok login once),
+// or Gemini (the player's own Gemini CLI, signed in from a terminal once).
 let codexState = null;
 let grokState = null;
+let geminiState = null;
+async function refreshGeminiStatus() {
+  geminiState = await window.promptBattle.geminiStatus().catch(() => ({ loggedIn: false, detail: '' }));
+  renderAiOptions();
+}
 async function refreshCodexStatus() {
   codexState = await window.promptBattle.codexStatus().catch(() => ({ loggedIn: false, detail: '' }));
   renderAiOptions();
@@ -192,7 +201,7 @@ async function refreshGrokStatus() {
   grokState = await window.promptBattle.grokStatus().catch(() => ({ loggedIn: false, detail: '' }));
   renderAiOptions();
 }
-const AI_LABEL = { claude: '🤖 Claude', codex: '⚡ Codex', grok: '✦ Grok' };
+const AI_LABEL = { claude: '🤖 Claude', codex: '⚡ Codex', grok: '✦ Grok', gemini: '◆ Gemini' };
 function renderAiOptions() {
   const box = $('ai-options');
   box.textContent = '';
@@ -200,6 +209,7 @@ function renderAiOptions() {
     { id: 'claude', icon: '🤖', name: 'Claude', by: 'Anthropic · Claude Code', note: '파티 모드 · 스킬북 · MCP 지원' },
     { id: 'codex', icon: '⚡', name: 'Codex', by: 'OpenAI · Codex', note: codexState?.loggedIn ? '로그인됨' : codexState ? 'ChatGPT 로그인이 필요하다' : '확인 중...' },
     { id: 'grok', icon: '✦', name: 'Grok', by: 'xAI · Grok Build', note: grokState?.loggedIn ? '로그인됨' : grokState?.detail || '확인 중...' },
+    { id: 'gemini', icon: '◆', name: 'Gemini', by: 'Google · Gemini CLI', note: geminiState?.loggedIn ? '로그인됨' : geminiState?.detail || '확인 중...' },
   ];
   for (const t of tiles) {
     const tile = document.createElement('button');
@@ -241,17 +251,17 @@ function chooseProvider(provider) {
   renderAiOptions();
 }
 function syncEffortUi() {
-  const grok = providerOf(weaponSelect.value || chosenWeapon) === 'grok';
+  const only = weaponOnly(weaponSelect.value || chosenWeapon);
   const setup = $('skill-setup-row');
-  if (setup) setup.hidden = grok;
+  if (setup) setup.hidden = only;
   const battle = $('effort-battle-wrap');
-  if (battle) battle.hidden = grok;
+  if (battle) battle.hidden = only;
 }
 function renderBattleDetailsSummary() {
   const el = $('battle-details-summary');
   if (!el) return;
   const diff = document.querySelector('input[name="difficulty"]:checked')?.value ?? 'normal';
-  const skill = providerOf(chosenWeapon) === 'grok' ? '' : ` · ${skillName()}`;
+  const skill = weaponOnly(chosenWeapon) ? '' : ` · ${skillName()}`;
   el.textContent = `${classWeapon(chosenWeapon).name}${skill} · ${DIFFICULTY_LABEL[diff] ?? ''}`;
 }
 document.querySelectorAll('input[name="difficulty"]').forEach((r) => r.addEventListener('change', () => renderBattleDetailsSummary()));
@@ -284,6 +294,13 @@ for (const b of document.querySelectorAll('.ai-switch button')) {
       await refreshCodexStatus();
       if (!codexState?.loggedIn) {
         appendLog('⚡ Codex를 쓰려면 먼저 시작 화면(② 누구와 싸울까)에서 ChatGPT로 로그인해야 한다.', 'error');
+        return;
+      }
+    }
+    if (provider === 'gemini' && !geminiState?.loggedIn) {
+      await refreshGeminiStatus();
+      if (!geminiState?.loggedIn) {
+        appendLog(`◆ Gemini를 쓰려면 먼저 Gemini CLI를 설치하고 로그인해야 한다. ${geminiState?.detail ?? ''}`, 'error');
         return;
       }
     }
@@ -398,6 +415,7 @@ async function loadSetup() {
   petDefs = info.pets ?? [];
   refreshCodexStatus();
   refreshGrokStatus();
+  refreshGeminiStatus();
   prestigeLevel = info.prestigeLevel ?? prestigeLevel;
   todayDungeon = info.daily ?? null;
   rosterNames = info.rosterNames ?? [];
@@ -759,11 +777,14 @@ function newBubble() {
   b.push = (text) => {
     b.target += text;
     typingBehind.add(b);
-    if (!b.raf) b.raf = requestAnimationFrame(frame);
+    if (document.hidden) b.flush(); // no frames come while hidden: catch up at once
+    else if (!b.raf) b.raf = requestAnimationFrame(frame);
   };
   function frame() {
     const backlog = b.target.length - b.shown;
-    b.shown += Math.max(1, Math.ceil(backlog / 25));
+    // Hidden (another app in front, minimized): no animation frames arrive, and
+    // waiting on them would hold every battle event behind this bubble.
+    b.shown = document.hidden ? b.target.length : b.shown + Math.max(1, Math.ceil(backlog / 25));
     render(b.shown >= b.target.length);
     if (b.shown < b.target.length) b.raf = requestAnimationFrame(frame);
     else {
@@ -778,8 +799,17 @@ function newBubble() {
     b.closing = true;
     if (!b.raf) finish();
   };
+  b.flush = () => {
+    cancelAnimationFrame(b.raf);
+    b.raf = 0;
+    frame();
+  };
   return b;
 }
+// The window went to the background mid-typing: finish what's pending now.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) for (const b of [...typingBehind]) b.flush();
+});
 function liveAppend(text) {
   if (!live) live = newBubble();
   live.push(text);
@@ -2761,7 +2791,11 @@ async function saveClaude(patch) {
 
 // Effort is picked as the hero class's skill: low → max = weakest → strongest.
 const skillOf = (level) => heroClass()?.skills?.[level] ?? { name: level, text: '' };
-const skillName = () => skillOf(claudeSettings.effort).name;
+// Grok and Gemini have no effort setting: the weapon's tier names the skill.
+const skillName = () => {
+  const w = weaponSelect.value || chosenWeapon;
+  return skillOf(weaponOnly(w) ? ['low', 'medium', 'high', 'max'][tierIndex(w)] ?? 'medium' : claudeSettings.effort).name;
+};
 function renderEffortSelects() {
   if (!speedInfo) return;
   const select = $('effort-battle');

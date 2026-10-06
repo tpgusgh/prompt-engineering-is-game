@@ -10,7 +10,11 @@ test('each AI\'s weapons are ordered weakest to strongest by multiplier', () => 
 });
 
 test('weapons are model families (no version numbers: the latest one is always used), Claude and Codex in matching tiers', () => {
-  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable', 'codex:luna', 'codex:terra', 'codex:sol', 'codex:astra', 'grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova']);
+  assert.deepEqual(WEAPONS.map((w) => w.model), ['haiku', 'sonnet', 'opus', 'fable', 'codex:luna', 'codex:terra', 'codex:sol', 'codex:astra', 'grok:spark', 'grok:kindle', 'grok:flare', 'grok:nova', 'gemini:flash-lite', 'gemini:flash', 'gemini:auto', 'gemini:pro']);
+  assert.equal(sameTierOn('opus', 'gemini'), 'gemini:auto');
+  assert.equal(sameTierOn('gemini:flash-lite', 'grok'), 'grok:spark');
+  assert.equal(providerOf('gemini:flash-lite'), 'gemini');
+  assert.equal(getWeapon('gemini:flash').multiplier, getWeapon('sonnet').multiplier);
   assert.equal(sameTierOn('opus', 'codex'), 'codex:sol');
   assert.equal(sameTierOn('codex:luna', 'claude'), 'haiku');
   assert.equal(sameTierOn('sonnet', 'claude'), 'sonnet');

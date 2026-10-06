@@ -5,12 +5,12 @@
 // One account, two models. The four weapon tiers (see src/weapons.ts) are
 // grok-4.6 at low/high effort, then grok-4.7 at medium/high. The weapon is
 // the effort — the hero's skill picker does not stack on top.
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { findBin, runJsonLines } from './cli-proc.ts';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline';
 import type { AgentEvent, TurnResult } from './agent.ts';
 
 export const GROK_EFFORTS = ['low', 'medium', 'high'] as const;
@@ -28,37 +28,7 @@ export const grokPath = () => process.env.PROMPTBATTLE_GROK_EXECUTABLE;
 export function grokBin(): string | undefined {
   const fromEnv = grokPath();
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
-  // Windows: npm-style installs are grok.cmd shims, not only grok.exe.
-  const names = process.platform === 'win32' ? ['grok.exe', 'grok.cmd', 'grok.bat'] : ['grok'];
-  const dirs = [path.join(os.homedir(), '.grok', 'bin'), ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean)];
-  return dirs.flatMap((dir) => names.map((name) => path.join(dir, name))).find((file) => fs.existsSync(file));
-}
-
-// A .cmd/.bat shim only runs through cmd.exe. The arguments are paths, model
-// names and flags (the prompt goes in a file), and a Windows path can't hold
-// a double quote, so quoting each one is enough.
-function command(bin: string, args: string[]): [string, string[], { windowsVerbatimArguments?: boolean }] {
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
-    return ['cmd.exe', ['/d', '/s', '/c', `"${[bin, ...args].map((a) => `"${a}"`).join(' ')}"`], { windowsVerbatimArguments: true }];
-  }
-  return [bin, args, {}];
-}
-
-// Stop grok and everything it started (test runs, dev servers): the process
-// group on macOS/Linux (SIGTERM, then SIGKILL), the whole tree on Windows.
-function killTree(pid: number | undefined, hard = false) {
-  if (!pid) return;
-  if (process.platform === 'win32') {
-    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
-    return;
-  }
-  try {
-    process.kill(-pid, hard ? 'SIGKILL' : 'SIGTERM');
-  } catch {
-    try {
-      process.kill(pid, hard ? 'SIGKILL' : 'SIGTERM');
-    } catch {}
-  }
+  return findBin('grok', [path.join(os.homedir(), '.grok', 'bin')]);
 }
 
 function authFile(): string {
@@ -191,40 +161,13 @@ export async function runGrokTurn(
     '--cwd', cwd, '-m', tune.model, '--effort', tune.effort,
     ...(sessionId ? ['-r', sessionId] : []),
   ];
-  let code = 1;
-  let stderr = '';
-  let spawnError: NodeJS.ErrnoException | undefined;
+  let run;
   try {
-    const [file, argv, extra] = command(bin, args);
-    // Its own process group (detached), so a stop takes its commands down too.
-    const child = spawn(file, argv, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true, ...extra });
-    child.stderr.on('data', (chunk) => { stderr = (stderr + String(chunk)).slice(-4000); });
-    const lines = readline.createInterface({ input: child.stdout });
-    lines.on('line', (line) => {
-      try { mapGrokEvent(JSON.parse(line), state, (e) => onEvent?.(e)); } catch { /* a non-JSON line is not an event */ }
-    });
-    let hardKill: NodeJS.Timeout | undefined;
-    const stop = () => {
-      killTree(child.pid);
-      hardKill = setTimeout(() => killTree(child.pid, true), 2000);
-    };
-    if (signal?.aborted) stop();
-    else signal?.addEventListener('abort', stop, { once: true });
-    code = await new Promise((resolve) => {
-      child.on('error', (err) => {
-        spawnError = err;
-        resolve(1);
-      });
-      // 'exit', not only 'close': a grandchild holding stdout open must not hang the turn.
-      child.on('exit', (status) => resolve(status ?? 1));
-      child.on('close', (status) => resolve(status ?? 1));
-    });
-    clearTimeout(hardKill);
-    signal?.removeEventListener('abort', stop);
-    lines.close();
+    run = await runJsonLines(bin, args, { cwd, signal, onEvent: (event) => mapGrokEvent(event, state, (e) => onEvent?.(e)) });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+  const { code, stderr, spawnError } = run;
   if (signal?.aborted) {
     return { summary: (state.last ?? state.text).trim(), filesChanged: [...state.files], commandsRun: state.commands, interrupted: true, ...(state.ended && state.sessionId ? { sessionId: state.sessionId } : {}) };
   }

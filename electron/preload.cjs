@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('promptBattle', {
   codexStatus: () => ipcRenderer.invoke('codex-status'),
   codexLogin: () => ipcRenderer.invoke('codex-login'),
   grokStatus: () => ipcRenderer.invoke('grok-status'),
+  geminiStatus: () => ipcRenderer.invoke('gemini-status'),
   grokLogin: () => ipcRenderer.invoke('grok-login'),
   skillSave: (skill) => ipcRenderer.invoke('skill-save', skill),
   skillDelete: (name) => ipcRenderer.invoke('skill-delete', name),

@@ -32,6 +32,7 @@ import type { Difficulty } from '../src/monsters.ts';
 import { WEAPONS, DEFAULT_WEAPON_ID, getWeapon, providerOf, type Provider } from '../src/weapons.ts';
 import { runCodexTurn, codexModels, codexLoginStatus, codexLogin } from '../src/codex.ts';
 import { runGrokTurn, grokLoginStatus, grokLogin } from '../src/grok.ts';
+import { runGeminiTurn, geminiLoginStatus } from '../src/gemini.ts';
 import { ITEMS, BOSS_ITEMS } from '../src/items.ts';
 import { STATS, STAT_MAX_LEVEL } from '../src/stats.ts';
 import { SWORD_MAX_LEVEL } from '../src/forge.ts';
@@ -626,17 +627,18 @@ ipcMain.handle(
     };
     // Claude and Codex each keep their own session; switching AI hands the new
     // one what was said since it last worked (the files are shared anyway).
-    const sessions: Record<Provider, string | undefined> = { claude: undefined, codex: undefined, grok: undefined };
+    const sessions: Record<Provider, string | undefined> = { claude: undefined, codex: undefined, grok: undefined, gemini: undefined };
     if (options.sessionId?.startsWith('codex:')) sessions.codex = options.sessionId.slice('codex:'.length);
     else if (options.sessionId?.startsWith('grok:')) sessions.grok = options.sessionId.slice('grok:'.length);
+    else if (options.sessionId?.startsWith('gemini:')) sessions.gemini = options.sessionId.slice('gemini:'.length);
     else sessions.claude = options.sessionId;
     let lastReturned: string | undefined = options.sessionId;
     const convo: { provider: Provider; role: 'user' | 'assistant'; text: string }[] = [];
-    const seen: Record<Provider, number> = { claude: 0, codex: 0, grok: 0 };
+    const seen: Record<Provider, number> = { claude: 0, codex: 0, grok: 0, gemini: 0 };
     const providersUsed = new Set<Provider>();
     let walletWrites: Promise<unknown> = Promise.resolve();
     runBestCpm = 0;
-    const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex', grok: 'Grok' };
+    const NAME: Record<Provider, string> = { claude: 'Claude', codex: 'Codex', grok: 'Grok', gemini: 'Gemini' };
     const handoff = (provider: Provider) => {
       const missed = convo.slice(seen[provider]).filter((e) => e.provider !== provider);
       if (!missed.length) return '';
@@ -663,7 +665,7 @@ ipcMain.handle(
       else if (event.type === 'agentSummary') folder.history = appendHistory(folder.history, { role: 'assistant', text: event.summary });
       else if (event.type === 'agentError') folder.history = appendHistory(folder.history, { role: 'assistant', text: `(오류) ${event.error}` });
       else if (event.type === 'sessionSaved') {
-        if (!event.sessionId.startsWith('codex:') && !event.sessionId.startsWith('grok:')) folder.sessionId = event.sessionId; // the folder's Claude session
+        if (!/^(codex|grok|gemini):/.test(event.sessionId)) folder.sessionId = event.sessionId; // the folder's Claude session
       }
       else if (event.type === 'sessionReset') delete folder.sessionId;
       else if (event.type === 'sessionSwitched') folder.sessionId = event.sessionId;
@@ -678,7 +680,7 @@ ipcMain.handle(
         try {
           // /new (or a failed first turn) cleared the battle's session: both AIs start fresh.
           if (sessionId === undefined && lastReturned !== undefined) {
-            sessions.claude = sessions.codex = sessions.grok = undefined;
+            sessions.claude = sessions.codex = sessions.grok = sessions.gemini = undefined;
             convo.length = 0;
           }
           const provider = providerOf(currentModel);
@@ -695,6 +697,10 @@ ipcMain.handle(
                 })
               : provider === 'grok' && (currentClaude ?? profile.claude).safeMode
                 ? { summary: '', filesChanged: [], commandsRun: [], error: '안전 모드에서는 Grok을 쓸 수 없다 — Grok은 명령마다 허락을 받을 수 없다. Claude로 바꾸거나 설정에서 안전 모드를 꺼 줘.' }
+              : provider === 'gemini' && (currentClaude ?? profile.claude).safeMode
+                ? { summary: '', filesChanged: [], commandsRun: [], error: '안전 모드에서는 Gemini를 쓸 수 없다 — Gemini는 명령마다 허락을 받을 수 없다. Claude로 바꾸거나 설정에서 안전 모드를 꺼 줘.' }
+              : provider === 'gemini'
+                ? await runGeminiTurn(withTextAttachments(full, sent, 'Gemini'), cwd, sessions.gemini, onEvent, { model: currentModel, signal: stop.signal })
               : provider === 'grok'
                 ? await runGrokTurn(withTextAttachments(full, sent, 'Grok'), cwd, sessions.grok, onEvent, { model: currentModel, signal: stop.signal })
                 : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
@@ -777,7 +783,7 @@ ipcMain.handle(
       startFloor: Math.max(0, Math.floor(options.startFloor || 0)),
       getDamageMultiplier: () => {
         const weapon = getWeapon(currentModel);
-        if (weapon.provider === 'grok') return weapon.multiplier;
+        if (weapon.provider === 'grok' || weapon.provider === 'gemini') return weapon.multiplier; // the weapon is the whole setting
         return weapon.multiplier * ATTACK_SPEED[(currentClaude ?? profile.claude).effort].multiplier;
       },
       // Hero stats are per-run: fresh each game, restored only from a save slot.
@@ -888,6 +894,7 @@ ipcMain.handle('title-wear', (_event, id: unknown) => titleChange((p) => wearTit
 ipcMain.handle('codex-status', async () => ({ ...(await codexLoginStatus()), models: await codexModels() }));
 ipcMain.handle('codex-login', () => codexLogin());
 ipcMain.handle('grok-status', () => grokLoginStatus());
+ipcMain.handle('gemini-status', () => geminiLoginStatus());
 ipcMain.handle('grok-login', () => grokLogin());
 ipcMain.handle('skills-list', () => (currentCwd ? listSkills(currentCwd) : []));
 ipcMain.handle('skill-save', (_event, skill: { name: string; description: string; body: string }) =>
