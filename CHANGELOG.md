@@ -1,9 +1,9 @@
 # 변경 내역 / Changelog
 
-## v0.42.0 — 2026-10-06
+## v0.43.0 — 2026-10-06
 
 ### 새 기능
-- **✦ Grok** (기여: @Stephan1226): xAI Grok Build를 세 번째 AI로. 무기 4단계, Claude·Codex와 대화를 이어받는다
+- **✦ Grok** (기여: @Stephan1226): xAI Grok Build를 세 번째 AI로. 무기 4단계, Claude·Codex와 대화를 이어받는다. v0.42.0 릴리스에는 설치 파일이 올라가지 않아, 이번이 Grok이 들어간 첫 배포다
 - **◆ Gemini**: Google Gemini CLI를 네 번째 AI로. 무기는 Gemini CLI의 별칭 Flash-Lite · Flash · Auto · Pro라 늘 최신 모델. 시작 화면 ②와 전투 중 스위치에서 고르고, 다른 AI와 나눈 대화를 넘겨받는다. 컴퓨터에 Gemini CLI를 설치하고 한 번 Google로 로그인(또는 GEMINI_API_KEY)
 
 ### 버그 수정
