@@ -28,3 +28,38 @@ test('Windows: listening ports matched to processes whose command line points in
   assert.deepEqual(parseWindowsListen(json, 'c:/code/app'), [{ pid: 40, name: 'node.exe', ports: [5173], command: '"node" C:\\Code\\App\\node_modules\\vite\\bin\\vite.js' }]);
   assert.deepEqual(parseWindowsListen('not json', 'c:/x'), []);
 });
+
+import { listServers, killServer, restartServer, serverLog, parseLsofCwd as parseFd } from '../src/servers.ts';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+
+test('a server started like the AI does (detached, output to a log) shows its log and can be restarted', { skip: process.platform === 'win32' }, async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'srv-'));
+  await writeFile(path.join(dir, 'server.js'), "require('node:http').createServer((q, r) => r.end('ok')).listen(0, () => console.log('listening ' + process.pid));");
+  const log = path.join(dir, 'server.log');
+  const fd = fs.openSync(log, 'a');
+  spawn('/bin/sh', ['-c', 'node server.js'], { cwd: dir, detached: true, stdio: ['ignore', fd, fd] }).unref();
+  let list: Awaited<ReturnType<typeof listServers>> = [];
+  for (let i = 0; i < 40 && !(Array.isArray(list) && list.length); i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    list = await listServers(dir);
+  }
+  assert.ok(Array.isArray(list) && list.length === 1, 'found');
+  const s = list[0];
+  assert.equal(s.log, fs.realpathSync(log));
+  assert.match(await serverLog(s), /listening/);
+  const again = await restartServer(s);
+  assert.ok(again, 'restarted');
+  let after: Awaited<ReturnType<typeof listServers>> = [];
+  for (let i = 0; i < 40 && !(Array.isArray(after) && after.length && after[0].pid !== s.pid); i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    after = await listServers(dir);
+  }
+  assert.ok(Array.isArray(after) && after.length === 1 && after[0].pid !== s.pid, 'a new process serves');
+  assert.equal(((await serverLog(after[0])).match(/listening/g) ?? []).length, 2, 'appends to the same log');
+  await killServer(after[0].pid);
+  void parseFd;
+});

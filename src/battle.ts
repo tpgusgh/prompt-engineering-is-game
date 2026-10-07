@@ -1086,6 +1086,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         turnRunning = false;
       }
       runStats.tokens += turn.tokensUsed ?? 0;
+      modelRecord(floorModel).tokens = (modelRecord(floorModel).tokens ?? 0) + (turn.tokensUsed ?? 0);
       runStats.longestTurnMs = Math.max(runStats.longestTurnMs, Date.now() - turnStartedAt);
       // Boss rule not met: the turn's work hits are undone and the closing
       // blow doesn't land.
@@ -1128,6 +1129,7 @@ export async function runDungeon(deps: BattleDeps): Promise<BattleSummary> {
         if (chests) overkill += Math.max(0, damage - hp);
         hp = Math.max(0, hp - damage);
         runStats.bestHit = Math.max(runStats.bestHit, damage);
+        modelRecord(floorModel).bestHit = Math.max(modelRecord(floorModel).bestHit ?? 0, damage);
         if (crit) runStats.crits += 1;
         deps.onBattleEvent({ type: 'attack', damage, crit, matchedKeywords, ...(base.short ? { short: true } : {}) });
         if (turn.summary) deps.onBattleEvent({ type: 'agentSummary', summary: turn.summary });

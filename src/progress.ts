@@ -8,6 +8,8 @@ const TOTAL_MONSTERS = MONSTER_COUNT * ROSTER_COUNT;
 export interface ModelRecord {
   engaged: number; // floors fought with this model
   cleared: number; // floors won with it
+  tokens?: number; // tokens its turns used
+  bestHit?: number; // its hardest closing blow
 }
 
 export interface RunStats {
@@ -66,7 +68,12 @@ export function mergeRecords(records: Records, run: RunStats, extra: { swordLeve
   }
   for (const [model, r] of Object.entries(run.byModel)) {
     const prev = out.byModel[model] ?? { engaged: 0, cleared: 0 };
-    out.byModel[model] = { engaged: prev.engaged + r.engaged, cleared: prev.cleared + r.cleared };
+    out.byModel[model] = {
+      engaged: prev.engaged + r.engaged,
+      cleared: prev.cleared + r.cleared,
+      tokens: (prev.tokens ?? 0) + (r.tokens ?? 0),
+      bestHit: Math.max(prev.bestHit ?? 0, r.bestHit ?? 0),
+    };
   }
   out.runs += 1;
   out.maxSwordLevel = Math.max(out.maxSwordLevel, extra.swordLevel);
@@ -196,7 +203,9 @@ export function coerceRecords(value: unknown): Records {
   }
   if (v.byModel && typeof v.byModel === 'object') {
     for (const [model, r] of Object.entries(v.byModel as Record<string, any>)) {
-      if (Number.isFinite(r?.engaged) && Number.isFinite(r?.cleared)) out.byModel[model] = { engaged: r.engaged, cleared: r.cleared };
+      if (Number.isFinite(r?.engaged) && Number.isFinite(r?.cleared)) {
+        out.byModel[model] = { engaged: r.engaged, cleared: r.cleared, ...(Number.isFinite(r.tokens) ? { tokens: r.tokens } : {}), ...(Number.isFinite(r.bestHit) ? { bestHit: r.bestHit } : {}) };
+      }
     }
   }
   if (Array.isArray(v.seen)) out.seen = v.seen.filter((i): i is number => Number.isInteger(i) && i >= 0);

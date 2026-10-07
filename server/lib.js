@@ -54,6 +54,7 @@ function readRunToken(serverSecret, token) {
 
 // A title bought in the game's 칭호 상점: just its id ("bug-hunter").
 const cleanBadge = (v) => (typeof v === 'string' && /^[a-z0-9-]{1,24}$/.test(v) ? v : undefined);
+const AIS = ['claude', 'codex', 'grok', 'gemini'];
 
 const cleanName = (name) =>
   typeof name === 'string' ? name.normalize('NFC').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 16) : '';
@@ -155,6 +156,7 @@ export async function handle({ method, query = {}, body = {}, headers = {}, ip =
     level: isCount(body.level, 100_000) ? body.level : 1,
     prestige: isCount(body.prestige, 1000) ? body.prestige : 0,
     ...(cleanBadge(body.badge) ? { badge: cleanBadge(body.badge) } : {}),
+    ...(AIS.includes(body.ai) ? { ai: body.ai } : {}),
     ...(body.daily !== undefined ? { daily: body.daily } : {}),
     at: now,
   });

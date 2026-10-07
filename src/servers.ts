@@ -2,7 +2,8 @@
 // any process listening on a TCP port whose working directory is inside the
 // project folder (Windows: whose command line points into it). The player
 // can open one in the browser or force it off.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -14,6 +15,10 @@ export interface Listening {
 }
 export interface Server extends Listening {
   command: string;
+  // macOS/Linux: where it runs, and the file its output goes to (if any) —
+  // what a restart needs, and what the log view shows.
+  cwd?: string;
+  log?: string;
 }
 
 // `lsof -nP -iTCP -sTCP:LISTEN -Fpcn`: p<pid> / c<command> / n<host:port> lines.
@@ -91,6 +96,10 @@ export async function listServers(folder: string): Promise<Server[] | { error: s
     }
     // lsof exits 1 when it finds nothing; its output is still what we want.
     const out = async (args: string[]) => (await run('lsof', args, { maxBuffer: 8 << 20 }).catch((e) => { if (e.code === 'ENOENT') throw e; return { stdout: String(e.stdout ?? '') }; })).stdout;
+    // lsof reports resolved paths (/private/var/... on macOS): compare like with like.
+    try {
+      folder = fs.realpathSync(folder);
+    } catch {}
     const listen = parseLsofListen(await out(['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpcn']));
     if (!listen.length) return [];
     const cwd = parseLsofCwd(await out(['-a', '-d', 'cwd', '-p', listen.map((l) => l.pid).join(','), '-Fpn']));
@@ -98,7 +107,13 @@ export async function listServers(folder: string): Promise<Server[] | { error: s
     if (!mine.length) return [];
     const { stdout } = await run('ps', ['-o', 'pid=,command=', '-p', mine.map((s) => s.pid).join(',')]).catch((e) => ({ stdout: String(e.stdout ?? '') }));
     const cmd = new Map(stdout.split('\n').map((l) => l.trim().match(/^(\d+)\s+(.*)$/)).filter((m): m is RegExpMatchArray => !!m).map((m) => [Number(m[1]), m[2]]));
-    return mine.map((s) => ({ ...s, command: cmd.get(s.pid) ?? s.name }));
+    // fd 1 = where its output goes; a log only if that's a regular file.
+    const outputs = parseLsofCwd(await out(['-a', '-d', '1', '-p', mine.map((s) => s.pid).join(','), '-Fpn']));
+    return mine.map((s) => {
+      const log = outputs.get(s.pid);
+      const isFile = !!log && log.startsWith('/') && !log.startsWith('/dev/') && fs.existsSync(log) && fs.statSync(log).isFile();
+      return { ...s, command: cmd.get(s.pid) ?? s.name, cwd: cwd.get(s.pid), ...(isFile ? { log } : {}) };
+    });
   } catch (err) {
     const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
     return { error: missing ? '이 컴퓨터에서는 서버 목록을 읽을 수 없다 (lsof 없음)' : `서버 목록을 읽지 못했다: ${err instanceof Error ? err.message : err}` };
@@ -133,4 +148,42 @@ export async function killServer(pid: number): Promise<boolean> {
     await new Promise((r) => setTimeout(r, 200));
   }
   return !alive(pid);
+}
+
+// The last lines the server wrote (its stdout file), for the panel.
+export async function serverLog(server: Server, lines = 30): Promise<string> {
+  if (!server.log) return '';
+  try {
+    const fh = await fs.promises.open(server.log, 'r');
+    try {
+      const { size } = await fh.stat();
+      const start = Math.max(0, size - 16 * 1024);
+      const buf = Buffer.alloc(size - start);
+      await fh.read(buf, 0, buf.length, start);
+      return buf.toString('utf8').split('\n').slice(-lines - 1).join('\n').trim();
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return '';
+  }
+}
+
+// Stop it and run the same command again where it ran, output appended to
+// the same log. ponytail: the command comes back from `ps` as one string, so
+// an argument with spaces inside quotes may not survive; fine for dev servers.
+export async function restartServer(server: Server): Promise<boolean> {
+  if (process.platform === 'win32' || !server.cwd || !server.command) return false;
+  await killServer(server.pid);
+  const out = server.log ? fs.openSync(server.log, 'a') : 'ignore';
+  try {
+    const child = spawn('/bin/sh', ['-c', server.command], { cwd: server.cwd, detached: true, stdio: ['ignore', out, out] });
+    child.on('error', () => {});
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (typeof out === 'number') fs.closeSync(out);
+  }
 }

@@ -12,7 +12,7 @@ import { GODS, DEMONS } from '../src/contracts.ts';
 import { toAttachment, MAX_ATTACHMENTS, type Attachment } from '../src/attachments.ts';
 import { loadRankingConfig, startRankedRun, submitScore, fetchRanking, scoreFor, type RankedRun } from '../src/ranking.ts';
 import { DIFFICULTY_MULTIPLIER, DIFFICULTY_REWARD } from '../src/monsters.ts';
-import { listServers, killServer } from '../src/servers.ts';
+import { listServers, killServer, restartServer, serverLog, type Server } from '../src/servers.ts';
 import { runAgentTurn, fetchPlanUsage, fetchClaudeCapabilities, fetchAccount, listFolderSessions, loadSessionHistory } from '../src/agent.ts';
 import { ATTACK_SPEED, EFFORT_LEVELS, coerceClaudeSettings, parseMcpEntry, authEnv, type ClaudeSettings } from '../src/claude-settings.ts';
 import os from 'node:os';
@@ -255,6 +255,12 @@ function showcaseRolls(): { random?: () => number; shopRandom?: () => number } {
 
 const rankingConfig = loadRankingConfig(path.join(__dirname, 'ranking-config.json'));
 let pendingRank: Omit<RankedRun, 'name'> | null = null;
+// The AI that fought most floors of a run (shown by the name in the ranking).
+const mainAi = (byModel: Record<string, { engaged: number }>) => {
+  const floors: Partial<Record<Provider, number>> = {};
+  for (const [model, r] of Object.entries(byModel)) floors[providerOf(model)] = (floors[providerOf(model)] ?? 0) + r.engaged;
+  return (Object.entries(floors) as [Provider, number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
+};
 ipcMain.handle('ranking-list', async (_event, board: unknown) => {
   if (!rankingConfig) return { error: '랭킹 서버가 설정되지 않은 빌드다' };
   const which = board === 'weekly' || board === 'daily' ? board : 'all';
@@ -367,14 +373,17 @@ ipcMain.handle('pick-folder', async () => {
 // file editor is allowed to write.
 let currentCwd: string | null = null;
 // 🖥 서버 (src/servers.ts): only a pid from the latest listing can be killed.
-let knownServers = new Set<number>();
+let knownServers = new Map<number, Server>();
 ipcMain.handle('servers-list', async () => {
   if (!currentCwd) return [];
   const list = await listServers(currentCwd);
-  if (Array.isArray(list)) knownServers = new Set(list.map((s) => s.pid));
+  if (Array.isArray(list)) knownServers = new Map(list.map((s) => [s.pid, s]));
   return list;
 });
-ipcMain.handle('servers-kill', (_event, pid: unknown) => (typeof pid === 'number' && knownServers.has(pid) ? killServer(pid) : false));
+const known = (pid: unknown) => (typeof pid === 'number' ? knownServers.get(pid) : undefined);
+ipcMain.handle('servers-kill', (_event, pid: unknown) => (known(pid) ? killServer(pid as number) : false));
+ipcMain.handle('servers-log', (_event, pid: unknown) => (known(pid) ? serverLog(known(pid)!) : ''));
+ipcMain.handle('servers-restart', (_event, pid: unknown) => (known(pid) ? restartServer(known(pid)!) : false));
 ipcMain.handle('open-local', (_event, port: unknown) =>
   Number.isInteger(port) && (port as number) > 0 && (port as number) < 65536 ? shell.openExternal(`http://localhost:${port}`) : undefined,
 );
@@ -688,6 +697,22 @@ ipcMain.handle(
           const sent = attachments;
           attachments = [];
           const full = handoff(provider) + prompt;
+          // 안전 모드: a risky shell command waits for the player's OK (Claude and Gemini).
+          const safeGuard = (currentClaude ?? profile.claude).safeMode
+            ? (command: string, danger: string) =>
+                new Promise<boolean>((resolve) => {
+                  pendingAsk?.(null);
+                  const done = (answers: Record<string, string> | null) => resolve(answers?.danger === 'allow');
+                  pendingAsk = done;
+                  send({ type: 'askDanger', command, danger });
+                  stop.signal.addEventListener('abort', () => {
+                    if (pendingAsk !== done) return;
+                    pendingAsk = null;
+                    resolve(false);
+                    send({ type: 'askClosed' });
+                  }, { once: true });
+                })
+            : undefined;
           const turn =
             provider === 'codex'
               ? await runCodexTurn(withTextAttachments(full, sent, 'Codex'), cwd, sessions.codex, onEvent, {
@@ -697,31 +722,13 @@ ipcMain.handle(
                 })
               : provider === 'grok' && (currentClaude ?? profile.claude).safeMode
                 ? { summary: '', filesChanged: [], commandsRun: [], error: '안전 모드에서는 Grok을 쓸 수 없다 — Grok은 명령마다 허락을 받을 수 없다. Claude로 바꾸거나 설정에서 안전 모드를 꺼 줘.' }
-              : provider === 'gemini' && (currentClaude ?? profile.claude).safeMode
-                ? { summary: '', filesChanged: [], commandsRun: [], error: '안전 모드에서는 Gemini를 쓸 수 없다 — Gemini는 명령마다 허락을 받을 수 없다. Claude로 바꾸거나 설정에서 안전 모드를 꺼 줘.' }
               : provider === 'gemini'
-                ? await runGeminiTurn(withTextAttachments(full, sent, 'Gemini'), cwd, sessions.gemini, onEvent, { model: currentModel, signal: stop.signal })
+                ? await runGeminiTurn(withTextAttachments(full, sent, 'Gemini'), cwd, sessions.gemini, onEvent, { model: currentModel, signal: stop.signal, guard: safeGuard })
               : provider === 'grok'
                 ? await runGrokTurn(withTextAttachments(full, sent, 'Grok'), cwd, sessions.grok, onEvent, { model: currentModel, signal: stop.signal })
                 : await runAgentTurn(full, cwd, sessions.claude, onEvent, {
                   model: currentModel, party: currentParty, claude: currentClaude ?? undefined, env: claudeEnv(), signal: stop.signal, attachments: sent,
-                  ...((currentClaude ?? profile.claude).safeMode
-                    ? {
-                        guard: (command: string, danger: string) =>
-                          new Promise<boolean>((resolve) => {
-                            pendingAsk?.(null);
-                            const done = (answers: Record<string, string> | null) => resolve(answers?.danger === 'allow');
-                            pendingAsk = done;
-                            send({ type: 'askDanger', command, danger });
-                            stop.signal.addEventListener('abort', () => {
-                              if (pendingAsk !== done) return;
-                              pendingAsk = null;
-                              resolve(false);
-                              send({ type: 'askClosed' });
-                            }, { once: true });
-                          }),
-                      }
-                    : {}),
+                  ...(safeGuard ? { guard: safeGuard } : {}),
                   ...(planMode
                     ? {
                         reviewPlan: (plan: string) =>
@@ -859,7 +866,7 @@ ipcMain.handle(
     const startFloor = Math.min(summary.nextFloor, Math.max(0, Math.floor(options.startFloor || 0)));
     pendingRank =
       runToken && rankScore > 0
-        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, ...(cleanBadge(updated.badge) ? { badge: updated.badge } : {}), ...(day ? { daily: day.date } : {}) }
+        ? { runToken, ...rankStats, startFloor, theme: options.themeId, heroClass, level: updated.level, prestige: updated.prestige ?? 0, ...(cleanBadge(updated.badge) ? { badge: updated.badge } : {}), ...(mainAi(summary.runStats.byModel) ? { ai: mainAi(summary.runStats.byModel) } : {}), ...(day ? { daily: day.date } : {}) }
         : null;
     const rankReason = !rankingConfig?.secret ? '이 빌드는 랭킹 등록을 지원하지 않는다' : !runToken ? '랭킹 서버에 연결하지 못했다' : rankScore > 0 ? '' : '점수가 0점이라 등록할 수 없다 — 몬스터를 쓰러뜨려 보자';
     const ranking = summary.defeated ? { submittable: Boolean(pendingRank), score: rankScore, reason: rankReason } : null;

@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('promptBattle', {
   setPlanMode: (on) => ipcRenderer.invoke('set-plan-mode', on),
   serversList: () => ipcRenderer.invoke('servers-list'),
   serversKill: (pid) => ipcRenderer.invoke('servers-kill', pid),
+  serversLog: (pid) => ipcRenderer.invoke('servers-log', pid),
+  serversRestart: (pid) => ipcRenderer.invoke('servers-restart', pid),
   openLocal: (port) => ipcRenderer.invoke('open-local', port),
   onSaveAndClose: (callback) => ipcRenderer.on('save-and-close', () => callback()),
   saveAndCloseDone: (ok) => ipcRenderer.send('save-and-close-done', ok),

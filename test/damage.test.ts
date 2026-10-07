@@ -52,3 +52,10 @@ test('under 50 characters the criteria count half and never crit (no keyword stu
   assert.equal(stuffed.damage, Math.round(12 * (1 + 4 * 0.25)));
   assert.equal(stuffed.short, true);
 });
+
+test('Japanese prompts meet the criteria too', () => {
+  const r = calculateDamage('src/app.tsのlogin()が空の値で落ちる。他のファイルは触らずに、なぜそうなるか説明してから段階的に直して、テストで確認して。例えば空文字ならエラーメッセージ');
+  assert.deepEqual(r.matchedKeywords, ['대상', '제약', '검증', '단계', '이유', '예시', '엣지 케이스']);
+  assert.deepEqual(calculateDamage('まず原因を調べて、次に修正してください。必ず既存の動作は維持すること').matchedKeywords, ['제약', '단계']);
+  assert.deepEqual(calculateDamage('境界値と例外処理、nullのケースも見て').matchedKeywords, ['엣지 케이스']);
+});

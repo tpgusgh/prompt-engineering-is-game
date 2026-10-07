@@ -21,11 +21,11 @@ export const WEAPONS: Weapon[] = [
   { model: 'codex:terra', name: '장검', flavor: '균형 잡힌 Codex Terra', multiplier: 1, provider: 'codex' },
   { model: 'codex:sol', name: '마검', flavor: '코딩의 일꾼 Codex Sol', multiplier: 1.25, provider: 'codex' },
   { model: 'codex:astra', name: '전설의 성검', flavor: '최전선의 Codex Astra', multiplier: 1.5, provider: 'codex' },
-  // Grok (src/grok.ts): grok-4.6 fills the two light tiers, grok-4.7 the two heavy ones. Effort is the weapon.
-  { model: 'grok:spark', name: '단검', flavor: '가벼운 Grok 4.6 · 낮은 effort', multiplier: 0.8, provider: 'grok' },
-  { model: 'grok:kindle', name: '장검', flavor: 'Grok 4.6 · 높은 effort', multiplier: 1, provider: 'grok' },
-  { model: 'grok:flare', name: '마검', flavor: 'Grok 4.7 · 보통 effort', multiplier: 1.25, provider: 'grok' },
-  { model: 'grok:nova', name: '전설의 성검', flavor: 'Grok 4.7 · 높은 effort', multiplier: 1.5, provider: 'grok' },
+  // Grok (src/grok.ts): the lighter model fills the two light tiers, the stronger one the two heavy ones (GROK_TUNE). Effort is the weapon.
+  { model: 'grok:spark', name: '단검', flavor: '가볍고 빠른 Grok · 낮은 effort', multiplier: 0.8, provider: 'grok' },
+  { model: 'grok:kindle', name: '장검', flavor: '균형 잡힌 Grok · 높은 effort', multiplier: 1, provider: 'grok' },
+  { model: 'grok:flare', name: '마검', flavor: '상위 모델 Grok · 보통 effort', multiplier: 1.25, provider: 'grok' },
+  { model: 'grok:nova', name: '전설의 성검', flavor: '최상위 Grok · 높은 effort', multiplier: 1.5, provider: 'grok' },
   // Gemini (src/gemini.ts): the CLI's model aliases, each its newest model.
   { model: 'gemini:flash-lite', name: '단검', flavor: '가볍고 빠른 Gemini Flash-Lite', multiplier: 0.8, provider: 'gemini' },
   { model: 'gemini:flash', name: '장검', flavor: '균형 잡힌 Gemini Flash', multiplier: 1, provider: 'gemini' },

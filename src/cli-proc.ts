@@ -51,14 +51,14 @@ export interface CliRun {
 export async function runJsonLines(
   bin: string,
   args: string[],
-  { cwd, stdin, signal, onEvent }: { cwd: string; stdin?: string; signal?: AbortSignal; onEvent: (event: unknown) => void },
+  { cwd, stdin, signal, env, onEvent }: { cwd: string; stdin?: string; signal?: AbortSignal; env?: Record<string, string>; onEvent: (event: unknown) => void },
 ): Promise<CliRun> {
   let stderr = '';
   let spawnError: NodeJS.ErrnoException | undefined;
   const [file, argv, extra] = command(bin, args);
   const child = spawn(file, argv, {
     cwd,
-    env: process.env,
+    env: { ...process.env, ...env },
     stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
     windowsHide: true,

@@ -99,3 +99,48 @@ test('an API error blob from the real CLI comes out as its readable message', ()
   assert.equal(readableError(blob), 'API key not valid. Please pass a valid API key.');
   assert.equal(readableError('plain words'), 'plain words');
 });
+
+test('safe mode: a BeforeTool hook asks the player about risky shell commands only — via a stand-in ~/.gemini that links to the real one', { skip: !posix }, async () => {
+  // The player's own ~/.gemini: a login, sessions, and settings of their own.
+  const home = await mkdtemp(path.join(tmpdir(), 'gemini-home-'));
+  await import('node:fs/promises').then((f) => f.mkdir(path.join(home, '.gemini', 'tmp'), { recursive: true }));
+  await writeFile(path.join(home, '.gemini', 'oauth_creds.json'), '{"token":"t"}');
+  await writeFile(path.join(home, '.gemini', 'settings.json'), JSON.stringify({ security: { auth: { selectedType: 'oauth-personal' } }, hooks: { AfterTool: [{ matcher: 'x', hooks: [] }] } }));
+  const realHome = process.env.HOME;
+  process.env.HOME = home;
+  // This fake runs the configured hook the way the real CLI does: tool input as JSON on stdin, a decision as JSON on stdout.
+  await fakeGemini(`
+    const fs = require('node:fs'); const path = require('node:path'); const { execSync } = require('node:child_process');
+    const dir = path.join(process.env.GEMINI_CLI_HOME, '.gemini');
+    const settings = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+    const hook = settings.hooks.BeforeTool.find((h) => h.matcher === 'run_shell_command');
+    const ask = (command) => JSON.parse(execSync(hook.hooks[0].command, { input: JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'run_shell_command', tool_input: { command } }) }).toString());
+    fs.writeFileSync(path.join(dir, 'tmp', 'session.json'), 'saved');
+    process.stdin.resume(); process.stdin.on('end', () => {
+      const out = (o) => console.log(JSON.stringify(o));
+      out({ type: 'init', session_id: 's' });
+      out({ type: 'message', role: 'assistant', content: JSON.stringify({ auth: settings.security.auth.selectedType, keptHooks: Object.keys(settings.hooks), enabled: settings.hooksConfig.enabled, creds: fs.readFileSync(path.join(dir, 'oauth_creds.json'), 'utf8'), ls: ask('ls -la'), rm: ask('rm -rf dist'), keep: ask('rm -rf keep') }), delta: true });
+      out({ type: 'result', status: 'success', stats: { total_tokens: 1 } });
+    });`);
+  const asked: string[] = [];
+  let r;
+  try {
+    r = await runGeminiTurn('hi', tmpdir(), undefined, undefined, { model: 'gemini:flash', guard: async (command) => (asked.push(command), command.includes('keep')) });
+  } finally {
+    process.env.HOME = realHome;
+  }
+  const seen = JSON.parse(r.summary);
+  assert.equal(seen.auth, 'oauth-personal', 'the player\'s own settings still apply');
+  assert.deepEqual(seen.keptHooks.sort(), ['AfterTool', 'BeforeTool'], 'and their own hooks');
+  assert.equal(seen.enabled, true);
+  assert.equal(seen.creds, '{"token":"t"}', 'the login is the real one');
+  assert.equal(seen.ls.decision, 'allow', 'ordinary commands pass without asking');
+  assert.equal(seen.rm.decision, 'deny');
+  assert.match(seen.rm.reason, /refused/);
+  assert.equal(seen.keep.decision, 'allow');
+  assert.deepEqual(asked, ['rm -rf dist', 'rm -rf keep']);
+  const fs = await import('node:fs');
+  assert.equal(fs.readFileSync(path.join(home, '.gemini', 'tmp', 'session.json'), 'utf8'), 'saved', 'sessions land in the real ~/.gemini (resume works either way)');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.gemini', 'settings.json'), 'utf8')).hooks.BeforeTool, undefined, 'the real settings are untouched');
+  assert.equal(fs.readFileSync(path.join(home, '.gemini', 'oauth_creds.json'), 'utf8'), '{"token":"t"}', 'cleanup left the real files alone');
+});

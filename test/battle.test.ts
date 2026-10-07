@@ -821,7 +821,7 @@ test('the run reports its stats: turns, tokens, tests passed, edits, crits, best
   assert.equal(s.crits, 1);
   assert.equal(s.bestHit, 270);
   assert.equal(s.floorsCleared, 1);
-  assert.deepEqual(s.byModel, { sonnet: { engaged: 1, cleared: 1 } });
+  assert.deepEqual(s.byModel, { sonnet: { engaged: 1, cleared: 1, tokens: 500, bestHit: 270 } }, 'per model: floors, tokens, best hit');
   assert.deepEqual(s.seen, [0, 1], 'floor 0 fought, floor 1 met before quitting');
   assert.deepEqual(s.kills, { 0: 1 });
 });

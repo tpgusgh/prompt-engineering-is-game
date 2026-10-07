@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyProgress, emptyRecords, emptyRunStats, isTestCommand, dailyQuestFor, currentDaily, coerceRecords, DAILY_QUESTS,
+  applyProgress, emptyRecords, emptyRunStats, isTestCommand, dailyQuestFor, currentDaily, coerceRecords, DAILY_QUESTS, mergeRecords,
 } from '../src/progress.ts';
 
 test('isTestCommand spots common test runners, not other commands', () => {
@@ -16,7 +16,7 @@ test('records add counts, keep maxima for best hit and longest turn, and merge p
   const second = applyProgress({ records: first.records, achievements: first.achievements }, { ...run, bestHit: 30 }, { swordLevel: 0, level: 2 }, '2026-09-30');
   assert.equal(second.records.turns, 4);
   assert.equal(second.records.bestHit, 50);
-  assert.deepEqual(second.records.byModel.sonnet, { engaged: 4, cleared: 2 });
+  assert.deepEqual(second.records.byModel.sonnet, { engaged: 4, cleared: 2, tokens: 0, bestHit: 0 });
   assert.equal(second.records.runs, 2);
   assert.equal(second.records.maxSwordLevel, 1);
   assert.equal(second.records.maxLevel, 2);
@@ -74,4 +74,11 @@ test('new achievements unlock from their records; typing speed and coins held ke
     assert.ok(ACHIEVEMENTS.find((a) => a.id === id)?.done(r), id);
   }
   assert.equal(ACHIEVEMENTS.find((a) => a.id === 'typing-god')?.done({ ...r, bestTypingCpm: 699 }), false);
+});
+
+test('per-model records also keep tokens (summed) and the best hit (highest), for the per-AI records', () => {
+  const base = mergeRecords(emptyRecords(), { ...emptyRunStats(), byModel: { 'gemini:pro': { engaged: 2, cleared: 1, tokens: 500, bestHit: 80 } } }, { swordLevel: 0 } as never);
+  const next = mergeRecords(base, { ...emptyRunStats(), byModel: { 'gemini:pro': { engaged: 1, cleared: 1, tokens: 300, bestHit: 60 }, opus: { engaged: 1, cleared: 0 } } }, { swordLevel: 0 } as never);
+  assert.deepEqual(next.byModel['gemini:pro'], { engaged: 3, cleared: 2, tokens: 800, bestHit: 80 });
+  assert.deepEqual(next.byModel.opus, { engaged: 1, cleared: 0, tokens: 0, bestHit: 0 });
 });

@@ -3009,6 +3009,10 @@ function showQuest(el) {
       btn.type = 'button';
       btn.className = 'quest-choice';
       btn.textContent = text;
+      const key = document.createElement('kbd');
+      key.className = 'ask-key';
+      key.textContent = String(choices.children.length + 1);
+      btn.append(key);
       btn.addEventListener('click', () => answerQuest(text));
       choices.append(btn);
     }
@@ -3082,9 +3086,14 @@ $('quest-answer').addEventListener('keydown', (e) => {
 // a free answer. The picks go back to Claude and stay in the log as a card.
 let askQuestions = null;
 let askPicks = [];
+// The question number keys answer (the first unanswered one, or the one last touched).
+let askActive = 0;
+const askButtons = []; // per question: its option buttons
 function showAsk(questions) {
   askQuestions = Array.isArray(questions) ? questions : [];
   askPicks = askQuestions.map(() => ({ labels: new Set(), other: '' }));
+  askActive = 0;
+  askButtons.length = 0;
   $('quest-ribbon').textContent = '📜 퀘스트 — Claude가 용사의 선택을 기다린다';
   const body = $('quest-body');
   body.textContent = '';
@@ -3093,7 +3102,7 @@ function showAsk(questions) {
   $('quest-later').textContent = '건너뛰기';
   askQuestions.forEach((q, qi) => {
     const block = document.createElement('section');
-    block.className = 'ask-question';
+    block.className = `ask-question${qi === 0 ? ' active' : ''}`;
     const head = document.createElement('div');
     head.className = 'ask-head';
     const chip = document.createElement('span');
@@ -3111,7 +3120,7 @@ function showAsk(questions) {
       btn.setAttribute('aria-pressed', String(on));
     };
     const buttons = [];
-    for (const o of q.options ?? []) {
+    for (const [oi, o] of (q.options ?? []).entries()) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = `ask-option ${q.multiSelect ? 'multi' : 'single'}`;
@@ -3119,8 +3128,12 @@ function showAsk(questions) {
       label.textContent = o.label;
       const desc = document.createElement('span');
       desc.textContent = o.description ?? '';
-      btn.append(label, desc);
+      const key = document.createElement('kbd');
+      key.className = 'ask-key';
+      key.textContent = String(oi + 1);
+      btn.append(label, desc, key);
       btn.addEventListener('click', () => {
+        setAskActive(qi);
         const pick = askPicks[qi];
         if (q.multiSelect) {
           if (pick.labels.has(o.label)) pick.labels.delete(o.label);
@@ -3132,10 +3145,16 @@ function showAsk(questions) {
         }
         buttons.forEach((b, i) => mark(b, pick.labels.has(q.options[i].label)));
         renderAskSubmit();
+        // One pick answers a single-choice question: on to the next unanswered one.
+        if (!q.multiSelect) {
+          const next = askPicks.findIndex((p, i) => i > qi && !askAnswerOf(p));
+          if (next >= 0) setAskActive(next);
+        }
       });
       buttons.push(btn);
       list.append(btn);
     }
+    askButtons.push(buttons);
     const other = document.createElement('input');
     other.type = 'text';
     other.className = 'ask-other';
@@ -3156,6 +3175,38 @@ function showAsk(questions) {
   sfx('party');
 }
 const askAnswerOf = (pick) => [...pick.labels, ...(pick.other.trim() ? [pick.other.trim()] : [])].join(', ');
+function setAskActive(qi) {
+  askActive = qi;
+  document.querySelectorAll('#quest-body .ask-question').forEach((el, i) => el.classList.toggle('active', i === qi));
+}
+// Keys while a quest is open (not while typing in a box): numbers pick,
+// Enter goes ahead. ⌘/Ctrl+Enter approves a war-council plan. The safe-mode
+// prompt has none on purpose: a stray key must not allow a risky command.
+document.addEventListener('keydown', (e) => {
+  if ($('quest-overlay').hidden || e.isComposing) return;
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
+  if (planAsk) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      answerPlan(true);
+    }
+    return;
+  }
+  if (dangerAsk || typing) return;
+  const n = /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
+  if (askQuestions) {
+    if (n >= 0) askButtons[askActive]?.[n]?.click();
+    else if (e.key === 'Enter' && !$('quest-submit').disabled) submitAsk();
+    else return;
+    e.preventDefault();
+    return;
+  }
+  const choice = n >= 0 ? $('quest-choices').querySelectorAll('.quest-choice')[n] : null;
+  if (choice) {
+    e.preventDefault();
+    choice.click();
+  }
+});
 function renderAskSubmit() {
   const btn = $('quest-submit');
   btn.textContent = '⚔️ 이 선택으로 진행';
@@ -3476,6 +3527,7 @@ $('agents-close').addEventListener('click', () => ($('agents-drawer').hidden = t
 // dev servers — with their ports; open one in the browser or force it off.
 let servers = [];
 let serversError = '';
+const openServerLogs = new Set(); // pids whose log is unfolded (kept across refreshes)
 async function refreshServers() {
   if (dungeonScreen.hidden) return;
   const r = await window.promptBattle.serversList();
@@ -3519,6 +3571,40 @@ function renderServers() {
       open.addEventListener('click', () => window.promptBattle.openLocal(port));
       actions.append(open);
     }
+    const logBox = document.createElement('pre');
+    logBox.className = 'server-log';
+    logBox.hidden = !openServerLogs.has(s.pid);
+    if (s.log) {
+      const logBtn = document.createElement('button');
+      logBtn.type = 'button';
+      logBtn.textContent = '📜 로그';
+      logBtn.title = s.log;
+      const showLog = async () => {
+        logBox.textContent = (await window.promptBattle.serversLog(s.pid)) || t('(로그가 비어 있다)');
+        logBox.scrollTop = logBox.scrollHeight;
+      };
+      logBtn.addEventListener('click', () => {
+        if (openServerLogs.has(s.pid)) openServerLogs.delete(s.pid);
+        else openServerLogs.add(s.pid);
+        logBox.hidden = !openServerLogs.has(s.pid);
+        if (!logBox.hidden) showLog();
+      });
+      if (!logBox.hidden) showLog();
+      actions.append(logBtn);
+    }
+    if (s.cwd) {
+      const restart = document.createElement('button');
+      restart.type = 'button';
+      restart.textContent = '🔄 재시작';
+      restart.addEventListener('click', async () => {
+        if (!window.confirm(t(`${s.name} (PID ${s.pid})을(를) 껐다가 같은 명령으로 다시 켤까?`))) return;
+        restart.disabled = true;
+        const ok = await window.promptBattle.serversRestart(s.pid);
+        appendLog(ok ? `🖥 서버를 다시 켰다: ${s.command}` : `🖥 서버를 다시 켜지 못했다: ${s.name}`, ok ? undefined : 'error');
+        setTimeout(refreshServers, 1500);
+      });
+      actions.append(restart);
+    }
     const kill = document.createElement('button');
     kill.type = 'button';
     kill.className = 'server-kill';
@@ -3531,7 +3617,7 @@ function renderServers() {
       refreshServers();
     });
     actions.append(kill);
-    item.append(head, cmd, actions);
+    item.append(head, cmd, actions, logBox);
     list.append(item);
   }
 }
@@ -3596,6 +3682,31 @@ async function openRecords() {
     l.textContent = label;
     cell.append(v, l);
     grid.append(cell);
+  }
+  // Per AI: every weapon of that AI added up (floors, tokens, best hit).
+  const ais = $('records-ais');
+  ais.textContent = '';
+  const byAi = {};
+  for (const [id, m] of Object.entries(r.byModel ?? {})) {
+    const a = (byAi[providerOf(familyOf(id))] ??= { engaged: 0, cleared: 0, tokens: 0, bestHit: 0 });
+    a.engaged += m.engaged;
+    a.cleared += m.cleared;
+    a.tokens += m.tokens ?? 0;
+    a.bestHit = Math.max(a.bestHit, m.bestHit ?? 0);
+  }
+  const aiRows = Object.entries(byAi).filter(([, a]) => a.engaged > 0).sort((x, y) => y[1].engaged - x[1].engaged);
+  if (!aiRows.length) ais.textContent = '아직 기록이 없어요. 한 판 싸우면 채워진다.';
+  for (const [ai, a] of aiRows) {
+    const card = document.createElement('div');
+    card.className = 'ai-record';
+    const name = document.createElement('strong');
+    name.textContent = AI_LABEL[ai] ?? ai;
+    const rate = document.createElement('span');
+    rate.textContent = `승률 ${Math.round((a.cleared / a.engaged) * 100)}% (${a.cleared}/${a.engaged}층)`;
+    const more = document.createElement('small');
+    more.textContent = `토큰 ${fmtNum(a.tokens)} · 최고 한 방 ${fmtNum(a.bestHit)}`;
+    card.append(name, rate, more);
+    ais.append(card);
   }
   const models = $('records-models');
   models.textContent = '';
@@ -3987,7 +4098,7 @@ function renderRankingTable() {
     tr.addEventListener('click', () => openRankDetail(e));
     const cells = [
       e.rank <= 3 ? ['1위', '2위', '3위'][e.rank - 1] : String(e.rank),
-      e.name ?? '',
+      `${e.ai && AI_LABEL[e.ai] ? `${AI_LABEL[e.ai].split(' ')[0]} ` : ''}${e.name ?? ''}`,
       `${stars}${shownTitle(e.level ?? 1, e.badge)}`,
       fmtNum(e.score),
       CLASS_NAME[e.heroClass] ?? '',
@@ -4281,7 +4392,7 @@ $('skill-form').addEventListener('submit', async (e) => {
       return;
     }
     // 1-9: the bag's items in the order the bag shows them.
-    if (inBattle && inputEnabled && /^[1-9]$/.test(e.key)) {
+    if (inBattle && inputEnabled && $('quest-overlay').hidden && /^[1-9]$/.test(e.key)) { // an open quest owns the number keys
       const rows = [...document.querySelectorAll('#bag .bag-item button')];
       rows[Number(e.key) - 1]?.click();
     }
@@ -4471,6 +4582,7 @@ function openRankDetail(e) {
   stats.textContent = '';
   const rows = [
     ['점수', fmtNum(e.score)],
+    ...(e.ai && AI_LABEL[e.ai] ? [['AI', AI_LABEL[e.ai]]] : []),
     ['칭호', `${e.prestige ? `★${e.prestige} ` : ''}${shownTitle(e.level ?? 1, e.badge)}`],
     ['레벨', String(e.level ?? 1)],
     ['직업', CLASS_NAME[e.heroClass] ?? ''],

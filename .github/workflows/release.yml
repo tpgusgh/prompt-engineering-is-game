@@ -29,6 +29,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 26
+      # A tag made by hand (e.g. from the GitHub release page) must match the
+      # app's version, or the installers come out with the wrong version and
+      # auto-update never offers them. `npm version` + `npm run release` keep them in step.
+      - name: Check the tag matches package.json
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if [ "v$v" != "$TAG" ]; then
+            echo "::error::Tag $TAG but package.json says $v. Run: npm version <patch|minor> && npm run release (don't create the tag on the GitHub page)."
+            exit 1
+          fi
       - name: Create the release with its CHANGELOG notes
         run: |
           node -e "import('./scripts/release.mjs').then(({ extractNotes }) => { const fs = require('node:fs'); const v = process.env.TAG.replace(/^v/, ''); const n = extractNotes(fs.readFileSync('CHANGELOG.md', 'utf-8'), v); if (!n) { console.error('no CHANGELOG section for ' + v); process.exit(1); } fs.writeFileSync('notes.md', n); })"
